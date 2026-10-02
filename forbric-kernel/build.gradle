@@ -84,10 +84,14 @@ def transferModuleFiles = files(fileTree(transferModulesDir) { include '*.jar' }
 // property it is taken from beside the staged tree, else from this checkout's own run/energy-api/, so a fresh clone
 // or a second working tree needs only the file dropped there. verifyRebornEnergy checks it on EVERY game-side build:
 // compileRuntimeJava's own up-to-date check sees only the jar's API, so a same-API file never re-ran it.
-def rebornEnergySha256 = '889afc438d3e4add5cfdac76517da7987a2c495e4731690a56f2c5dee775db59'
-def rebornEnergyDefaults = [file('.dev/api/energy-5.0.0.jar'),
-		new File(stagedRoot.parentFile.parentFile, 'forbric-kernel/run/energy-api/energy-5.0.0.jar'),
-		file('run/energy-api/energy-5.0.0.jar')]
+// PORT(1.21.1): energy-5.0.0 (the 26.2 pin, sha 889afc…) has no 1.21.1 build. The era's API is Team Reborn
+// Energy 4.1.0, taken from TechReborn 5.11.19's META-INF/jars and remapped intermediary→named by
+// 实验/forbric/p1/tools/RemapJarTree.java (the W2 prototype) — the raw build is intermediary-mapped and javac
+// cannot cross its MC types (class_2350, class_9331) into the Mojmap merged base.
+def rebornEnergySha256 = 'cec89d1c2e1d1eed9a43ccf60a049668900232c9ef7387a32dd670d20cd297d3'
+def rebornEnergyDefaults = [file('.dev/api/energy-4.1.0-named.jar'),
+		new File(stagedRoot.parentFile.parentFile, 'forbric-kernel/run/energy-api/energy-4.1.0-named.jar'),
+		file('run/energy-api/energy-4.1.0-named.jar')]
 def stagedRebornEnergy = file(project.findProperty('forbric.rebornEnergy')
 		?: (rebornEnergyDefaults.find { it.isFile() } ?: rebornEnergyDefaults[0]))
 // Integration runs pass -Pforbric.requireTransfer=true: there a skipped transfer suite is a failure, not a pass.
@@ -268,16 +272,17 @@ tasks.named('compileRuntimeJava') {
 }
 // No outputs, so never up to date: it runs whenever the game side is built.
 def verifyRebornEnergy = tasks.register('verifyRebornEnergy') {
-	description = 'Checks the Team Reborn Energy jar the game side compiles against: present, and exactly the pinned 5.0.0 file.'
+	description = 'Checks the Team Reborn Energy jar the game side compiles against: present, and exactly the pinned 4.1.0 file.'
 	onlyIf { !stagedGameJars.isEmpty() }
 	doLast {
 		if (!stagedRebornEnergy.isFile()) throw new GradleException("The kernel game side includes its energy bridge " +
-				"and compiles it against Team Reborn Energy 5.0.0, but ${stagedRebornEnergy} does not exist. Pass " +
-				"-Pforbric.rebornEnergy=<energy-5.0.0.jar> or put the file in forbric-kernel/run/energy-api/ " +
-				"(team_reborn_energy 5.0.0, MIT, https://github.com/TechReborn/Energy; SHA-256 ${rebornEnergySha256}).")
+				"and compiles it against Team Reborn Energy (the 1.21.1-era build this generation pins), but " +
+				"${stagedRebornEnergy} does not exist. Pass -Pforbric.rebornEnergy=<energy-4.1.0-named.jar> or put " +
+				"the file in forbric-kernel/run/energy-api/ (team_reborn_energy 4.1.0, MIT, from TechReborn " +
+				"5.11.19's nested jars, remapped to named; SHA-256 ${rebornEnergySha256}).")
 		def digest = java.security.MessageDigest.getInstance('SHA-256').digest(stagedRebornEnergy.bytes).encodeHex().toString()
 		if (digest != rebornEnergySha256) throw new GradleException("${stagedRebornEnergy} is not the Team Reborn Energy " +
-				"5.0.0 jar the energy bridge is built and tested against: its SHA-256 is ${digest}, expected " +
+				"jar the energy bridge is built and tested against: its SHA-256 is ${digest}, expected " +
 				"${rebornEnergySha256}. Use that exact file; another Reborn build needs the bridge re-verified and this pin changed.")
 	}
 }

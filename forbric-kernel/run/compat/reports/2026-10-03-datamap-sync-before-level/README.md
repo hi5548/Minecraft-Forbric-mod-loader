@@ -306,3 +306,45 @@ criterion's own terms, that outcome is not a verdict on candidate 2, and nothing
 Two harness facts, recorded because they bound the run: both runs were flagged `contended: true` (67.5% and 120%
 CPU busy), and W7Harness closed a gap in its own client sweep — the client rows now carry `compatibility_policy`
 and `mixin_fit` (the row above is from the re-run with both live), matching the server rows' axes.
+
+**For the record — shape is not verification.** This was the first pass in this campaign where the *shape* test
+was green while the artifact was still wrong: the branch was gone exactly as asserted, but the class no longer
+verified. A test that reads instruction order and jump targets cannot see a `StackMapTable` the rewrite
+invalidated. §11 adds the gate that can.
+
+## 11. Fix: the branch rewrite has to recompute the frames, and now a gate holds it
+
+Committed as `9bfc1e1b` (on top of `51f03efb`). One production change: the class is written with
+`ClassWriter(COMPUTE_FRAMES)` instead of preserving the carrier's `StackMapTable`. The transform replaces a
+conditional branch with `POP`+`GOTO`, so the instruction after the GOTO starts a new basic block and the carrier's
+single `same_frame(@27)` no longer covers it — that is the `VerifyError` §10 quotes. `COMPUTE_FRAMES` recomputes
+the whole method's frames; for the now-dead inline block ASM emits `NOP…ATHROW` under a self-consistent synthetic
+frame, which is the standard shape a recomputed class carries. The method has no merge of two reference types (the
+only branch left is the GOTO), so ASM's frame computation never calls `getCommonSuperClass` and never has to
+resolve — let alone load — a game class.
+
+The artifact's "leave the dead block in place — removing it would move frame offsets for no gain" was the wrong
+call: leaving it is fine, but only once the frames are recomputed, and the artifact preserved them. That sentence
+is superseded.
+
+**Build.** `build-kernel.sh` on a clean worktree at `9bfc1e1b` printed
+`sha256: eb8f8c5d4832083e451122526263afc904575f9332615cf9b804ab540692636a`.
+
+**The gate.** The shape test now also carries `theTransformedClassLinksUnderTheRealVerifier`: it builds a
+`URLClassLoader` over the staged `neoforge-runtime.jar`, merged base and forge runtime, defines the transformed
+`ClientPayloadContext` through a child loader, and calls `Class.forName(OWNER, true, …)` so the JVM links and
+verifies every method. The test JVM's own verifier is the check; no game is launched.
+
+**Is a JVM-free form available? Not one with fidelity, and that is stated rather than papered over.** A
+`CheckClassAdapter.verify` pass is what the artifact originally reached for, but its `SimpleVerifier` resolves
+every referenced type through a `ClassLoader` and the game classes are not on the test classpath (the same reason
+`MergedBasePipBridgeTest` and `PackMetadataFailSoftInjectorTest` use `BasicVerifier` instead). A `BasicVerifier`
+analysis checks stack depth and locals at merges but does **not** compare against the declared frames, so it does
+not catch this defect. A hand-written frame-coverage check would be re-implementing the verifier. So the honest
+position: the frame/link check must be a JVM gate (the test JVM over staged jars, or the client arm), and the
+JVM-free assertions remain the instruction-shape ones.
+
+Verified here: with `COMPUTE_FRAMES` the class defines, links and initialises cleanly; reverting the writer to
+`ClassWriter(0)` makes the new gate fail with the **same** `VerifyError: Expecting a stack map frame … @16:
+aload_1 … same_frame(@27)` the client arm hit. The gate reproduces the field failure exactly, so it is the check
+that would have caught it before the arm.

@@ -7,7 +7,10 @@ in `KernelBoot`, with the switch `-Dforbric.payloadWorkOrdering=off`. Compiled a
 **unverified** and is what the client arm falsifies. The arm ran (README §10): `joined world via quick-play` does
 **not** appear — the transform fires and the class it produces then fails verification at load
 (`VerifyError: Expecting a stack map frame` at `enqueueWork(Runnable) @16`), so the client disconnects before the
-join and the semantic question was never reached. What follows is the change as written for review, kept
+join and the semantic question was never reached. **Fixed in `9bfc1e1b`** by writing the class with
+`COMPUTE_FRAMES` (README §11): the branch rewrite invalidates the carrier's `StackMapTable`, so it cannot be
+preserved. The shape test gained a link-verification gate; the arm is re-run against the fix. What follows is the
+change as written for review, kept
 unchanged so the landed file can be diffed against the spec: the landed file adds only the standard kill switch
 (`PROPERTY`/`enabled()`/guard) and drops the "not landed yet" paragraph from the javadoc.
 

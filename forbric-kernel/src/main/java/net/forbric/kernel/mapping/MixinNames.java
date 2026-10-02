@@ -266,6 +266,18 @@ public final class MixinNames {
 		String exact = refmap.bySelector().get(value);
 		if (exact != null) return translateSelector(spine, mixinTargets, exact);
 
+		// The SAME member in the refmap key's own spelling. A Fabric refmap may key a member by its dotted name —
+		// `net/minecraft/…/SynchronizeRecipesS2CPacket.<init>(Ljava/util/Collection;)V` — while the annotation
+		// writes the descriptor form `Lnet/minecraft/…/SynchronizeRecipesS2CPacket;<init>(…)V`. The exact table
+		// cannot see that, and the bare-name fallback below CANNOT either when two entries share the name: fabric-
+		// lifecycle-events-v1's two constructor keys are both `<init>`, so the collision is refused as ambiguous and
+		// BOTH of its `@At(target=…)` selectors stayed untranslated — the injectors were required losses on 7 of 10
+		// subjects in the 10-subject slice. Trying the other spelling is not a guess: it is the same member, written
+		// the other way, and the refmap's answer is the one Mixin itself would use.
+		String alternate = otherSpelling(value);
+		String alternateExact = alternate == null ? null : refmap.bySelector().get(alternate);
+		if (alternateExact != null) return translateSelector(spine, mixinTargets, alternateExact);
+
 		String translated = translateSelector(spine, mixinTargets, value);
 		String name = memberName(value);
 		String byName = name == null || refmap.ambiguous().contains(name) ? null : refmap.byName().get(name);
@@ -281,6 +293,37 @@ public final class MixinNames {
 		return memberName(translated) != null && memberName(translated).equals(name)
 				? translateSelector(spine, mixinTargets, byName)
 				: translated;
+	}
+
+	/**
+	 * The same member reference written the other way, or null when the selector is not an owner-qualified member.
+	 *
+	 * <p>Two spellings exist in practice and both are KEYS in Fabric refmaps: the descriptor form
+	 * {@code Lowner;member(desc)ret} / {@code Lowner;member:fieldDesc} and the dotted form
+	 * {@code owner.member(desc)ret}. They name the same member, so a lookup that only tries the spelling the
+	 * annotation happens to use misses half the table. Anything without an owner (a bare name, an {@code @At}
+	 * constant, a parenthesised descriptor) comes back null: there is nothing to re-spell, and inventing an owner
+	 * would be the coin toss {@link #selector} already refuses.
+	 */
+	private static String otherSpelling(String selector) {
+		if (selector == null || selector.isEmpty()) return null;
+		int semi = selector.indexOf(';');
+		int paren = selector.indexOf('(');
+		int colon = selector.indexOf(':');
+		int memberStart = paren > 0 ? paren : colon > 0 ? colon : -1;
+		if (memberStart < 0) return null;
+		if (semi >= 0 && semi < memberStart) {
+			// Lowner;member… -> owner.member…
+			String owner = selector.substring(selector.startsWith("L") ? 1 : 0, semi);
+			return owner.isEmpty() ? null : owner + "." + selector.substring(semi + 1);
+		}
+		if (paren > 0 || colon > 0) {
+			// owner.member… -> Lowner;member… , only when an owner is actually spelled out.
+			int dot = selector.lastIndexOf('.', memberStart - 1);
+			if (dot <= 0 || selector.lastIndexOf('/', dot) < 0) return null;
+			return "L" + selector.substring(0, dot) + ";" + selector.substring(dot + 1);
+		}
+		return null;
 	}
 
 	/**

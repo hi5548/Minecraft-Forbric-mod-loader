@@ -168,4 +168,31 @@ class MixinNamesTest {
 	private static boolean isAtTarget(AnnotationNode annotation, String key) {
 		return "target".equals(key) && annotation.desc.equals("Lorg/spongepowered/asm/mixin/injection/At;");
 	}
+
+	/**
+	 * Two constructors in one refmap: the bare-name fallback is refused by design (it would be a coin toss between
+	 * them), so the ONLY way left is the refmap key's own spelling. fabric-lifecycle-events-v1 is exactly this —
+	 * `SynchronizeRecipesS2CPacket.<init>(Ljava/util/Collection;)V` and `SynchronizeTagsS2CPacket.<init>(Ljava/util/Map;)V`
+	 * are both dotted keys named `<init>`, and both of its `@At(target=…)` selectors are written in the descriptor
+	 * spelling, so before this both anchors stayed untranslated and the injectors were required losses on every
+	 * subject that reached the audit (7 of 10 in the 10-subject slice).
+	 */
+	@Test
+	void aConstructorAtTargetResolvesThroughItsOwnDottedRefmapKeyWhenTwoConstructorsShareTheName(@TempDir Path dir) throws Exception {
+		Path jar = dir.resolve("probe.jar");
+		writeJar(jar,
+				"{\"mappings\":{\"" + MIXIN + "\":{"
+						+ "\"net/minecraft/network/packet/s2c/play/SynchronizeRecipesS2CPacket.<init>(Ljava/util/Collection;)V\":"
+						+ "\"Lnet/minecraft/network/protocol/game/ClientboundUpdateRecipesPacket;<init>(Ljava/util/Collection;)V\","
+						+ "\"net/minecraft/network/packet/s2c/common/SynchronizeTagsS2CPacket.<init>(Ljava/util/Map;)V\":"
+						+ "\"Lnet/minecraft/network/protocol/common/ClientboundUpdateTagsPacket;<init>(Ljava/util/Map;)V\"}}}",
+				"Lnet/minecraft/network/packet/s2c/play/SynchronizeRecipesS2CPacket;<init>(Ljava/util/Collection;)V", "INVOKE");
+
+		MixinNames.translate(jar, spine());
+
+		assertEquals(List.of("Lnet/minecraft/network/protocol/game/ClientboundUpdateRecipesPacket;<init>(Ljava/util/Collection;)V"),
+				atTargets(jar),
+				"the refmap's own key is the dotted spelling of the very member the annotation names; the ambiguous "
+						+ "bare name must not be the only path to it");
+	}
 }

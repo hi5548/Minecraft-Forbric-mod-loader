@@ -174,7 +174,25 @@ balm = 5；对 arm 13 的 0/17 与 3/23 是**上升**，因为启动现在跑到
 - **debug 真开时 `registries in the Fabric namespace` 仍不出现** ⇒ `KernelRegistryDirectories` 的
   `path.equals(merged)` 对每个注册表都成立 ⇒ **目录判定从不分歧，不是 dropper**（这条负结果已记，免得重读）。
 
-## 11. 尚未做
+## 12. registry-load 之后的下一批：已确认 required 集合（枚举 + 逐项读数）
+
+判据（kernel 自己）：`confirmedRequired` = `confidence==CONFIRMED && required`（`CompatibilityFinding.java`）——
+不是「required 为真」的全部行，SUSPECTED 行不算。按此判据，2 主体切片（`packselection-fix`）的集合是：
+
+|subject|cr|id|读数结论|
+|---|---|---|---|
+|cristellib|2|`fabric-lifecycle-events-v1 …PlayerManagerMixin#hookOnPlayerConnect@PlayerList`|**可重定位**：锚是 `@At(INVOKE) SynchronizeRecipesS2CPacket.<init> in PlayerList.placeNewPlayer`；合并基底同一位置 `new ClientboundUpdateRecipesPacket`（offset 489）——同一个概念、1.21.1 的类名不同 ⇒ 锚名换代即可，属既有 `FabricEntityMixinAnchors`/`MixinNames` 那类「1.21.1 拼法」工作|
+|cristellib/balm|各 1|`fabric-object-builder-v1 …TradeOffersTypeAwareBuyForOneEmeraldFactoryMixin#disableVanillaCheck@VillagerTrades$EmeraldsForVillagerTypeItem`|**待定**：锚 `DefaultedRegistry.stream` 在 `<init>`；合并基底的该类有 `lambda$new$0(Map,VillagerType)`/`lambda$new$1(VillagerType)`（filter 谓词仍在），需要再读一层确认 registry 迭代是否被抬到调用方 ⇒ 再定重定位 vs 按注入器 stand-down|
+|balm|3|`balm.fabric.mixins.json:FabricCropBlockMixin`（mixin 级 `InvalidInjectionException`）+ `#randomTickPreGrow` + `#randomTickPostGrow`|**同因一体的三行**：`getGrowthSpeed` 两个注入器锚在 `BlockState.is(Block)`（ordinal 0/1），而合并基底（NeoForge 重写）的 `getGrowthSpeed` 签名已是 `(BlockState,BlockGetter,BlockPos)F` 且**不再调用** `BlockState.is(Block)`（改用 `canSustainPlant`/`isFertile`/`getBlock()`）⇒ 一个注入器失败把整个 mixin 拖死 ⇒ `randomTick` 的两个（`ServerLevel.setBlock` 锚**存在**）才报「无附着」。修法：把两个 `getGrowthSpeed*` 按注入器 stand-down（`GuestInjectorPruner` 的表里加 balm 这一项，代价写明：`CustomFarmBlock.isFertile` 不再影响生长速度），三行一起消失|
+
+**未计入但同因**：`FabricCropBlockMixin#getGrowthSpeed`/`#getGrowthSpeedCaptureLocals` 两条是 SUSPECTED（所以不在 cr 里），
+但它们是 abort 的成因，stand-down 它们才清掉上面三行。`balm …PlayerMixin#getDestroySpeed` 是 SUSPECTED
+（"只在转发 stub 里附着"，carrier-stub 形状），不在 cr 里，若后续要动它属于 `MixinStubRebind` 的重定位域。
+
+**顺序建议**（每个决定一次提交 + 一次切片）：fabric-api 那两条优先——它们**在 10 个主体里逐条复现**，
+清掉等于同时降 10 个主体的 cr；再处理 balm 的 crop 三行；最后按 10 主体切片的其余枚举逐项来。
+
+## 13. 尚未做
 
 - 游戏 JVM/切片不在本 agent lane（共享机器；由 W7Harness 跑）。
 - 0.116.17 模块 jar 未 staged 成测试 fixture ⇒ §5 第二条生成测试在本 checkout 只 skip；要它本地也由红到绿需那一步。

@@ -34,32 +34,30 @@ import net.forbric.api.ForeignType;
 import net.forbric.kernel.util.ForbricLog;
 
 /**
- * The three carrier-side edits that let MinecraftForge biome/structure modifiers run inside NeoForge's pass.
+ * The carrier-side edit that lets MinecraftForge biome/structure modifiers run inside NeoForge's pass.
  *
- * <p>Two repairs on the Forge carrier, so Forge's own worldgen builders link against the merged
- * {@code WeightedList$Builder} (which implements no Forge interface, so the defaults Forge's code calls are gone):
- * {@code MobSpawnSettingsBuilder.lambda$new$0} calls {@code addAll(Iterable)} with a {@code List} on the stack —
- * the descriptor becomes vanilla's {@code addAll(Collection)}; {@code RemoveSpawnsBiomeModifier.modify} calls
- * {@code removeIf(Predicate<E>)}, which links to the merged {@code removeIf(Predicate<Weighted<E>>)} and then
- * ClassCastExceptions inside Forge's lambda — it becomes {@code KernelForgeWorldgen.removeIfValue}, the lost
- * default's one line as kernel code.
+ * <p>PORT(1.21.1): 26.2 carried two further repairs on the Forge carrier, both built around
+ * {@code net.minecraft.util.random.WeightedList$Builder} — widening {@code addAll(Iterable)} to
+ * {@code addAll(Collection)} by descriptor, and routing {@code removeIf(Predicate)} through
+ * {@code KernelForgeWorldgen.removeIfValue}. 1.21.1 HAS NO {@code WeightedList$Builder} at all (that class is
+ * from a later generation), and Forge 52's {@code RemoveSpawnsBiomeModifier} calls {@code java.util.List.removeIf}
+ * directly on {@code MobSpawnSettingsBuilder.getSpawner(MobCategory)} — so neither pattern could ever match on
+ * this carrier. Both are deleted rather than left as scans that promise work they cannot do, and their REQUIRED
+ * anchors with them. The splice below is the one that still has its anchors.
  *
- * <p>One splice on NeoForge's {@code ServerLifecycleHooks.runModifiers}: after each of the two
+ * <p>The splice on NeoForge's {@code ServerLifecycleHooks.runModifiers}: after each of the two
  * {@code Stream.toList} that materialise its biome and structure modifier lists (immediately before
  * {@code astore_2} / {@code astore_3}), one {@code invokestatic KernelForgeWorldgen.withMinecraftForge*Modifiers
- * (List)List} — List in, List out, no frame moves. Exactly two matches or nothing is edited.
+ * (List)List} — List in, List out, no frame moves. Exactly two matches or nothing is edited. (1.21.1's
+ * {@code runModifiers} still materialises both lists into locals 2 and 3, verified by javap, so the anchors hold.)
  *
- * <p>{@code -Dforbric.forgeWorldgen=off}: all three targets are returned untouched and the anchors are
- * declared as scanned, not missed.
+ * <p>{@code -Dforbric.forgeWorldgen=off}: the target is returned untouched and the anchor is declared as
+ * scanned, not missed.
  */
 public final class ForgeWorldModifierInjector implements ClassTransformer {
 	public static final String PROPERTY = "forbric.forgeWorldgen";
 	static final String RUNTIME = "net/forbric/kernel/runtime/KernelForgeWorldgen";
-	static final String WEIGHTED_BUILDER = "net/minecraft/util/random/WeightedList$Builder";
-	static final String BUILDER_DESC = "L" + WEIGHTED_BUILDER + ";";
 	static final String LIST_TO_LIST = "(Ljava/util/List;)Ljava/util/List;";
-	private static final String SPAWN_BUILDER = ForeignType.MOB_SPAWN_SETTINGS_BUILDER.binary(Ecosystem.FORGE);
-	private static final String REMOVE_SPAWNS = ForeignType.REMOVE_SPAWNS_BIOME_MODIFIER.binary(Ecosystem.FORGE);
 	private static final String LIFECYCLE_HOOKS = ForeignType.SERVER_LIFECYCLE_HOOKS.binary(Ecosystem.NEOFORGE);
 	private static final String NEO_KEYS = ForeignType.MODIFIER_REGISTRY_KEYS.internal(Ecosystem.NEOFORGE);
 	private static volatile boolean warnedOff;
@@ -73,10 +71,6 @@ public final class ForgeWorldModifierInjector implements ClassTransformer {
 	public AnchorSet anchors() {
 		if (!enabled()) return AnchorSet.scanned("switched off by -D" + PROPERTY);
 		return AnchorSet.of(
-				new AnchorSet.Anchor(SPAWN_BUILDER, AnchorSet.Severity.REQUIRED,
-						"MinecraftForge's spawn-settings builder cannot link, so any Forge biome modifier touching spawns throws"),
-				new AnchorSet.Anchor(REMOVE_SPAWNS, AnchorSet.Severity.REQUIRED,
-						"forge:remove_spawns ClassCastExceptions inside Forge's own lambda"),
 				new AnchorSet.Anchor(LIFECYCLE_HOOKS, AnchorSet.Severity.REQUIRED,
 						"MinecraftForge biome/structure modifiers never reach the world"));
 	}
@@ -88,70 +82,22 @@ public final class ForgeWorldModifierInjector implements ClassTransformer {
 	@Override
 	public byte[] transform(String className, byte[] classBytes, TransformContext context) {
 		if (classBytes == null || classBytes.length == 0) return classBytes;
-		boolean target = SPAWN_BUILDER.equals(className) || REMOVE_SPAWNS.equals(className) || LIFECYCLE_HOOKS.equals(className);
-		if (!target) return classBytes;
+		if (!LIFECYCLE_HOOKS.equals(className)) return classBytes;
 		if (!enabled()) {
 			if (!warnedOff) {
 				warnedOff = true;
 				ForbricLog.warn("[Forbric/Worldgen] -D%s=off — MinecraftForge biome/structure modifiers are not bridged "
-						+ "into NeoForge's pass and Forge's worldgen builders are left unlinked", PROPERTY);
+						+ "into NeoForge's pass", PROPERTY);
 			}
 			return classBytes;
 		}
 		ClassNode node = new ClassNode();
 		new ClassReader(classBytes).accept(node, 0);
-		boolean changed;
-		if (SPAWN_BUILDER.equals(className)) changed = widenAddAllToCollection(node);
-		else if (REMOVE_SPAWNS.equals(className)) changed = routeRemoveIfThroughTheLostDefault(node);
-		else changed = spliceBothModifierLists(node);
+		boolean changed = spliceBothModifierLists(node);
 		if (!changed) return classBytes;
 		ClassWriter writer = new ClassWriter(0);
 		node.accept(writer);
 		return writer.toByteArray();
-	}
-
-	/** {@code addAll(Iterable)} → {@code addAll(Collection)}: the value on the stack is already a List. */
-	private static boolean widenAddAllToCollection(ClassNode node) {
-		int repaired = 0;
-		for (MethodNode method : node.methods) {
-			for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
-				if (insn instanceof MethodInsnNode call && call.getOpcode() == Opcodes.INVOKEVIRTUAL
-						&& WEIGHTED_BUILDER.equals(call.owner) && "addAll".equals(call.name)
-						&& ("(Ljava/lang/Iterable;)" + BUILDER_DESC).equals(call.desc)) {
-					call.desc = "(Ljava/util/Collection;)" + BUILDER_DESC;
-					repaired++;
-				}
-			}
-		}
-		if (repaired == 0) return false;
-		ForbricLog.info("[Forbric/Worldgen] applied %d call-site repair(s) in %s — WeightedList$Builder.addAll(Iterable) "
-				+ "was a MinecraftForge interface default the merge lost; vanilla's addAll(Collection) takes the same List",
-				repaired, node.name.replace('/', '.'));
-		return true;
-	}
-
-	/** {@code removeIf(Predicate<E>)} → the kernel's copy of Forge's lost default. */
-	private static boolean routeRemoveIfThroughTheLostDefault(ClassNode node) {
-		int repaired = 0;
-		for (MethodNode method : node.methods) {
-			for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
-				if (insn instanceof MethodInsnNode call && call.getOpcode() == Opcodes.INVOKEVIRTUAL
-						&& WEIGHTED_BUILDER.equals(call.owner) && "removeIf".equals(call.name)
-						&& ("(Ljava/util/function/Predicate;)" + BUILDER_DESC).equals(call.desc)) {
-					call.setOpcode(Opcodes.INVOKESTATIC);
-					call.owner = RUNTIME;
-					call.name = "removeIfValue";
-					call.desc = "(" + BUILDER_DESC + "Ljava/util/function/Predicate;)" + BUILDER_DESC;
-					call.itf = false;
-					repaired++;
-				}
-			}
-		}
-		if (repaired == 0) return false;
-		ForbricLog.info("[Forbric/Worldgen] applied %d call-site repair(s) in %s — WeightedList$Builder.removeIf(Predicate<E>) "
-				+ "was a MinecraftForge interface default the merge lost; the merged same-descriptor method takes "
-				+ "Predicate<Weighted<E>> and would ClassCastException inside Forge's lambda", repaired, node.name.replace('/', '.'));
-		return true;
 	}
 
 	/** Both lists or nothing: a Forge biome modifier without its structure twin would be a half-bridged world. */

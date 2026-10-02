@@ -224,5 +224,85 @@ Red/green, run in this session:
 **Falsification criterion** (unchanged from `ordering-transform.md`): a client arm pinned to the commit carrying
 the transform, `compatibility_policy` and `mixin_fit` recorded on the row. **`joined world via quick-play`** is
 the confirmation; its absence, with the same `Network Protocol Error`, means the hand-off was not the ordering's
-cause and candidate 2's mechanism needs re-reading. The `build-kernel.sh` sha and the arm outcome are recorded in
-§10 once they land.
+cause and candidate 2's mechanism needs re-reading. The `build-kernel.sh` sha and the arm outcome are in §10.
+
+## 10. The arm, run against the landed commit — `joined world via quick-play` does NOT appear
+
+**Build.** `build-kernel.sh` on a clean worktree at the landed commit `51f03efb` printed:
+
+```
+[build] kernel dir: /tmp/forbric-wt/forbric-kernel
+[build] commit:    51f03efb
+[build] /tmp/w7-kernel-build/forbric-kernel.jar
+[build] sha256: 32bfa8e612abbb71fb6be7a238c634d9663b7c7d2a362afa185900bf5a750b47
+[build] verified: zip readable, game side present, mtime Oct  3 07:21:26 2026
+```
+
+W7Harness's own clean-worktree build of the same commit reproduced the sha exactly, and the client arm was run
+twice with this frozen kernel (`frozen-kernel-sha256.txt` = `32bfa8e6…`): `reports/2026-10-03-client-ordering2/`
+(the first run, `…-client-ordering`, is identical line for line). Subject `sound-physics-remastered__fabric`, row:
+
+```
+run=STALL  exit=143  world=false  frames=0  strict=false  na=false  cause=crash  seconds=217
+mod=OK  status_source=console:constructed-or-entrypoint  confirmed_required=0
+compatibility_policy=continue   mixin_fit=default   catalog_mods_rows=0
+kernel_sha256=32bfa8e6…
+```
+
+**`joined world via quick-play` does not appear** — the run's console contains zero occurrences of it. What appears
+instead, verbatim from `console.log`, is the transform firing and then the class it produced being refused by the
+verifier at load:
+
+```
+[07:28:38] [Netty Local Client IO #0/INFO]: [Forbric/PayloadOrdering] net.neoforged.neoforge.network.handling.ClientPayloadContext.enqueueWork now submits its work unconditionally — the inline same-thread path ran payload work before the client level existed, which is how the data-map sync died with "Network Protocol Error"
+[07:28:38] [Netty Local Client IO #0/ERROR]: Exception caught in connection
+java.lang.VerifyError: Expecting a stack map frame
+Exception Details:
+  Location:
+    net/neoforged/neoforge/network/handling/ClientPayloadContext.enqueueWork(Ljava/lang/Runnable;)Ljava/util/concurrent/CompletableFuture; @16: aload_1
+  Reason:
+    Expected stackmap frame at this location.
+  Bytecode:
+    0000000: 2ab4 0022 b900 3a01 00b6 0040 57a7 000e
+    0000010: 2bb9 0045 0100 01b8 004b b02a b400 22b9
+    0000020: 003a 0100 2bb6 004e 2ab4 0024 b800 54b0
+    0000030:
+  Stackmap Table:
+    same_frame(@27)
+```
+
+and the disconnect it causes:
+
+```
+[07:28:38] [Render thread/WARN]: Client disconnected with reason: Internal Exception: java.lang.VerifyError: Expecting a stack map frame
+Exception Details:
+  Location:
+    net/neoforged/neoforge/network/handling/ClientPayloadContext.enqueueWork(Ljava/lang/Runnable;)Ljava/util/concurrent/CompletableFuture; @16: aload_1
+  Reason:
+    Expected stackmap frame at this location.
+  Bytecode:
+    0000000: 2ab4 0022 b900 3a01 00b6 0040 57a7 000e
+    0000010: 2bb9 0045 0100 01b8 004b b02a b400 22b9
+    0000020: 003a 0100 2bb6 004e 2ab4 0024 b800 54b0
+    0000030:
+  Stackmap Table:
+    same_frame(@27)
+```
+
+The screens the run does reach, in order, verbatim: `GenericMessageScreen` → `BackupConfirmScreen` →
+`LevelLoadingScreen` → `DisconnectedScreen`; it never announces `joined world via quick-play`, writes no frame
+(`frames=0`) and never reaches a world. The class is loaded from `NetworkRegistry.handleModdedPayload` on the
+configuration-phase payload path, so the client dies at the first modded payload, before the data-map sync of §7
+is even reached.
+
+**The falsification criterion was not exercised.** The artifact's criterion reads: absence of `joined world via
+quick-play` **with the same `Network Protocol Error`** means the hand-off was not the ordering's cause. Here the
+absence is not that: the client never attempted the join, because the transformed `enqueueWork` fails verification
+at `@16` (the instruction immediately after the `pop`+`goto` this transform writes — `57 a7 000e` in the byte
+dump above), and the JVM refuses the class before any of its code runs. So the arm did not test whether removing
+the inline branch orders the data-map work after the level; it stopped on the transform's own output. Per the
+criterion's own terms, that outcome is not a verdict on candidate 2, and nothing here is claimed as one.
+
+Two harness facts, recorded because they bound the run: both runs were flagged `contended: true` (67.5% and 120%
+CPU busy), and W7Harness closed a gap in its own client sweep — the client rows now carry `compatibility_policy`
+and `mixin_fit` (the row above is from the re-run with both live), matching the server rows' axes.

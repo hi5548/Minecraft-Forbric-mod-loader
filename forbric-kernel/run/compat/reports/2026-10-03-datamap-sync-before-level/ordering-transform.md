@@ -4,7 +4,10 @@ Status: **LANDED** (2026-10-03) — the class below is now
 `forbric-kernel/src/main/java/net/forbric/kernel/transform/PayloadWorkOrderingTransformer.java` and is registered
 in `KernelBoot`, with the switch `-Dforbric.payloadWorkOrdering=off`. Compiled and shape-tested (see `README.md`
 §9 and §10); the behavioural half — that removing the inline branch is safe for every payload — is still
-**unverified** and is what the client arm falsifies. What follows is the change as written for review, kept
+**unverified** and is what the client arm falsifies. The arm ran (README §10): `joined world via quick-play` does
+**not** appear — the transform fires and the class it produces then fails verification at load
+(`VerifyError: Expecting a stack map frame` at `enqueueWork(Runnable) @16`), so the client disconnects before the
+join and the semantic question was never reached. What follows is the change as written for review, kept
 unchanged so the landed file can be diffed against the spec: the landed file adds only the standard kill switch
 (`PROPERTY`/`enabled()`/guard) and drops the "not landed yet" paragraph from the javadoc.
 

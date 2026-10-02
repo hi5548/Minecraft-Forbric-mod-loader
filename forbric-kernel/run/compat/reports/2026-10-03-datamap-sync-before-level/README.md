@@ -186,3 +186,43 @@ has already rejected on the grounds of matching the platform's guarantee. I am r
 made on the receipts rather than on my last-minute judgement; the transform is small enough that whoever takes it
 can land and test it inside one budget, and the confirmation is unchanged: `joined world via quick-play` on an arm
 pinned to the commit that carries it, with `compatibility_policy` and `mixin_fit` on the row.
+
+## 9. Landed: the branch removed, with its shape test and its falsification
+
+Landed the transform written out in `ordering-transform.md`: new
+`forbric-kernel/src/main/java/net/forbric/kernel/transform/PayloadWorkOrderingTransformer.java`, plus one
+`chain.register(TransformPhase.COREMOD, new net.forbric.kernel.transform.PayloadWorkOrderingTransformer());`
+beside the other COREMOD registrations in `KernelBoot` (next to `SplitterPacketContextInjector`, the other
+network-path registration). Nothing existing changed.
+
+What it does: in `ClientPayloadContext.enqueueWork(Runnable)` the `INVOKEVIRTUAL isSameThread` + `IFEQ` pair
+becomes `POP` + a `GOTO` to the same label, so the `submit` path is entered unconditionally and the work is
+queued instead of run inline. It is general — every payload that enqueues a `Runnable` — not a special case for
+the data-map sync. Kill switch, in the family's style: `-Dforbric.payloadWorkOrdering=off` leaves the class
+untouched (read inside `transform`, so the registration stays a single unguarded line, as
+`SplitterPacketContextInjector` does).
+
+Deliberately not touched: the `enqueueWork(Supplier)` overload carries the same shortcut, but the failed join
+enqueued a `Runnable`, and widening the repair to the returning form is a separate change with its own arm.
+
+**Shape test** (`forbric-kernel/src/test/java/net/forbric/kernel/transform/PayloadWorkOrderingTransformerTest.java`,
+no JVM): it reads the real `net/neoforged/neoforge/network/handling/ClientPayloadContext.class` out of
+`neoforge-runtime.jar`, runs the transformer over it, and asserts (a) the transformed `enqueueWork(Runnable)`
+carries **no** `INVOKEVIRTUAL isSameThread` followed by a conditional jump, and (b) the `GOTO` that replaced the
+`IFEQ` lands on the same block the `IFEQ` targeted — the `submit` + `NetworkRegistry.guard` path. The label's
+block is compared rather than label object identity, because identity does not survive serialization. Its javadoc
+states plainly what it does not cover: **it proves the branch is gone, not that removing it is safe for handlers
+that currently rely on the inline form** — which is why the falsification is an arm, not a test.
+
+Red/green, run in this session:
+- **red without the transform**: with the shortcut-removal disabled, the test fails at "the transform must edit
+  the real class, not hand it back" (`expected: not same but was: [B@…`) — 1 failed, 1 passed.
+- **green with it**: `2 tests, 0 skipped, 0 failed`; the four anchor/chain tests that police Transformer
+  declarations (`TransformerAnchorCensusTest`, `TransformChainAnchorAccountingTest`, `AnchorLedgerTest`,
+  `TransformChainTest`) also pass beside it (30 tests, 0 failed, run together).
+
+**Falsification criterion** (unchanged from `ordering-transform.md`): a client arm pinned to the commit carrying
+the transform, `compatibility_policy` and `mixin_fit` recorded on the row. **`joined world via quick-play`** is
+the confirmation; its absence, with the same `Network Protocol Error`, means the hand-off was not the ordering's
+cause and candidate 2's mechanism needs re-reading. The `build-kernel.sh` sha and the arm outcome are recorded in
+§10 once they land.

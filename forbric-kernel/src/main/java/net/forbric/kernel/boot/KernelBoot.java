@@ -589,6 +589,14 @@ public final class KernelBoot {
 		chain.register(TransformPhase.COREMOD,
 				new net.forbric.kernel.transform.SplitterPacketContextInjector());
 
+		// …and the payload path itself: `ClientPayloadContext.enqueueWork` runs a payload's work INLINE when the
+		// payload is already handled on the main thread, so NeoForge's data-map sync handler dereferences
+		// `Minecraft.getInstance().level` before `handleLogin` created it and the join dies with
+		// "Network Protocol Error". Removing the same-thread shortcut sends every payload's work through the
+		// main-thread queue (what a real network thread gets), so the work lands after `handleLogin`.
+		chain.register(TransformPhase.COREMOD,
+				new net.forbric.kernel.transform.PayloadWorkOrderingTransformer());
+
 		// …and keep the packs it serves OUT of the player's resource-pack screen. Pack.isHidden survived the
 		// merge; the screen-side filter that reads it did not.
 		chain.register(TransformPhase.COREMOD,

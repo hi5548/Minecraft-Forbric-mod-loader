@@ -126,6 +126,27 @@ import net.forbric.kernel.util.ForbricLog;
  * longer called in {@code ServerPlayerGameMode.destroyBlock}, and whose {@code breakBlock} anchor IS present but
  * the {@code @Inject} captures locals the merged LVT no longer has ("incompatible changes at opcode 89").
  *
+ * <p>Two more of the same kind, from the 10-subject slice that first reached the world. fabric-object-builder-v1's
+ * {@code TradeOffersTypeAwareBuyForOneEmeraldFactoryMixin#disableVanillaCheck} {@code @At(INVOKE)}s
+ * {@code DefaultedRegistry.stream} inside {@code VillagerTrades$EmeraldsForVillagerTypeItem.<init>}, and the merged
+ * class has neither: its constructor takes the item map as a PARAMETER and assigns four fields, and no
+ * {@code DefaultedRegistry.stream} call exists in the class or in {@code VillagerTrades} (the trade is built from a
+ * literal map), so a handler returning a widened {@code Stream} cannot be retargeted either. It was a CONFIRMED
+ * required loss on 8 of the 10 subjects. Its sibling {@code @At(NEW)} anchor needed no pruning: the name layer
+ * translates {@code Lnet/minecraft/village/TradeOffer;} into {@code MerchantOffer} now (see
+ * {@link net.forbric.kernel.mapping.MixinNames}).
+ *
+ * <p>And balm's own {@code FabricCropBlockMixin}, whose failure mode is the loud one. Its two {@code getGrowthSpeed*}
+ * handlers anchor on {@code BlockState.is(Block)} inside a method the merged base declares as
+ * {@code getGrowthSpeed(BlockState, BlockGetter, BlockPos)} and whose body no longer calls {@code BlockState.is} at
+ * all — NeoForge rewrote the farmland test as {@code canSustainPlant}/{@code isFertile}/{@code getBlock()}. One
+ * unbound required injector aborts the WHOLE mixin, so the two {@code randomTick} pre/post grow handlers — whose
+ * {@code ServerLevel.setBlock} anchor IS present in the merged {@code randomTick} — reported no attachment, and the
+ * mixin itself was a CONFIRMED required loss. Pruning the two unfit handlers lets the mixin apply and both events
+ * bind; the cost is that a {@code CustomFarmBlock}'s {@code isFertile} no longer changes a crop's growth speed.
+ * Those two handlers are SUSPECTED rather than CONFIRMED in the report and are named here so a later reader does not
+ * re-open them as unexplained: they are the CAUSE of the three counted balm rows.
+ *
  * <p><b>A lambda-selector retarget is NOT local — measured 2026-10-03, reverted.</b> A transformer that rewrote a
  * guest mixin's selectors onto the lambda the merged base declares cleared {@code SerializableRegistriesMixin}'s
  * finding, and the same subject then reported eleven more CONFIRMED {@code mixin-injector} losses plus a balm
@@ -157,6 +178,21 @@ public final class GuestInjectorPruner implements ClassTransformer {
 	static final String RECIPE_MIXIN = "net.fabricmc.fabric.mixin.item.RecipeMixin";
 	static final String PLAYER_INTERACTION_MIXIN =
 			"net.fabricmc.fabric.mixin.event.interaction.ServerPlayerInteractionManagerMixin";
+	static final String TRADE_OFFERS_MIXIN =
+			"net.fabricmc.fabric.mixin.object.builder.TradeOffersTypeAwareBuyForOneEmeraldFactoryMixin";
+	static final String BALM_CROP_MIXIN = "net.blay09.mods.balm.mixin.FabricCropBlockMixin";
+
+	/**
+	 * One table plus the entries that would push {@code Map.of} past its ten-pair limit. Java's {@code Map.of}
+	 * takes at most ten pairs, and these seven tables describe eleven and twelve mixins; the alternative — hoisting
+	 * every existing pair into a {@code Map.ofEntries} — rewrites lines whose content nobody is changing, which is
+	 * exactly the kind of churn a diff of this file should not carry.
+	 */
+	private static <K, V> Map<K, V> with(Map<K, V> base, Map<K, V> extra) {
+		Map<K, V> all = new java.util.LinkedHashMap<>(base);
+		all.putAll(extra);
+		return Map.copyOf(all);
+	}
 	private static final String SHARED_INDEX = "Lcom/llamalad7/mixinextras/sugar/ref/LocalIntRef;";
 
 	/**
@@ -173,7 +209,21 @@ public final class GuestInjectorPruner implements ClassTransformer {
 		}
 	}
 
-	static final Map<String, List<Prune>> TABLE = Map.of(MODEL_MANAGER_MIXIN, List.of(
+	static final Map<String, List<Prune>> EXTRA_TABLE = Map.ofEntries(
+			Map.entry(TRADE_OFFERS_MIXIN, List.of(new Prune("disableVanillaCheck",
+					"(Lnet/minecraft/core/DefaultedRegistry;)Ljava/util/stream/Stream;", "<init>"))),
+			Map.entry(BALM_CROP_MIXIN, List.of(
+					new Prune("getGrowthSpeed",
+							"(FLnet/minecraft/world/level/block/Block;Lnet/minecraft/world/level/BlockGetter;"
+									+ "Lnet/minecraft/core/BlockPos;Lcom/llamalad7/mixinextras/sugar/ref/LocalRef;)F",
+							"getGrowthSpeed"),
+					new Prune("getGrowthSpeedCaptureLocals",
+							"(Lnet/minecraft/world/level/block/state/BlockState;"
+									+ "Lcom/llamalad7/mixinextras/sugar/ref/LocalRef;)"
+									+ "Lnet/minecraft/world/level/block/state/BlockState;",
+							"getGrowthSpeed"))));
+
+	static final Map<String, List<Prune>> TABLE = with(Map.of(MODEL_MANAGER_MIXIN, List.of(
 			new Prune("cancelVanillaDeserialize",
 					"(Ljava/io/Reader;)Lnet/minecraft/client/resources/model/cuboid/CuboidModel;", MODEL_LAMBDA),
 			new Prune("actuallyDeserializeModel",
@@ -236,10 +286,15 @@ public final class GuestInjectorPruner implements ClassTransformer {
 							+ "Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;"
 							+ "Lnet/minecraft/world/level/block/entity/BlockEntity;Lnet/minecraft/world/level/block/Block;"
 							+ "Lnet/minecraft/world/level/block/state/BlockState;Z)V",
-							"Lnet/minecraft/server/level/ServerPlayerGameMode;destroyBlock")));
+							"Lnet/minecraft/server/level/ServerPlayerGameMode;destroyBlock"))), EXTRA_TABLE);
+
+	/** The two entries the config table cannot hold; see the class docs for their evidence and cost. */
+	private static final Map<String, String> EXTRA_CONFIGS = Map.ofEntries(
+			Map.entry(TRADE_OFFERS_MIXIN, "fabric-object-builder-v1.mixins.json"),
+			Map.entry(BALM_CROP_MIXIN, "balm.fabric.mixins.json"));
 
 	/** The mixin config each entry is declared in, which names the owning mod on the finding. */
-	static final Map<String, String> CONFIGS = Map.of(MODEL_MANAGER_MIXIN, "fabric-model-loading-api-v1.mixins.json",
+	static final Map<String, String> CONFIGS = with(Map.of(MODEL_MANAGER_MIXIN, "fabric-model-loading-api-v1.mixins.json",
 			ITEM_STACK_MIXIN, "fabric-item-api-v1.mixins.json",
 			WORLD_CHUNK_MIXIN, "fabric-lifecycle-events-v1.mixins.json",
 			BREWING_STAND_MIXIN, "fabric-item-api-v1.mixins.json",
@@ -248,10 +303,14 @@ public final class GuestInjectorPruner implements ClassTransformer {
 			FURNACE_CONTENT_MIXIN, "fabric-content-registries-v0.mixins.json",
 			ENCHANT_RANDOMLY_MIXIN, "fabric-item-api-v1.mixins.json",
 			RECIPE_MIXIN, "fabric-item-api-v1.mixins.json",
-			PLAYER_INTERACTION_MIXIN, "fabric-events-interaction-v0.mixins.json");
+			PLAYER_INTERACTION_MIXIN, "fabric-events-interaction-v0.mixins.json"), EXTRA_CONFIGS);
 
 	/** Whether an entry applies on this boot, beyond the pruner's own switch. */
-	private static final Map<String, BooleanSupplier> ACTIVE = Map.of(MODEL_MANAGER_MIXIN, () -> true,
+	private static final Map<String, BooleanSupplier> EXTRA_ACTIVE = Map.ofEntries(
+			Map.entry(TRADE_OFFERS_MIXIN, () -> true),
+			Map.entry(BALM_CROP_MIXIN, () -> true));
+
+	private static final Map<String, BooleanSupplier> ACTIVE = with(Map.of(MODEL_MANAGER_MIXIN, () -> true,
 			ITEM_STACK_MIXIN, GuestInjectorPruner::fabricTooltipBridgeOn,
 			WORLD_CHUNK_MIXIN, () -> true,
 			BREWING_STAND_MIXIN, () -> true,
@@ -260,10 +319,22 @@ public final class GuestInjectorPruner implements ClassTransformer {
 			FURNACE_CONTENT_MIXIN, () -> true,
 			ENCHANT_RANDOMLY_MIXIN, () -> true,
 			RECIPE_MIXIN, () -> true,
-			PLAYER_INTERACTION_MIXIN, () -> true);
+			PLAYER_INTERACTION_MIXIN, () -> true), EXTRA_ACTIVE);
 
 	/** What is lost when an entry's class loads and is not pruned. */
-	private static final Map<String, String> COSTS = Map.of(MODEL_MANAGER_MIXIN,
+	private static final Map<String, String> EXTRA_COSTS = Map.ofEntries(
+			Map.entry(TRADE_OFFERS_MIXIN, "the injector stays in the mixin, cannot attach (the merged "
+					+ "EmeraldsForVillagerTypeItem.<init> only assigns four fields — the caller builds the map, and no "
+					+ "DefaultedRegistry.stream call exists anywhere in the merged base) and is reported as a required "
+					+ "CONFIRMED loss, so a STRICT launch halts on it; the feature is gone either way, since the trade it "
+					+ "would widen is no longer built from a registry iteration"),
+			Map.entry(BALM_CROP_MIXIN, "the two injectors stay in the mixin and abort it (InvalidInjectionException), "
+					+ "taking the two randomTick handlers with them — both of THEIR anchors are present in the merged "
+					+ "randomTick, so the abort, not the anchor, is what makes them required losses, and the mixin-level "
+					+ "failure is reported on its own; the feature is gone either way, since the merged getGrowthSpeed "
+					+ "consults NeoForge's own canSustainPlant/isFertile and never the mod's CustomFarmBlock"));
+
+	private static final Map<String, String> COSTS = with(Map.of(MODEL_MANAGER_MIXIN,
 			"the whole mixin stays pinned, so every Fabric ModelLoadingPlugin -- block-state resolvers, extra "
 					+ "models, model modifiers -- is registered and never called",
 			ITEM_STACK_MIXIN, "fabric-item-api's tooltip injectors stay where the retarget put them, so the kernel's "
@@ -287,10 +358,23 @@ public final class GuestInjectorPruner implements ClassTransformer {
 					+ "calls ItemStack.hasCraftingRemainingItem/getCraftingRemainingItem, not the Item overloads) and are "
 					+ "reported as required losses, so a STRICT launch halts on them",
 			PLAYER_INTERACTION_MIXIN, "breakBlock is lost to the local-variable table and onBlockBroken to a removed "
-					+ "Block.destroy call site; both are reported as required losses, so a STRICT launch halts on them");
+					+ "Block.destroy call site; both are reported as required losses, so a STRICT launch halts on them"),
+			EXTRA_COSTS);
 
 	/** Why an entry's injectors cannot stay, for the log line. */
-	private static final Map<String, String> REASONS = Map.of(MODEL_MANAGER_MIXIN,
+	private static final Map<String, String> EXTRA_REASONS = Map.ofEntries(
+			Map.entry(TRADE_OFFERS_MIXIN, "the merged EmeraldsForVillagerTypeItem.<init>(int,int,int,Map) takes its map "
+					+ "as a PARAMETER and assigns four fields; vanilla's registry iteration is gone from the class "
+					+ "entirely — VillagerTrades builds that map without iterating BuiltInRegistries.VILLAGER_TYPE at "
+					+ "all — so the @At(INVOKE) DefaultedRegistry.stream anchor has no call to bind to, and a handler "
+					+ "returning a widened Stream cannot fit any surviving call"),
+			Map.entry(BALM_CROP_MIXIN, "the merged (NeoForge) CropBlock.getGrowthSpeed takes a BlockState, not vanilla's "
+					+ "Block, and its body no longer calls BlockState.is(Block) at all — NeoForge rewrote the farmland "
+					+ "test as canSustainPlant/isFertile/getBlock() — so both anchors (ordinals 0 and 1) are gone; one "
+					+ "unbound required injector aborts the WHOLE mixin, which is why the two randomTick handlers report "
+					+ "no attachment although their ServerLevel.setBlock anchor is present in the merged randomTick"));
+
+	private static final Map<String, String> REASONS = with(Map.of(MODEL_MANAGER_MIXIN,
 			"NeoForge replaced CuboidModel.fromStream with UnbakedModelParser.parse at that site, so fabric's @Redirect "
 					+ "could not bind while its @ModifyArg did and re-read a consumed Reader (every block model missingno)",
 			ITEM_STACK_MIXIN, "NeoForge's ItemStack draws tooltips from its appender lists, where the kernel draws "
@@ -316,10 +400,17 @@ public final class GuestInjectorPruner implements ClassTransformer {
 					+ "getCraftingRemainingItem() (the owner moved Item->ItemStack, so the Item-parameter handlers cannot match)",
 			PLAYER_INTERACTION_MIXIN, "onBlockBroken's @At(INVOKE) Block.destroy is no longer made inside "
 					+ "ServerPlayerGameMode.destroyBlock, and breakBlock's @Inject captures locals its LVT no longer has "
-					+ "(incompatible changes at opcode 89); the anchor is present but the capture is not");
+					+ "(incompatible changes at opcode 89); the anchor is present but the capture is not"),
+			EXTRA_REASONS);
 
 	/** What happens to an entry's mixin when a reshaped fabric-api leaves it untouched. */
-	private static final Map<String, String> DRIFT = Map.of(MODEL_MANAGER_MIXIN, "it will read PARTIAL and apply half — the state that made every block "
+	private static final Map<String, String> EXTRA_DRIFT = Map.ofEntries(
+			Map.entry(TRADE_OFFERS_MIXIN, "the injector soft-skips with Mixin's own warning, exactly as it did before "
+					+ "this entry, and the mixin's three other anchors still bind"),
+			Map.entry(BALM_CROP_MIXIN, "balm's whole crop mixin aborts (InvalidInjectionException) and its two randomTick "
+					+ "handlers never attach — exactly the state before this entry"));
+
+	private static final Map<String, String> DRIFT = with(Map.of(MODEL_MANAGER_MIXIN, "it will read PARTIAL and apply half — the state that made every block "
 					+ "model missingno",
 			ITEM_STACK_MIXIN, "it is retargeted as before and the kernel's tooltip bridge stands down; Fabric component "
 					+ "tooltip providers show only above the item id in advanced tooltips",
@@ -332,10 +423,21 @@ public final class GuestInjectorPruner implements ClassTransformer {
 					+ "this entry, and the mixin's other three anchors still bind",
 			ENCHANT_RANDOMLY_MIXIN, "the redirect soft-skips with Mixin's own warning, exactly as it did before this entry",
 			RECIPE_MIXIN, "the two redirects soft-skip with Mixin's own warnings, exactly as they did before this entry",
-			PLAYER_INTERACTION_MIXIN, "both soft-skip with Mixin's own warnings, exactly as they did before this entry");
+			PLAYER_INTERACTION_MIXIN, "both soft-skip with Mixin's own warnings, exactly as they did before this entry"),
+			EXTRA_DRIFT);
 
 	/** The finding a removed injector records, or none when a kernel repair does its job. */
-	private static final Map<String, String> LOSSES = Map.of(MODEL_MANAGER_MIXIN,
+	private static final Map<String, String> EXTRA_LOSSES = Map.ofEntries(
+			Map.entry(TRADE_OFFERS_MIXIN, "the kernel removed this injector: Fabric's type-aware emerald trade no longer "
+					+ "substitutes a modded VillagerType for the vanilla one (the merged EmeraldsForVillagerTypeItem is "
+					+ "built from a caller-supplied map, with no registry iteration left to widen); the mixin's @At(NEW) "
+					+ "construction anchor and its method anchors still bind"),
+			Map.entry(BALM_CROP_MIXIN, "the kernel removed these injectors: a balm CustomFarmBlock's "
+					+ "canSustainPlant/isFertile no longer changes a crop's growth speed (the merged "
+					+ "CropBlock.getGrowthSpeed consults NeoForge's own canSustainPlant/isFertile); the mixin's two "
+					+ "randomTick handlers (the pre/post grow events) still bind"));
+
+	private static final Map<String, String> LOSSES = with(Map.of(MODEL_MANAGER_MIXIN,
 			"the kernel removed this injector: NeoForge's UnbakedModelParser now reads block models at its call site, so "
 					+ "Fabric's fabric:type custom model formats (UnbakedModelDeserializer) are not consulted — the "
 					+ "kernel's own dispatch of them is off (-D" + ModelFormatFunnelInjector.PROPERTY + "=off)",
@@ -360,7 +462,8 @@ public final class GuestInjectorPruner implements ClassTransformer {
 			RECIPE_MIXIN, "the kernel removed these injectors: fabric-item-api's crafting-remainder substitution no longer "
 					+ "applies in Recipe.getRemainingItems (the merged base calls ItemStack's own methods)",
 			PLAYER_INTERACTION_MIXIN, "the kernel removed these injectors: fabric-events-interaction's "
-					+ "PlayerBlockBreakEvents BEFORE/AFTER no longer fire from ServerPlayerGameMode.destroyBlock");
+					+ "PlayerBlockBreakEvents BEFORE/AFTER no longer fire from ServerPlayerGameMode.destroyBlock"),
+			EXTRA_LOSSES);
 
 	/**
 	 * The finding an entry's removed injectors record on this boot, or null when something does their job:

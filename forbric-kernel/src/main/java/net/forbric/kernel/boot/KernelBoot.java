@@ -457,6 +457,20 @@ public final class KernelBoot {
 		}
 
 		LifecycleHookInjector lifecycleHook = side.injector();
+		// PORT(1.21.1): on 1.21.1 the CLIENT's genuine-loader trigger is not in the entry class any more — 26.2 wove
+		// ClientModLoader.begin()V into Main.main, while 1.21.1 calls the three-argument begin from Minecraft.<init>.
+		// Probe the merged base (never a version string) and, when the entry does not carry it, boot on the injector
+		// that targets Minecraft.<init>; Main.main is still registered for its early-failure reporting alone.
+		if (side == Side.CLIENT && !LifecycleHookInjector.clientEntryCarriesTheTrigger(path -> {
+				try (java.io.InputStream in = loader.getGameResourceAsStream(path)) {
+					return in == null ? null : in.readAllBytes();
+				} catch (java.io.IOException unreadable) {
+					return null;
+				}
+			})) {
+			chain.register(TransformPhase.COREMOD, LifecycleHookInjector.forClientEarlyFailures());
+			lifecycleHook = LifecycleHookInjector.forClientMinecraftInit();
+		}
 		chain.register(TransformPhase.COREMOD, lifecycleHook);
 
 		// Repairs class-local invariants the 3-ABI byte-merge breaks. It was written but never wired — without it the
@@ -1105,6 +1119,15 @@ public final class KernelBoot {
 	 */
 	private static void addSideNeuters(Side side, MethodBodyNeuter neuter) {
 		if (side != Side.CLIENT) return;
+
+		// PORT(1.21.1): the merged client's Main.main ticks NeoForge's early-window progress before Minecraft is
+		// constructed (BackgroundWaiter.runAndTick → ImmediateWindowHandler.updateProgress). The kernel runs no
+		// NeoForge early window — there is no ModLauncher to start one — so earlyProgress is null and the call NPEs
+		// Main.main before the client can construct Minecraft at all. The progress label is cosmetic; neuter it.
+		neuter.add(new MethodBodyNeuter.Target("net.neoforged.fml.loading.ImmediateWindowHandler", "updateProgress",
+				"(Ljava/lang/String;)V",
+				"the kernel runs no NeoForge early window (no ModLauncher), so earlyProgress is null — this call NPEs "
+						+ "Main.main before Minecraft is constructed"));
 
 		// Leaving a world, Minecraft.disconnect calls NeoForge's RegistryManager.revertToFrozen — the client-only
 		// undo of server-synced registry ids back to a "frozen" snapshot. NeoForge's own body cannot run here: the

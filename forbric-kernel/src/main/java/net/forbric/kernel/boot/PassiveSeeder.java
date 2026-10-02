@@ -279,6 +279,11 @@ public final class PassiveSeeder {
 		production.setBoolean(null, PRODUCTION);
 
 		setStaticIfNull(fmlLoader, "gamePath", gameDir.toAbsolutePath());
+		// PORT(1.21.1): the merged client's Main.main ticks NeoForge's early window through
+		// BackgroundWaiter.runAndTick(bootstrap, FMLLoader.progressWindowTick). Nothing starts that window under the
+		// kernel (no ModLauncher), so the field is null and runAndTick NPEs on tick.run() before Minecraft is
+		// constructed. There is no window to tick; a no-op is the honest value.
+		setStaticIfNull(fmlLoader, "progressWindowTick", (Runnable) () -> { });
 		// ModuleLayer.boot() is the honest answer where the game classes are defined by ForbricClassLoader and not
 		// by a ModLauncher layer: NeoForge's ModLoader reads it through getGameLayer(), and a service scan of the
 		// boot layer simply finds none of its providers.
@@ -294,13 +299,121 @@ public final class PassiveSeeder {
 		}
 
 		seedEmptyNeoForgeLoadingModList(gameLoader, fmlLoader);
+		if (side.isClient()) seedNeoForgeWindowProvider(gameLoader);
 
 		ForbricLog.info("[Forbric/Seed] NeoForge 21.1 FMLLoader seeded (dist=%s, production=%s, neoforge=%s, mc=%s) — "
 				+ "static identity only, no lifecycle", side.distName(), PRODUCTION,
 				net.forbric.kernel.metadata.forge.EcosystemVersions.provided("neoforge"), gameVersion);
 	}
 
-	/** The STATIC-field twin of {@link #seedEmptyLoadingModList} for the 21.1 FMLLoader shape. */
+	/**
+	 * PORT(1.21.1): gives NeoForge's {@code ImmediateWindowHandler} a window provider, so the merged {@code
+	 * Window.<init>} can create its window.
+	 *
+	 * <p>NeoForge's patch replaces vanilla's {@code GLFW.glfwCreateWindow} with
+	 * {@code ImmediateWindowHandler.setupMinecraftWindow(...)}, which delegates to a {@code provider} that a genuine
+	 * launch installs from ModLauncher's early-window phase. The kernel runs no early window, so the field is null
+	 * and constructing {@code Minecraft} dies at {@code VirtualScreen.newWindow → Window.<init>}. {@code
+	 * ImmediateWindowHandler.load} is not a way out — its first instruction reads {@code Launcher.INSTANCE}.
+	 *
+	 * <p>The stand-in creates the window exactly the way vanilla's own body did — {@code GLFW.glfwCreateWindow} with
+	 * the game's own hints already set, the monitor supplier and {@code share == 0} — and answers
+	 * {@code positionWindow} with {@code false} so the game centers it itself, which is also vanilla. The remaining
+	 * methods are the no-ops an absent early window implies.
+	 */
+	private static void seedNeoForgeWindowProvider(ClassLoader gameLoader) {
+		try {
+			Class<?> handler = Class.forName("net.neoforged.fml.loading.ImmediateWindowHandler", false, gameLoader);
+			Field provider = handler.getDeclaredField("provider");
+			provider.setAccessible(true);
+			if (provider.get(null) != null) return;
+
+			Class<?> providerType = Class.forName("net.neoforged.neoforgespi.earlywindow.ImmediateWindowProvider",
+					false, gameLoader);
+			Object standIn = Proxy.newProxyInstance(gameLoader, new Class<?>[] {providerType}, (proxy, method, args) -> {
+				switch (method.getName()) {
+					case "name": return "forbric-vanilla-window";
+					case "initialize": return (Runnable) () -> { };
+					case "setupMinecraftWindow":
+						return glfwCreateWindow(gameLoader,
+								((java.util.function.IntSupplier) args[0]).getAsInt(),
+								((java.util.function.IntSupplier) args[1]).getAsInt(),
+								String.valueOf(((java.util.function.Supplier<?>) args[2]).get()),
+								((java.util.function.LongSupplier) args[3]).getAsLong());
+					case "positionWindow": return false;
+					case "getGLVersion": return "unknown";
+					// The game's own overlay for the initial resource reload: vanilla built it as
+					// new LoadingOverlay(mc, reload, onError, fadeIn), and the two suppliers plus the consumer are
+					// exactly those arguments. A genuine early window would return its own; there is none here, so
+					// this is the vanilla one, deferred the way the supplier contract wants.
+					case "loadingOverlay":
+						return (java.util.function.Supplier<Object>) () -> newLoadingOverlay(gameLoader,
+								((java.util.function.Supplier<?>) args[0]).get(),
+								((java.util.function.Supplier<?>) args[1]).get(), args[2],
+								(Boolean) args[3]);
+					case "updateFramebufferSize":
+					case "updateModuleReads":
+					case "periodicTick":
+					case "crash": return null;
+					default:
+						if (method.getDeclaringClass() == Object.class) {
+							return switch (method.getName()) {
+								case "toString" -> "ForbricImmediateWindowProvider";
+								case "hashCode" -> System.identityHashCode(proxy);
+								case "equals" -> proxy == args[0];
+								default -> null;
+							};
+						}
+						return null;
+				}
+			});
+			provider.set(null, standIn);
+
+			// The other half of the same seam: loadingOverlay() finishes the early-window progress meter before it
+			// delegates to the provider, and Minecraft.<init> calls it. Nothing started a meter; a plain one makes
+			// complete() a no-op list removal.
+			Field earlyProgress = handler.getDeclaredField("earlyProgress");
+			earlyProgress.setAccessible(true);
+			if (earlyProgress.get(null) == null) {
+				Class<?> meter = Class.forName("net.neoforged.fml.loading.progress.ProgressMeter", false, gameLoader);
+				Class<?> message = Class.forName("net.neoforged.fml.loading.progress.Message", false, gameLoader);
+				earlyProgress.set(null, meter.getConstructor(String.class, int.class, int.class, message)
+						.newInstance("Forbric", 1, 0, null));
+			}
+
+			ForbricLog.info("[Forbric/Seed] gave NeoForge's ImmediateWindowHandler a window provider — the kernel "
+					+ "runs no early window, so Window.<init>'s patched call had none; this creates the window the "
+					+ "vanilla way (GLFW.glfwCreateWindow with the game's own hints)");
+		} catch (ClassNotFoundException absent) {
+			ForbricLog.debug("[Forbric/Seed] NeoForge ImmediateWindowHandler not present — skipping");
+		} catch (Throwable t) {
+			ForbricLog.warn("[Forbric/Seed] could not seed NeoForge's window provider", unwrap(t));
+		}
+	}
+
+	/** Vanilla's own window creation, which NeoForge's patched {@code Window.<init>} delegates to the provider. */
+	private static long glfwCreateWindow(ClassLoader gameLoader, int width, int height, String title, long monitor)
+			throws Exception {
+		Class<?> glfw = Class.forName("org.lwjgl.glfw.GLFW", true, gameLoader);
+		return (long) glfw.getMethod("glfwCreateWindow", int.class, int.class, CharSequence.class, long.class, long.class)
+				.invoke(null, width, height, title, monitor, 0L);
+	}
+
+	/** Vanilla's initial-reload overlay, which NeoForge's provider would otherwise take from its early window. */
+	private static Object newLoadingOverlay(ClassLoader gameLoader, Object minecraft, Object reload, Object onError,
+			boolean fadeIn) {
+		try {
+			Class<?> overlay = Class.forName("net.minecraft.client.gui.screens.LoadingOverlay", true, gameLoader);
+			Class<?> reloadInstance = Class.forName("net.minecraft.server.packs.resources.ReloadInstance", false,
+					gameLoader);
+			return overlay.getConstructor(minecraft.getClass(), reloadInstance, java.util.function.Consumer.class,
+					boolean.class).newInstance(minecraft, reload, onError, fadeIn);
+		} catch (ReflectiveOperationException unavailable) {
+			throw new IllegalStateException("could not build the vanilla loading overlay", unavailable);
+		}
+	}
+
+	/** The STATIC-field twin of {@link #seedEmptyLoadingModList} for the 1.21.1 FMLLoader shape. */
 	private static void seedEmptyNeoForgeLoadingModList(ClassLoader gameLoader, Class<?> fmlLoader) {
 		try {
 			Field field = fmlLoader.getDeclaredField("loadingModList");

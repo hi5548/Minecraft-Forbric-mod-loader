@@ -85,6 +85,11 @@ public final class LifecycleHookInjector implements ClassTransformer {
 	public static final String CLIENT_MAIN = "net.minecraft.client.main.Main";
 
 	private static final String KERNEL_HOOK_OWNER = "net/forbric/kernel/boot/KernelLifecycle";
+	/**
+	 * PORT(1.21.1): the game-side bridge the 1.21.1 client redirect lands on, because the trigger's descriptor
+	 * (three game types) has to be preserved and {@code KernelLifecycle} is boot-side.
+	 */
+	static final String CLIENT_LIFECYCLE_BRIDGE = "net/forbric/kernel/runtime/KernelClientLifecycle";
 
 	/** The client {@code Main}'s handler for its first three steps: {@code private static (Throwable)V}. */
 	static final String EARLY_FAILURE = "logEarlyException";
@@ -144,11 +149,37 @@ public final class LifecycleHookInjector implements ClassTransformer {
 			new Trigger(ForeignType.CLIENT_MOD_LOADER.internal(Ecosystem.FORGE), BEGIN, "()V", "onClientModLoading", 0),
 	};
 
+	// PORT(1.21.1): the client's genuine-loader entry MOVED. 26.2 wove ClientModLoader.begin()V into
+	// net.minecraft.client.main.Main.main; on 1.21.1 both families' begin takes the three live objects —
+	// begin(Minecraft, PackRepository, ReloadableResourceManager) — and is called from Minecraft.<init> before the
+	// first resource reload. Measured on the 1.21.1 merged base: Main.main calls no ClientModLoader at all, and
+	// Minecraft.<init> calls net/neoforged/neoforge/client/loading/ClientModLoader.begin at bc 945. The hook keeps
+	// the descriptor (popSlots 0), so it takes the three arguments and can serve the pack repository itself.
+	public static final String CLIENT_INIT = "net.minecraft.client.Minecraft";
+	private static final String CLIENT_BEGIN_DESC = "(Lnet/minecraft/client/Minecraft;"
+			+ "Lnet/minecraft/server/packs/repository/PackRepository;"
+			+ "Lnet/minecraft/server/packs/resources/ReloadableResourceManager;)V";
+	private static final Trigger[] CLIENT_INIT_TRIGGERS = {
+			new Trigger(ForeignType.CLIENT_MOD_LOADER.internal(Ecosystem.NEOFORGE), BEGIN, CLIENT_BEGIN_DESC,
+					"onClientModLoadingWithPacks", 0),
+			new Trigger(ForeignType.CLIENT_MOD_LOADER.internal(Ecosystem.FORGE), BEGIN, CLIENT_BEGIN_DESC,
+					"onClientModLoadingWithPacks", 0),
+	};
+
+	/** No trigger arms: a reporting-only registration (see {@link #forClientEarlyFailures()}). */
+	private static final Trigger[] NO_TRIGGERS = {};
+
 	// The class + method carrying the trigger to rewrite. Server: Main.main. Client: Main.main (client entry), where
 	// ClientModLoader.begin() is woven — the exact analogue of the server's ServerModLoader.load site.
 	private final String transformClass;
 	private final String transformMethod;
 	private final Trigger[] triggers;
+	/**
+	 * The class the redirect targets. The boot-side {@code KernelLifecycle} answers no-argument calls; a trigger
+	 * whose descriptor must be preserved onto a game-typed hook (the 1.21.1 client) points at the game-side bridge
+	 * instead, because a boot class cannot declare {@code Minecraft} in a signature.
+	 */
+	private final String hookOwner;
 	/**
 	 * Whether a redirected trigger is followed by Fabric's {@code Hooks.startServer}. Server only: the client's
 	 * equivalent, {@code Hooks.startClient}, belongs in {@code Minecraft.<init>} and is emitted there by
@@ -162,27 +193,63 @@ public final class LifecycleHookInjector implements ClassTransformer {
 	private volatile boolean redirectedAtRequiredEntry;
 
 	private LifecycleHookInjector(String transformClass, String transformMethod, Trigger[] triggers,
-			boolean fabricServerHook, boolean reportsEarlyFailures) {
+			boolean fabricServerHook, boolean reportsEarlyFailures, String hookOwner) {
 		this.transformClass = transformClass;
 		this.transformMethod = transformMethod;
 		this.triggers = triggers;
+		this.hookOwner = hookOwner;
 		this.fabricServerHook = fabricServerHook;
 		this.reportsEarlyFailures = reportsEarlyFailures;
 	}
 
 	/** The injector for the dedicated-server entry ({@code Main.main}). */
 	public static LifecycleHookInjector forServer() {
-		return new LifecycleHookInjector(SERVER_MAIN, "main", SERVER_TRIGGERS, true, false);
+		return new LifecycleHookInjector(SERVER_MAIN, "main", SERVER_TRIGGERS, true, false, KERNEL_HOOK_OWNER);
 	}
 
 	/** The injector for the client ({@code net.minecraft.client.main.Main.main}). */
 	public static LifecycleHookInjector forClient() {
-		return new LifecycleHookInjector(CLIENT_MAIN, "main", CLIENT_TRIGGERS, false, true);
+		return new LifecycleHookInjector(CLIENT_MAIN, "main", CLIENT_TRIGGERS, false, true, KERNEL_HOOK_OWNER);
+	}
+
+	/**
+	 * The client lifecycle injector for 1.21.1, whose trigger is the three-argument {@code begin} called from
+	 * {@code Minecraft.<init>} rather than {@code Main.main}. The trigger keeps its descriptor, so the redirect
+	 * lands on the game-side bridge (see {@link #CLIENT_LIFECYCLE_BRIDGE}). The missed-excision gate then judges the
+	 * class that actually carries the caller.
+	 */
+	public static LifecycleHookInjector forClientMinecraftInit() {
+		return new LifecycleHookInjector(CLIENT_INIT, "<init>", CLIENT_INIT_TRIGGERS, false, false,
+				CLIENT_LIFECYCLE_BRIDGE);
+	}
+
+	/**
+	 * The client entry with NO trigger arms: patch {@code Main.logEarlyException} so a failure in Main's first three
+	 * steps reaches the kernel's log, but expect no redirect. Used alongside {@link #forClientMinecraftInit()} on
+	 * 1.21.1, where the lifecycle trigger is not in this class (26.2's {@link #forClient()} covers both).
+	 */
+	public static LifecycleHookInjector forClientEarlyFailures() {
+		return new LifecycleHookInjector(CLIENT_MAIN, "main", NO_TRIGGERS, false, true, KERNEL_HOOK_OWNER);
+	}
+
+	/**
+	 * Whether {@code Main.main} itself carries a genuine client lifecycle trigger — i.e. whether this base is the
+	 * 26.2 shape. Probes the merged-base bytes rather than a version string; a base the resolver cannot read keeps
+	 * the 26.2 reading, which is the one whose gate is strongest.
+	 */
+	public static boolean clientEntryCarriesTheTrigger(java.util.function.Function<String, byte[]> classes) {
+		byte[] bytes = classes.apply(CLIENT_MAIN.replace('.', '/') + ".class");
+		if (bytes == null) return true;
+		String pool = new String(bytes, java.nio.charset.StandardCharsets.ISO_8859_1);
+		for (Trigger t : CLIENT_TRIGGERS) {
+			if (pool.contains(t.owner())) return true;
+		}
+		return false;
 	}
 
 	/** Backwards-compatible default: the server entry (existing callers/tests). */
 	public LifecycleHookInjector() {
-		this(SERVER_MAIN, "main", SERVER_TRIGGERS, true, false);
+		this(SERVER_MAIN, "main", SERVER_TRIGGERS, true, false, KERNEL_HOOK_OWNER);
 	}
 
 	@Override
@@ -208,7 +275,7 @@ public final class LifecycleHookInjector implements ClassTransformer {
 
 				if (t.popSlots() == 0) {
 					// Same descriptor: keep the argument on the stack, just retarget owner+name.
-					call.owner = KERNEL_HOOK_OWNER;
+					call.owner = hookOwner;
 					call.name = t.hookName();
 				} else {
 					// The trigger has arguments the no-arg hook does not want: POP them, then call the hook. (Every
@@ -216,14 +283,14 @@ public final class LifecycleHookInjector implements ClassTransformer {
 					for (int i = 0; i < t.popSlots(); i++) {
 						m.instructions.insertBefore(call, new InsnNode(Opcodes.POP));
 					}
-					call.owner = KERNEL_HOOK_OWNER;
+					call.owner = hookOwner;
 					call.name = t.hookName();
 					call.desc = "()V";
 				}
 
 				redirected++;
 				ForbricLog.info("[Forbric/Lifecycle] redirected genuine loader trigger %s.%s to %s.%s from %s.%s "
-						+ "— kernel owns the lifecycle", t.owner(), t.name(), KERNEL_HOOK_OWNER, t.hookName(),
+						+ "— kernel owns the lifecycle", t.owner(), t.name(), hookOwner, t.hookName(),
 						transformClass, transformMethod);
 
 				if (fabricHooks && !marked) {
@@ -249,9 +316,23 @@ public final class LifecycleHookInjector implements ClassTransformer {
 		if (reportsEarlyFailures) reportEarlyFailures(node);
 
 		if (redirected == 0) {
-			ForbricLog.error("[Forbric/Lifecycle] %s.%s contained NO known genuine-loader trigger — the merged "
-					+ "base's entry shape changed; refusing to boot on an un-hooked lifecycle", transformClass,
-					transformMethod);
+			// A reporting-only registration (NO_TRIGGERS) expects no redirect and says nothing about it.
+			if (triggers.length > 0) {
+				StringBuilder seen = new StringBuilder();
+				for (MethodNode m : node.methods) {
+					if (!m.name.equals(transformMethod)) continue;
+					for (var insn : m.instructions.toArray()) {
+						if (insn instanceof MethodInsnNode call && call.owner.contains("ClientModLoader")) {
+							if (seen.length() > 0) seen.append(", ");
+							seen.append(call.owner).append('.').append(call.name).append(call.desc);
+						}
+					}
+				}
+				ForbricLog.error("[Forbric/Lifecycle] %s.%s contained NO known genuine-loader trigger — the merged "
+						+ "base's entry shape changed; refusing to boot on an un-hooked lifecycle. Loader calls in "
+						+ "that method: [%s]", transformClass, transformMethod,
+						seen.length() == 0 ? "none" : seen);
+			}
 			return classBytes;
 		}
 		redirectedAtRequiredEntry = true;
@@ -316,6 +397,13 @@ public final class LifecycleHookInjector implements ClassTransformer {
 		// The one FATAL in the tree, and not a new policy: KernelBoot already refuses to boot when this seam is
 		// missed. Declaring it puts the same fact in the books so the summary and the build-time audit can see it
 		// too.
+		//
+		// PORT(1.21.1): the client registers TWO injectors — the lifecycle one (Main.main on 26.2,
+		// Minecraft.<init> on 1.21.1) and a reporting-only one on Main.main that expects no redirect. Only the
+		// trigger-carrying one declares an anchor; a NO_TRIGGERS registration is not a seam that can be missed.
+		if (triggers.length == 0) {
+			return AnchorSet.scanned("reports early client failures only; carries no lifecycle trigger");
+		}
 		return AnchorSet.of(new AnchorSet.Anchor(transformClass, AnchorSet.Severity.FATAL,
 				"the genuine loader's own mod-loading lifecycle would run alongside the kernel's, which is the "
 						+ "one thing this architecture cannot survive"));

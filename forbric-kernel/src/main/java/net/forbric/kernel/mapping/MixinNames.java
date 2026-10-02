@@ -348,6 +348,16 @@ public final class MixinNames {
 	 * handing back the wrong one would parse as neither and be a silent loss again.
 	 */
 	private static String sameShape(String asWritten, String answer) {
+		// A MEMBER selector is never reshaped. The reshape below exists for CLASSES: `@At(NEW)` writes `L…;` while
+		// the flattened table answers with the bare name, and Mixin needs the shape the annotation used. Applied to
+		// a member it strips the owner's `L` and the return type's `;` from a full descriptor, giving
+		// `net/minecraft/server/MinecraftServer;reloadResources(Ljava/util/Collection;)Ljava/util/concurrent/CompletableFuture`
+		// — which Mixin reads as owner `net/minecraft/server/MinecraftServer;reloadResources` and rejects with
+		// `invalid target descriptor: Invalid owner`. Measured on a COLD cache (fresh `/tmp/w7-remap-cache-11`):
+		// every module in the closure whose refmap keys a member by its BARE name (`"reloadResources"`) or its DOTTED
+		// name (`net/minecraft/…/getOffer(…)`) broke at once — cr 88-90 against cr 2 on the pre-fix jars. The stage
+		// before this wrapper returned the descriptor here and Mixin accepted it, so this restores that.
+		if (answer.indexOf('(') >= 0) return answer;
 		boolean wrapped = asWritten.startsWith("L") && asWritten.endsWith(";");
 		boolean answerWrapped = answer.startsWith("L") && answer.endsWith(";");
 		if (wrapped && !answerWrapped) return "L" + answer + ";";

@@ -227,4 +227,95 @@ class MixinNamesTest {
 				atTargets(jar).stream().map(MixinNamesTest::bare).toList(),
 				"an @At(NEW) target written with the Yarn class name must name the class the merged base constructs");
 	}
+	/**
+	 * The MEMBER half of the same asymmetry the {@code @At(NEW)} case above normalises, and the one that made a cold
+	 * cache fail wholesale. fabric-lifecycle-events-v1 keys this member by its BARE name
+	 * ({@code "reloadResources"}) while the annotation writes the same bare name, so the exact lookup now RESOLVES
+	 * where it used to fall through — and the reply was being "reshaped" to the annotation's unwrapped spelling by
+	 * stripping the descriptor's {@code L} and its return type's {@code ;}, giving
+	 * {@code net/minecraft/server/MinecraftServer;reloadResources(...)…CompletableFuture}. Mixin parses that as an
+	 * owner of {@code net/minecraft/server/MinecraftServer;reloadResources} and refuses the mixin with
+	 * {@code invalid target descriptor: Invalid owner}.
+	 *
+	 * <p>Reshaping is for CLASSES (a bare class name and a wrapped one are both spellings of one class). A member
+	 * selector has no such second spelling: the descriptor is what every reader accepts, and it is what the stage
+	 * before the reshape emitted. Measured across a real closure: 119 of 625 injection selectors came back stripped,
+	 * every module was affected, and the fabric subjects went from {@code cr=2} to {@code cr=88-90}.
+	 */
+	@Test
+	void aBareMemberKeyKeepsItsDescriptorAndIsNotStripped(@TempDir Path dir) throws Exception {
+		Path jar = dir.resolve("probe.jar");
+		writeJarWithMethod(jar,
+				"{\"mappings\":{\"" + MIXIN + "\":{\"reloadResources\":"
+						+ "\"Lnet/minecraft/server/MinecraftServer;reloadResources(Ljava/util/Collection;)Ljava/util/concurrent/CompletableFuture;\"}}}",
+				"reloadResources", "INVOKE");
+
+		MixinNames.translate(jar, spine());
+
+		assertEquals(List.of("Lnet/minecraft/server/MinecraftServer;reloadResources(Ljava/util/Collection;)"
+						+ "Ljava/util/concurrent/CompletableFuture;"), methodSelectors(jar),
+				"a resolved member selector must come back as a descriptor; stripping the owner's L and the return "
+						+ "type's ; makes Mixin read the member as part of the owner");
+	}
+
+	/** One {@code @Mixin} with one {@code @Inject} whose {@code method} selector is the probe. */
+	private static void writeJarWithMethod(Path jar, String refmap, String methodSelector, String atValue) throws Exception {
+		ClassWriter writer = new ClassWriter(0);
+		writer.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, MIXIN, null, "java/lang/Object", null);
+
+		AnnotationVisitor mixin = writer.visitAnnotation("Lorg/spongepowered/asm/mixin/Mixin;", true);
+		AnnotationVisitor targets = mixin.visitArray("targets");
+		targets.visit(null, "net.minecraft.world.entity.LivingEntity");
+		targets.visitEnd();
+		mixin.visitEnd();
+
+		var method = writer.visitMethod(Opcodes.ACC_PRIVATE, "handler", "()V", null, null);
+		AnnotationVisitor inject = method.visitAnnotation("Lorg/spongepowered/asm/mixin/injection/Inject;", true);
+		AnnotationVisitor methods = inject.visitArray("method");
+		methods.visit(null, methodSelector);
+		methods.visitEnd();
+		AnnotationVisitor ats = inject.visitArray("at");
+		AnnotationVisitor at = ats.visitAnnotation(null, "Lorg/spongepowered/asm/mixin/injection/At;");
+		at.visit("value", atValue);
+		at.visit("target", "Lnet/minecraft/world/entity/LivingEntity;hurt()V");
+		at.visitEnd();
+		ats.visitEnd();
+		inject.visitEnd();
+		method.visitCode();
+		method.visitInsn(Opcodes.RETURN);
+		method.visitMaxs(0, 1);
+		method.visitEnd();
+		writer.visitEnd();
+
+		try (ZipOutputStream out = new ZipOutputStream(Files.newOutputStream(jar))) {
+			out.putNextEntry(new ZipEntry(MIXIN + ".class"));
+			out.write(writer.toByteArray());
+			out.closeEntry();
+			out.putNextEntry(new ZipEntry("probe-refmap.json"));
+			out.write(refmap.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+			out.closeEntry();
+		}
+	}
+
+	/** The injector's {@code method} selectors as they now stand in the jar. */
+	private static List<String> methodSelectors(Path jar) throws Exception {
+		List<String> out = new ArrayList<>();
+		try (ZipFile zip = new ZipFile(jar.toFile())) {
+			ClassNode node = new ClassNode();
+			new ClassReader(zip.getInputStream(zip.getEntry(MIXIN + ".class")).readAllBytes())
+					.accept(node, ClassReader.SKIP_FRAMES);
+			for (MethodNode method : node.methods) {
+				for (AnnotationNode annotation : method.visibleAnnotations == null ? List.<AnnotationNode>of()
+						: method.visibleAnnotations) {
+					if (!annotation.desc.equals("Lorg/spongepowered/asm/mixin/injection/Inject;")) continue;
+					for (int i = 0; i + 1 < annotation.values.size(); i += 2) {
+						if (!"method".equals(String.valueOf(annotation.values.get(i)))) continue;
+						for (Object item : (List<?>) annotation.values.get(i + 1)) out.add(String.valueOf(item));
+					}
+				}
+			}
+		}
+		return out;
+	}
+
 }

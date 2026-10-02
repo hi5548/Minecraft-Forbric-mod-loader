@@ -412,3 +412,62 @@ the `ClientboundLoginPacket` `ClassCastException` is recorded as what the consol
 differ (`(-29.5, 66.0, 54.5)` ON vs `(-26.5, 65.0, 49.5)` OFF), so the staged client world fixture is not
 byte-identical run to run; a future comparison that depends on world *state* should reset the fixture explicitly.
 It changes nothing above — the failure is identical in both.
+
+## 13. Root cause of the `ClassCastException`: the merge paired Forge's network registry-sync driver with NeoForge's element loader
+
+§12 quoted `java.lang.ClassCastException: class java.util.Optional cannot be cast to class
+net.minecraft.world.level.dimension.DimensionType` at `ClientboundLoginPacket.handle` → `Level.<init>` and did not
+diagnose it. Read at the bytecode, it is the root of the whole failure, and the `handleDataMapSync` NPE is its
+downstream consequence: `handleLogin` throws before `Minecraft.setLevel`, so the level is never created and the
+data-map sync then dereferences a null `Minecraft.level`.
+
+**The chain, from the bytes.**
+
+1. `CommonPlayerSpawnInfo.dimensionType` decodes through `DimensionType.STREAM_CODEC =
+   ByteBufCodecs.holderRegistry(DIMENSION_TYPE)` → `ByteBufCodecs$25.decode` → `Registry.asHolderIdMap().byIdOrThrow`
+   → `Registry$1.byId` = `this$0.getHolder(id).orElse(null)`. All of those are byte-identical to **neoforge**
+   (forge differs only in local-variable names and constant-pool indices). So the packet's `Holder` is the client's
+   own registry reference for `minecraft:overworld`, and its `value()` is an `Optional`.
+2. `ClientPacketListener.handleLogin` takes that holder (`commonPlayerSpawnInfo.dimensionType()`) and passes it to
+   `new ClientLevel(...)` → `Level.<init>` line 137 = `DimensionType d = holder.value();` (`checkcast
+   DimensionType`). That cast is the exception.
+3. The registry entry itself is Optional-valued because of `RegistryDataLoader`, the client registry-sync loader.
+
+**Where the shape diverges — `net.minecraft.resources.RegistryDataLoader`.** The server never runs this path
+(`loadContentsFromManager` is the datapack loader, and its decoder is the plain one — which is why the dedicated
+server is fine). The client's network path is:
+
+- **`loadContentsFromNetwork` is MinecraftForge's body.** It wraps the registry's element codec with
+  `net.minecraftforge.common.crafting.conditions.ConditionCodec.wrap`, producing a `Decoder<Optional<E>>` (empty =
+  "conditions not met"), and stores it in local 9. Bytecode: `invokestatic
+  ConditionCodec.wrap:(Decoder)Decoder` appears **1× in merged, 1× in forge-patched, 0× in neoforge-patched**.
+- **`loadElementFromResource` is NeoForge's body.** Its parameter is the plain `Decoder<E>` (**merged and
+  neoforge** signatures both say `Decoder<E>`; **forge's** says `Decoder<Optional<E>>`), and it wraps again with
+  `NeoForgeExtraCodecs.decodeOnly` + `ConditionalOps.createConditionalCodec` and unwraps exactly one level with
+  `ifPresentOrElse` (`merged` and `neoforge` each contain one `ConditionalOps.createConditionalCodec`; `forge`
+  contains none).
+- `loadContentsFromNetwork` calls `loadElementFromResource(registry, local9, …)` — i.e. it hands the
+  **Forge-wrapped** decoder to the **NeoForge** loader. Wrapped twice, unwrapped once ⇒ the element registered is
+  the inner `Optional<E>`.
+
+The client reaches that branch for exactly the entries the packet carries with no payload: in
+`RegistrySynchronization.lambda$packRegistry$3` (merged), `boolean known = registrationInfo(key).flatMap(info ->
+info.knownPackInfo()).filter(knownPacks::contains).isPresent()`, and when `known` the entry is sent as
+`data = Optional.empty()`. Vanilla's dimension types come from the `minecraft` known pack, so
+`minecraft:overworld` is sent id-only and the client loads it locally through `loadElementFromResource` — with
+Forge's wrap on the decoder.
+
+**Which family survived where.** Forge's writer/driver (`loadContentsFromNetwork`, its `ConditionCodec.wrap` and
+the `ICondition.IContext`-tagged `JsonOps`) + NeoForge's reader/loader (`loadElementFromResource`, `Decoder<E>`,
+one unwrap). Each family is internally consistent; the merge took one half from each. Nothing here is a defect in
+`CommonPlayerSpawnInfo`, `DimensionType`, `ByteBufCodecs` or `Holder` — those are NeoForge-identical across the
+merge.
+
+**Repair (commit pending, recorded in §14).** `RegistryNetworkSyncDecoderRepair` deletes the
+`ConditionCodec.wrap` call in `loadContentsFromNetwork`, so the raw decoder reaches the loader and the wrap/unwrap
+is once. That is the same convention the kernel already uses for this class of merge artefact
+(`NeoConversionPostInjector`-style `ClassTransformer`, COREMOD-registered, anchored, `-D` kill switch). The
+alternative — keeping the Forge wrap and making the loader Forge-shaped — would break the datapack path, which
+shares the same loader with the plain decoder; and giving up Forge's own condition gate on known-pack entries is
+benign, since those entries are the core data the client already has, and NeoForge's conditional codec still skips
+entries whose NeoForge conditions are unmet.

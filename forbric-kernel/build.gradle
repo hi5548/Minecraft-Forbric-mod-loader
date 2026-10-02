@@ -244,6 +244,12 @@ dependencies {
 	// KernelModInfo therefore need the same library on their link classpath; pinned like the other game-side
 	// libraries above, compile/link only, never bundled.
 	testRuntimeOnly 'org.apache.commons:commons-lang3:3.14.0'
+	// Guava, on the TEST classpath for the same reason as commons-lang3 above and on the same terms: the game
+	// supplies it (it is a Minecraft library), and a test that defines a merged-base class whose signatures NAME
+	// it — DependencySorter's `Multimap`, measured 2026-10-03 — cannot resolve those signatures without it. A
+	// fixture of the test's own would have proved nothing about the class the game links against. compile/link
+	// only, never bundled.
+	testImplementation 'com.google.guava:guava:33.6.0-jre'
 }
 
 tasks.withType(JavaCompile).configureEach {

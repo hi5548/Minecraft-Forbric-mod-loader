@@ -210,8 +210,14 @@ public final class GuestInjectorPruner implements ClassTransformer {
 	}
 
 	static final Map<String, List<Prune>> EXTRA_TABLE = Map.ofEntries(
+			// The prefix is the LIVE selector, not the module's own `"<init>"`: the name layer translates a member
+			// selector through the module's refmap before this transformer sees the class (the refmap maps
+			// `"<init>"` to `L…EmeraldsForVillagerTypeItem;<init>(IIILjava/util/Map;)V`), so a prefix written the way
+			// the MOD wrote it matches nothing here and the pruner declines — measured in a real boot, where this
+			// entry's guard read `no longer injects into <init>` while the class the loader had was translated.
 			Map.entry(TRADE_OFFERS_MIXIN, List.of(new Prune("disableVanillaCheck",
-					"(Lnet/minecraft/core/DefaultedRegistry;)Ljava/util/stream/Stream;", "<init>"))),
+					"(Lnet/minecraft/core/DefaultedRegistry;)Ljava/util/stream/Stream;",
+					"Lnet/minecraft/world/entity/npc/VillagerTrades$EmeraldsForVillagerTypeItem;<init>"))),
 			Map.entry(BALM_CROP_MIXIN, List.of(
 					new Prune("getGrowthSpeed",
 							"(FLnet/minecraft/world/level/block/Block;Lnet/minecraft/world/level/BlockGetter;"

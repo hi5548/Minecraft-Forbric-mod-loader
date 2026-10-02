@@ -84,8 +84,20 @@ public final class FabricGuestRemapper {
 	 * values and selector strings predated {@link MixinNames}' refmap-aware pass at all, so a run reported the old
 	 * selector-resolution losses while the new stage was never given the jar. Bumping this constant is the one-line
 	 * answer, and it costs one re-remap of the tree per cache directory.
+	 *
+	 * <p>Bumped to {@code 1.21.1-10-selector-spelling} for {@link MixinNames}' two spelling fixes: an {@code @At}
+	 * selector whose member the refmap keys DOTTED while the annotation writes the descriptor form, and an
+	 * {@code @At(NEW)} target whose class the refmap keys BARE while the annotation wraps it. Both change this
+	 * stage's OUTPUT for an unchanged input jar — measured on a warm cache whose fabric-lifecycle-events module had
+	 * its method selectors translated but its {@code @At} target still naming the module's own
+	 * {@code SynchronizeRecipesS2CPacket}, so the boot reported the same loss the fix was written for while the fix
+	 * had never been given the jar.
+	 *
+	 * <p>Bumped to {@code 1.21.1-11-inherited-member-decls} for {@link InheritedMemberDecls}, for the same reason
+	 * and by a wider margin than {@code 1.21.1-9}: a DECLARATION that gained its runtime name changes the class
+	 * file's method table, so a warm cache holding the previous bytes carries a class that implements nothing.
 	 */
-	private static final String REMAP_VERSION = "1.21.1-9-inherited-member-refs";
+	private static final String REMAP_VERSION = "1.21.1-11-inherited-member-decls";
 
 	private FabricGuestRemapper() {
 	}
@@ -133,6 +145,11 @@ public final class FabricGuestRemapper {
 				// walking the classpath, and a guest owner is not on it, so the name it cannot reach is rewritten
 				// here (see InheritedMemberRefs — the same shape as the refmap and the widener below).
 				InheritedMemberRefs.translate(out, spine);
+				// The other half of the same walk, for a DECLARATION: the class it satisfies is reached through a
+				// supertype that is neither input nor classpath (a Fabric API interface), so the method that would
+				// implement it keeps its intermediary name and satisfies nothing (see InheritedMemberDecls —
+				// betterrailwaysystem's reload listener died on the AbstractMethodError that produced).
+				InheritedMemberDecls.translate(out, spine);
 				// And the access widener is a namespace too: its directives name class_*/method_* the runtime
 				// class does not have, so a pass that never rewrites it widens nothing (see AccessWidenerRemapper).
 				net.forbric.kernel.access.AccessWidenerRemapper.remap(out, spine);

@@ -27,12 +27,12 @@ import org.objectweb.asm.tree.*;
  * <p>Inert unless {@code -Dforbric.eventChainAudit=<report.json>}: a diagnostic for gates, never on in play.
  */
 public final class EventChainAuditInjector implements ClassTransformer {
-	static final String NEO_BUS = "net.neoforged.bus.EventBus";
+	static final String NEO_BUS = ForeignType.EVENT_BUS_IMPL.binary(Ecosystem.NEOFORGE);
 	// PORT(1.21.1): MinecraftForge 1.21.1 is EventBus 6 — ONE concrete net.minecraftforge.eventbus.EventBus
 	// implementing IEventBus, with a single post(Event):Z. The 26.2 EventBus 7 pair (internal.EventBusImpl /
 	// internal.CancellableEventBusImpl) does not exist here, so the old targets left the Forge side of the audit
 	// permanently blind. Cancellability moved from the bus class to the event (Event.isCancelable()).
-	static final String FORGE_BUS = "net.minecraftforge.eventbus.EventBus";
+	static final String FORGE_BUS = ForeignType.EVENT_BUS_IMPL.binary(Ecosystem.FORGE);
 	static final String NEO_EVENT_TYPE = ForeignType.EVENT.internal(Ecosystem.NEOFORGE), FORGE_EVENT_TYPE = ForeignType.EVENT.internal(Ecosystem.FORGE);
 	static final String NEO_EVENT = "L" + NEO_EVENT_TYPE + ";";
 	static final String NEO_POST = "(" + NEO_EVENT + "[Lnet/neoforged/bus/api/EventListener;)" + NEO_EVENT;

@@ -162,7 +162,7 @@ class KernelEventSubscribersTest {
 	@Test
 	void collectsTheEventTypesASubscriberWaitsOn() {
 		var sub = KernelEventSubscribers.scanClassBytes(subscriberListening("com/example/Events", EBS_FORGE,
-				"Lnet/minecraftforge/eventbus/api/listener/SubscribeEvent;",
+				"Lnet/minecraftforge/eventbus/api/SubscribeEvent;",
 				"net/minecraftforge/event/ServerChatEvent",
 				"net/minecraftforge/event/level/BlockEvent$BreakEvent"));
 
@@ -251,13 +251,15 @@ class KernelEventSubscribersTest {
 	}
 
 	@Test
-	void anAbsentBusIsBOTH() {
-		// Forge's own default. It is the value that routes per event type, so defaulting to FORGE instead would
-		// strand every mod-bus listener in the class.
+	void anAbsentBusIsTheForgeDefault() {
+		// 1.21.1 MinecraftForge's @EventBusSubscriber.bus() carries AnnotationDefault Bus.FORGE (and its Bus enum
+		// has only FORGE and MOD), so an absent attribute means the game bus. Routing it as BOTH/AUTO instead would
+		// move a class's IModBusEvent listeners onto the mod bus, which Forge never does. Verified with javap -v
+		// against the staged forge-runtime.jar.
 		var s = KernelEventSubscribers.scanClassBytes(
 				subscriber("com/example/Events", EBS_FORGE, null, null, DIST_FORGE));
 
-		assertEquals("BOTH", s.bus());
+		assertEquals("FORGE", s.bus());
 		assertNull(s.modId());
 		assertTrue(s.dists().isEmpty());
 	}

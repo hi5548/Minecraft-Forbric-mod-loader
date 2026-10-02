@@ -523,6 +523,11 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 	private static final String NAME_FOR_CLASS =
 			"(Ljava/lang/Class;)Lnet/minecraft/resources/Identifier;";
 	private static final String KERNEL_RELOAD_NAMES = "net/forbric/kernel/runtime/KernelClientReloadNames";
+	/** Each family's model-geometry loader manager: the merged reload inits NeoForge's and this seam adds Forge's. */
+	private static final String FORGE_GEOMETRY_LOADERS =
+			ForeignType.GEOMETRY_LOADER_MANAGER.internal(Ecosystem.FORGE);
+	private static final String NEO_GEOMETRY_LOADERS =
+			ForeignType.GEOMETRY_LOADER_MANAGER.internal(Ecosystem.NEOFORGE);
 	/** NeoForge's retyping of vanilla's {@code providers}: the one the merged {@code <init>} actually writes. */
 	/**
 	 * The methods measured to be merge-injected in this shape, and worth removing.
@@ -1819,9 +1824,9 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 			if (!(instruction instanceof MethodInsnNode call)) continue;
 			if ("net/forbric/kernel/runtime/KernelForgeClientInit".equals(call.owner)
 					&& "initGeometryLoaders".equals(call.name)) return false;
-			if ("net/minecraftforge/client/model/geometry/GeometryLoaderManager".equals(call.owner)
+			if (FORGE_GEOMETRY_LOADERS.equals(call.owner)
 					&& "init".equals(call.name)) return false;
-			if ("net/neoforged/neoforge/client/model/geometry/GeometryLoaderManager".equals(call.owner)
+			if (NEO_GEOMETRY_LOADERS.equals(call.owner)
 					&& "init".equals(call.name)) neoGeometry = true;
 		}
 		if (!neoGeometry) return false;

@@ -101,7 +101,8 @@ public final class KernelEventSubscribers {
 	 * @param family which ecosystem's annotation matched — the bit the old scan threw away
 	 * @param dists  the declared {@code Dist[] value()}; EMPTY means "every side", not "no side"
 	 * @param modId  the declared {@code modid()}, or null
-	 * @param bus    the declared {@code bus()}, defaulting to {@code BOTH} when absent
+	 * @param bus    the declared {@code bus()}, or the family's own annotation default when absent — MinecraftForge
+	 *               declares {@code FORGE}, which is the arm {@link #busGroupChoice} routes
 	 */
 	record Subscriber(String className, Ecosystem family, java.util.Set<String> dists,
 			String modId, String bus, java.util.Set<String> subscribedEvents) {
@@ -119,10 +120,10 @@ public final class KernelEventSubscribers {
 		/** {@code bus = MOD} — the owning mod's own bus group. */
 		MOD,
 		/**
-		 * {@code bus = BOTH}, the default. Pass {@code null} and let Forge route per event type — its
-		 * {@code registerListener} opens with {@code if (busGroup == null)} and picks the mod bus for an
-		 * {@code IModBusEvent}, {@code BusGroup.DEFAULT} otherwise. Passing DEFAULT here instead would strand
-		 * every mod-bus listener.
+		 * An unrecognised {@code bus} — NeoForge's absent-attribute sentinel, {@code BOTH}. Pass {@code null} and
+		 * let Forge route per event type — its {@code registerListener} opens with {@code if (busGroup == null)}
+		 * and picks the mod bus for an {@code IModBusEvent}, {@code BusGroup.DEFAULT} otherwise. Passing DEFAULT
+		 * here instead would strand every mod-bus listener.
 		 */
 		AUTO,
 		/** {@code bus = MOD} but the owning mod has no bus group — anywhere else would be a lie that never fires. */

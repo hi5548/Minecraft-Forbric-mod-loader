@@ -86,7 +86,10 @@ public final class WorldDataShape {
 	}
 
 	private static boolean isEmptyContainer(JsonElement element) {
-		return (element instanceof JsonArray array && array.isEmpty())
-				|| (element instanceof JsonObject object && object.isEmpty());
+		// size(), never isEmpty(): the game ships its own gson (1.21.1 carries 2.10.1, older than 26.2's) and
+		// JsonObject has no isEmpty() there — calling it is a NoSuchMethodError from a method that runs on the
+		// game's classpath. size() has existed since long before either version.
+		return (element instanceof JsonArray array && array.size() == 0)
+				|| (element instanceof JsonObject object && object.size() == 0);
 	}
 }

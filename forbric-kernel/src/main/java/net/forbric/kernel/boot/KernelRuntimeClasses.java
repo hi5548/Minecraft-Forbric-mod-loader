@@ -312,9 +312,6 @@ public final class KernelRuntimeClasses {
 		CLASSES.put("net.forbric.kernel.runtime.KernelConversions", new Entry(Origin.COMPILED, List.of()));
 		// fabric-content-registries' fuel events on NeoForge's fuel builder; FabricFuelValuesInjector calls apply.
 		CLASSES.put("net.forbric.kernel.runtime.KernelFabricFuel", new Entry(Origin.COMPILED, List.of()));
-		// PORT(1.21.1): kept loadable, but its caller (FabricFluidModelsInjector) is retired — NeoForge 21.1 has no
-		// gatherFluidModels check. See the class for the 26.2 design it preserves.
-		CLASSES.put("net.forbric.kernel.runtime.KernelFabricFluidModels", new Entry(Origin.COMPILED, List.of()));
 		// Vanilla's compostables map behind NeoForge's data map: the merged ComposterBlock's bootStrap records vanilla's
 		// own entries and its four composter sites ask the rest (CompostablesFallbackInjector); no boot-side call.
 		CLASSES.put("net.forbric.kernel.runtime.KernelCompostables", new Entry(Origin.COMPILED, List.of()));
@@ -493,7 +490,6 @@ public final class KernelRuntimeClasses {
 		// NeoForge refuses to NAME a client reload listener a mixin added, and throws inside Minecraft.<init>.
 		// Called from a REWRITTEN CALL SITE, so it carries that site's game-typed descriptor.
 		CLASSES.put("net.forbric.kernel.runtime.KernelClientReloadNames", new Entry(Origin.COMPILED, List.of()));
-		CLASSES.put("net.forbric.kernel.runtime.KernelServerReloadNames", new Entry(Origin.COMPILED, List.of()));
 		CLASSES.put("net.forbric.kernel.runtime.KernelCreateSoundQuery", new Entry(Origin.COMPILED, List.of()));
 		CLASSES.put("net.forbric.kernel.runtime.KernelCreateHudQuery", new Entry(Origin.COMPILED, List.of()));
 		CLASSES.put("net.forbric.kernel.runtime.IdentityValueBiMap", new Entry(Origin.COMPILED, List.of()));

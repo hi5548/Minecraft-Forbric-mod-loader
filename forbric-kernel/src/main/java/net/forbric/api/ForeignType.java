@@ -231,7 +231,26 @@ public enum ForeignType {
 			"net.neoforged.neoforge.client.event.RegisterClientCommandsEvent"),
 	/** Each family's global-loot-modifier reload listener: same directory, two ideas of what a list file is. */
 	LOOT_MODIFIER_MANAGER("net.minecraftforge.common.loot.LootModifierManager",
-			"net.neoforged.neoforge.common.loot.LootModifierManager");
+			"net.neoforged.neoforge.common.loot.LootModifierManager"),
+	// The two families' concrete transfer stores and their client model-geometry manager. Each was written out as
+	// two literals a few lines apart — ForgeTransferShapeAudit's audited shapes, EventChainAuditInjector's two
+	// concrete bus impls, ForbricMergedBaseCompatTransformer's geometry-loader seam — so updating one half while
+	// missing the other compiled and passed every test. Names only: the audited shapes, descriptors and hashes
+	// stay at their call sites, which is where the two families genuinely differ.
+	/** Either family's standard energy store, the class ForgeEnergyAdapters reads back. */
+	ENERGY_STORAGE("net.minecraftforge.energy.EnergyStorage",
+			"net.neoforged.neoforge.energy.EnergyStorage"),
+	/** The CONCRETE bus each family's {@code post} runs on; {@link #EVENT_BUS} is the {@code IEventBus} interface. */
+	EVENT_BUS_IMPL("net.minecraftforge.eventbus.EventBus", "net.neoforged.bus.EventBus"),
+	FLUID_STACK("net.minecraftforge.fluids.FluidStack",
+			"net.neoforged.neoforge.fluids.FluidStack"),
+	FLUID_TANK("net.minecraftforge.fluids.capability.templates.FluidTank",
+			"net.neoforged.neoforge.fluids.capability.templates.FluidTank"),
+	/** The seam that (re)initialises each family's model-geometry loaders on every client resource reload. */
+	GEOMETRY_LOADER_MANAGER("net.minecraftforge.client.model.geometry.GeometryLoaderManager",
+			"net.neoforged.neoforge.client.model.geometry.GeometryLoaderManager"),
+	ITEM_STACK_HANDLER("net.minecraftforge.items.ItemStackHandler",
+			"net.neoforged.neoforge.items.ItemStackHandler");
 
 	private final String forge;
 	private final String neoforge;

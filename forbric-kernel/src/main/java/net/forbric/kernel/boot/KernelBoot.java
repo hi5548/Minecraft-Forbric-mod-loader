@@ -569,7 +569,7 @@ public final class KernelBoot {
 		chain.register(TransformPhase.COREMOD, new net.forbric.kernel.transform.SoundRegistryIdentityInjector());
 		// PORT(1.21.1): ServerReloadListenerNamesInjector is retired — NeoForge 21.1 has no
 		// AddServerReloadListenersEvent / VanillaServerListeners, and vanilla orders server reload listeners by
-		// identity, not by name (KernelServerReloadNames records the same).
+		// identity, not by name.
 		chain.register(TransformPhase.COREMOD, new net.forbric.kernel.transform.CreateWorkerWaitInjector());
 		if (loader.getResource("com/zurrtum/create/mixin/LivingEntityMixin.class") != null) {
 			chain.register(TransformPhase.COREMOD, new net.forbric.kernel.transform.CreateBreathingInjector());

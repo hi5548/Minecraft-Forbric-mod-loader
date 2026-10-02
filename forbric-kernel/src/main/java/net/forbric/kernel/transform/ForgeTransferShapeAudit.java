@@ -25,6 +25,9 @@ import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.TypeInsnNode;
 import org.objectweb.asm.tree.VarInsnNode;
 
+import net.forbric.api.Ecosystem;
+import net.forbric.api.ForeignType;
+
 /**
  * FINAL, post-Mixin certificates for the reviewed Forge implementations and their transfer-critical helpers.
  * ItemStack is checked by reachable critical methods, NOT whole-class identity: unrelated tooltip/use mixins may
@@ -58,12 +61,12 @@ public final class ForgeTransferShapeAudit {
 	 * are {@link #fingerprint} over the exact staged bytes, computed with the same ROOTS below.
 	 */
 	private static final Map<String, String> AUDITED = Map.ofEntries(
-			Map.entry("net.minecraftforge.items.ItemStackHandler", "572fb811850e7abd3a96b21253965664924e995f5361cc0d57c2aab2846a9185"),
+			Map.entry(ForeignType.ITEM_STACK_HANDLER.binary(Ecosystem.FORGE), "572fb811850e7abd3a96b21253965664924e995f5361cc0d57c2aab2846a9185"),
 			Map.entry("net.minecraftforge.items.ItemHandlerHelper", "b8bfaa89d80d5f950c708cf1251adf2f9fc345329c1feec2e20bd799424bad05"),
-			Map.entry("net.minecraftforge.fluids.capability.templates.FluidTank", "f7ad8934eb46fc4ae9b94770ed51ae6d5b5c20dbcaf50ef03e854ecf1dc46d6e"),
+			Map.entry(ForeignType.FLUID_TANK.binary(Ecosystem.FORGE), "f7ad8934eb46fc4ae9b94770ed51ae6d5b5c20dbcaf50ef03e854ecf1dc46d6e"),
 			// Forge's standard energy store: the whole class, since its int energy field IS its whole transferable state.
-			Map.entry("net.minecraftforge.energy.EnergyStorage", "21b61e64ea5bdbe6a80e759f2c25fae2db8d4e445145d3c9303231801adc934b"),
-			Map.entry("net.minecraftforge.fluids.FluidStack", "59300c2200e3209e86bf239d7adbf66fb72f55c12c13b3920e17adb578136536"),
+			Map.entry(ForeignType.ENERGY_STORAGE.binary(Ecosystem.FORGE), "21b61e64ea5bdbe6a80e759f2c25fae2db8d4e445145d3c9303231801adc934b"),
+			Map.entry(ForeignType.FLUID_STACK.binary(Ecosystem.FORGE), "59300c2200e3209e86bf239d7adbf66fb72f55c12c13b3920e17adb578136536"),
 			Map.entry("net.minecraftforge.common.capabilities.CapabilityProvider", "7ec42620f337441648477605b9e57ac10450e5e882803fc3645972fc7a64bbfd"),
 			Map.entry("net.minecraft.world.item.ItemStack", "d6c70b6f64d24bc8c3e36ea33e521411d7872ea53abf834cfee780a0313127d2"),
 			Map.entry("net.minecraft.world.item.Item", "54eb06f83dfd3d08352e812f19e8f8d5027fc210c2d10472554c7e9048dd5d02"),
@@ -74,15 +77,15 @@ public final class ForgeTransferShapeAudit {
 			Map.entry("net.minecraft.nbt.CompoundTag", "1ca987508bde52b9bf2cb257c2d2cad10e78f590eaf2c74f0bfba8b814d30290"),
 			Map.entry("net.neoforged.neoforge.common.MutableDataComponentHolder", "ad3f750687a0e032cc59a1ab4b18a832cc76788e6348afd547992d9a0804a6d6"),
 			Map.entry("net.neoforged.neoforge.common.extensions.IItemExtension", "c31798eaac8e69c11eda038886bbc2ce3044f177403fa139b9d6ffb7b7e2a8f6"),
-			Map.entry("net.neoforged.neoforge.fluids.FluidStack", "6180f6ebf22a2aad898b084c41f47de33d74d50a479dd0cb60794a0c6d9fd6d7"),
+			Map.entry(ForeignType.FLUID_STACK.binary(Ecosystem.NEOFORGE), "6180f6ebf22a2aad898b084c41f47de33d74d50a479dd0cb60794a0c6d9fd6d7"),
 			// PORT(1.21.1): the NeoForge standard stores the runtime bridge also authorises.
-			Map.entry("net.neoforged.neoforge.items.ItemStackHandler", "44ad28a68bf45e9ddf84e32bc1bc3198f072c343a164846600d7e77dec178594"),
-			Map.entry("net.neoforged.neoforge.fluids.capability.templates.FluidTank", "0512b5607a50cca242b54f0a1344946856ed78850c7af213a9c93bab3614ad44"),
-			Map.entry("net.neoforged.neoforge.energy.EnergyStorage", "f069e198aef44f2cc754588474fdb988b4fd182573c1fac7e93bcec91fe283a2"));
+			Map.entry(ForeignType.ITEM_STACK_HANDLER.binary(Ecosystem.NEOFORGE), "44ad28a68bf45e9ddf84e32bc1bc3198f072c343a164846600d7e77dec178594"),
+			Map.entry(ForeignType.FLUID_TANK.binary(Ecosystem.NEOFORGE), "0512b5607a50cca242b54f0a1344946856ed78850c7af213a9c93bab3614ad44"),
+			Map.entry(ForeignType.ENERGY_STORAGE.binary(Ecosystem.NEOFORGE), "f069e198aef44f2cc754588474fdb988b4fd182573c1fac7e93bcec91fe283a2"));
 	public static final List<String> ITEM_HELPERS = List.of("net.minecraftforge.items.ItemHandlerHelper", "net.minecraft.world.item.ItemStack", "net.minecraft.world.item.Item", "net.minecraft.core.NonNullList", "net.minecraft.core.component.PatchedDataComponentMap", "net.minecraft.core.component.DataComponentPatch", "net.minecraft.core.component.DataComponentHolder", "net.minecraftforge.common.capabilities.CapabilityProvider", "net.neoforged.neoforge.common.MutableDataComponentHolder", "net.neoforged.neoforge.common.extensions.IItemExtension");
-	public static final List<String> FLUID_HELPERS = List.of("net.minecraftforge.fluids.FluidStack", "net.minecraft.nbt.CompoundTag", "net.minecraft.core.component.DataComponentPatch", "net.minecraft.core.component.DataComponentHolder", "net.neoforged.neoforge.fluids.FluidStack");
+	public static final List<String> FLUID_HELPERS = List.of(ForeignType.FLUID_STACK.binary(Ecosystem.FORGE), "net.minecraft.nbt.CompoundTag", "net.minecraft.core.component.DataComponentPatch", "net.minecraft.core.component.DataComponentHolder", ForeignType.FLUID_STACK.binary(Ecosystem.NEOFORGE));
 	/** ForgeEnergyAdapters writes only through this class's own code and restores only its energy field. */
-	public static final List<String> ENERGY_HELPERS = List.of("net.minecraftforge.energy.EnergyStorage");
+	public static final List<String> ENERGY_HELPERS = List.of(ForeignType.ENERGY_STORAGE.binary(Ecosystem.FORGE));
 	private static final Map<String, String> DECLINED = new ConcurrentHashMap<>();
 	public static String declined(String name) { return DECLINED.getOrDefault(name, "the final definition did not receive a transfer-shape certificate"); }
 

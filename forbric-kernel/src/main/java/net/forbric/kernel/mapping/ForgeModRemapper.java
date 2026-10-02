@@ -114,13 +114,38 @@ public final class ForgeModRemapper {
 
 	/** Remaps {@code input} to {@code output} using an explicit provider (e.g. {@code provider(m, "official", "named")}). */
 	public static void remapJar(Path input, Path output, IMappingProvider provider, List<Path> remapClasspath) throws IOException {
+		remapJar(input, output, provider, remapClasspath, false);
+	}
+
+	/**
+	 * PORT(1.21.1): as above, optionally running tiny-remapper's own {@code MixinExtension}.
+	 *
+	 * <p>tiny-remapper rewrites classes, members, descriptors and class literals — bytecode references. A Fabric
+	 * guest's mixin ANNOTATION STRINGS are not references: {@code @Mixin(targets = "net.minecraft.class_245")},
+	 * {@code @Inject(method = "method_1234(…)V")}, {@code @Accessor("field_5678")}, {@code @At(target = "…")} and
+	 * the mixin's own {@code @Shadow}/{@code @Overwrite} declarations keep the intermediary names they were written
+	 * with. Mixin then looks for a class or member that does not exist in the merged base ("@Mixin target
+	 * net.minecraft.class_245 was not found"), the mixin is left out, and the kernel records a required finding —
+	 * measured on ferrite-core 7.0.3, whose {@code BlockStateCacheMixin} was suppressed for exactly that reason.
+	 *
+	 * <p>The extension is the mapping-aware pass for those strings, shipped inside the pinned tiny-remapper 0.14.0
+	 * ({@code net.fabricmc.tinyremapper.extension.mixin.MixinExtension}), so this is the engine's own answer rather
+	 * than a hand-rolled annotation walk. It reads the same {@link IMappingProvider} the remap does. Only guest
+	 * remaps want it: the reverse (named→intermediary) classpath conversion and the weld-era Forge remaps carry no
+	 * mixins, and running it there would inspect every annotation for nothing.
+	 */
+	public static void remapJar(Path input, Path output, IMappingProvider provider, List<Path> remapClasspath,
+			boolean mixinAnnotations) throws IOException {
 		Files.deleteIfExists(output);
 
-		TinyRemapper remapper = TinyRemapper.newRemapper()
+		TinyRemapper.Builder builder = TinyRemapper.newRemapper()
 				.withMappings(provider)
 				.renameInvalidLocals(false)
-				.threads(1)
-				.build();
+				.threads(1);
+		if (mixinAnnotations) {
+			builder.extension(new net.fabricmc.tinyremapper.extension.mixin.MixinExtension());
+		}
+		TinyRemapper remapper = builder.build();
 
 		try (OutputConsumerPath out = new OutputConsumerPath.Builder(output).build()) {
 			out.addNonClassFiles(input);
@@ -136,6 +161,87 @@ public final class ForgeModRemapper {
 		} finally {
 			remapper.finish();
 		}
+
+		stripSigningMetadata(output);
+	}
+
+	/**
+	 * PORT(1.21.1): drops the input jar's signing metadata from a remapped output.
+	 *
+	 * <p>A remap rewrites class bytes, and a jar that carried per-entry digests in its manifest fails verification
+	 * the first time a rewritten class is read: measured on the released ferrite-core jar, whose manifest holds
+	 * {@code SHA-384-Digest} per entry — Mixin's own reader is a verifying {@code JarFile} and died with
+	 * "SHA-384 digest error for malte0811/ferritecore/mixin/accessors/ArrayVSAccess.class", which surfaced as
+	 * "Error initialising mixin config ferritecore.accessors.mixin.json". Those digests describe the PRE-remap
+	 * bytes and cannot be recomputed without the signing key, so they are removed along with the signature files
+	 * ({@code META-INF/*.SF|.DSA|.RSA|.EC}, {@code META-INF/SIG-*}). The manifest's other attributes are kept: a
+	 * mod that reads {@code Implementation-Version} still finds it.
+	 *
+	 * <p>Harmless on unsigned jars — there is nothing to remove — which is why it runs for every remap, guest,
+	 * classpath conversion or weld-era alike.
+	 */
+	private static void stripSigningMetadata(Path jar) throws IOException {
+		Path tmp = jar.resolveSibling(jar.getFileName() + ".tmp");
+		boolean changed = false;
+
+		try (java.util.zip.ZipInputStream in = new java.util.zip.ZipInputStream(Files.newInputStream(jar));
+				java.util.zip.ZipOutputStream out = new java.util.zip.ZipOutputStream(Files.newOutputStream(tmp))) {
+			java.util.zip.ZipEntry entry;
+			while ((entry = in.getNextEntry()) != null) {
+				String name = entry.getName();
+				if (isSignatureFile(name)) {
+					changed = true;
+					continue;
+				}
+
+				byte[] bytes;
+				if ("META-INF/MANIFEST.MF".equalsIgnoreCase(name)) {
+					bytes = withoutDigests(in.readAllBytes());
+					changed = true;
+				} else {
+					bytes = in.readAllBytes();
+				}
+
+				java.util.zip.ZipEntry copy = new java.util.zip.ZipEntry(name);
+				copy.setTime(entry.getTime());
+				out.putNextEntry(copy);
+				out.write(bytes);
+				out.closeEntry();
+			}
+		}
+
+		if (changed) {
+			Files.move(tmp, jar, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+		} else {
+			Files.deleteIfExists(tmp);
+		}
+	}
+
+	private static boolean isSignatureFile(String name) {
+		String upper = name.toUpperCase(java.util.Locale.ROOT);
+		if (!upper.startsWith("META-INF/")) return false;
+		if (upper.startsWith("META-INF/SIG-")) return true;
+		return upper.endsWith(".SF") || upper.endsWith(".DSA") || upper.endsWith(".RSA") || upper.endsWith(".EC");
+	}
+
+	/** The manifest without any Digest attribute or per-entry section: those describe bytes this remap replaced. */
+	private static byte[] withoutDigests(byte[] manifestBytes) throws IOException {
+		java.util.jar.Manifest manifest = new java.util.jar.Manifest(new java.io.ByteArrayInputStream(manifestBytes));
+
+		java.util.jar.Attributes main = manifest.getMainAttributes();
+		java.util.List<Object> stale = new java.util.ArrayList<>();
+		for (Object key : main.keySet()) {
+			if (key instanceof java.util.jar.Attributes.Name attribute
+					&& attribute.toString().toUpperCase(java.util.Locale.ROOT).contains("DIGEST")) {
+				stale.add(key);
+			}
+		}
+		for (Object key : stale) main.remove(key);
+		manifest.getEntries().clear();
+
+		java.io.ByteArrayOutputStream rewritten = new java.io.ByteArrayOutputStream();
+		manifest.write(rewritten);
+		return rewritten.toByteArray();
 	}
 
 	/** @see #automaticModuleName(String, Ecosystem) */

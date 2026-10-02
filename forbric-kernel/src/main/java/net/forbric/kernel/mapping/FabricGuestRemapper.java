@@ -106,9 +106,14 @@ public final class FabricGuestRemapper {
 			if (ForbricCache.isCached(out)) {
 				ForbricLog.debug("[Forbric/Mapping] reusing remapped guest %s", out.getFileName());
 			} else {
-				ForgeModRemapper.remapJar(jar, out, provider, sourceClasspath);
-				ForbricLog.info("[Forbric/Mapping] remapped %s → %s (%s → %s)", jar.getFileName(), out.getFileName(),
-						ForbricMappings.INTERMEDIARY, ForbricMappings.NAMED);
+				// Mixin-aware: the guest's annotation strings and its own shadowed declarations are names too.
+				IMappingProvider jarProvider = MixinShadowMembers.withRenames(provider, jar, spine);
+				ForgeModRemapper.remapJar(jar, out, jarProvider, sourceClasspath, true);
+				// Mixin resolves names through the mod's refmap before it looks at the game, so the refmap is a
+				// namespace too: its values are intermediary and must become named (see MixinRefmaps).
+				MixinRefmaps.translate(out, spine);
+				ForbricLog.info("[Forbric/Mapping] remapped %s → %s (%s → %s, mixin annotations included)",
+						jar.getFileName(), out.getFileName(), ForbricMappings.INTERMEDIARY, ForbricMappings.NAMED);
 			}
 
 			remapped.add(out);

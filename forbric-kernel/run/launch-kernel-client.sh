@@ -77,6 +77,15 @@ PY
 )"
 ASSET_INDEX="$(python3 -c "import json;print(json.load(open('$MC/versions/$MC_VERSION/$MC_VERSION.json'))['assetIndex']['id'])")"
 
+# The Fabric guest remap data: Fabric's intermediary mappings then Mojang's client mappings, exactly the pair the
+# installer stages and names on the profile's command line. WITHOUT IT the kernel loads every Fabric guest as-is —
+# its classes under intermediary names and its mixin annotation strings naming classes the merged base does not
+# have — and the only sign is "target net.minecraft.class_… was not found" plus suppressed mixins. Overridable
+# because a caller may stage them elsewhere; absent is legal (the 26.2 shape, where no remap is needed).
+MAPPINGS_DIR="${FORBRIC_MAPPINGS_DIR:-$MC/.forbric/mappings}"
+INTERMEDIARY_MAPPINGS="${FORBRIC_INTERMEDIARY_MAPPINGS:-$(ls "$MAPPINGS_DIR"/intermediary-*.jar 2>/dev/null | head -1)}"
+MOJMAP_MAPPINGS="${FORBRIC_MOJMAP_MAPPINGS:-$(ls "$MAPPINGS_DIR"/client-*.txt 2>/dev/null | head -1)}"
+
 
 # Game root metadata (version.json) on the PARENT -cp, as a resources-only jar. Mods that ask
 # getSystemClassLoader() for it — CustomSkinLoader's bootstrap picks its bytecode patch variant by the protocol
@@ -104,12 +113,21 @@ cd "$RUNDIR"
 # whole fork with no display -- see gate-m20-depdialog.sh.
 # Developer runs fail closed by default instead of waiting on an unattended compatibility prompt. Installed
 # profiles keep the product's ask default; only deliberate negative canaries set FORBRIC_COMPAT_POLICY=continue.
+# Kernel arguments as an array so the optional --mappings pair can be appended without word-splitting paths
+# (the mcDir can contain spaces) and without ever expanding an EMPTY array, which bash 3.2 rejects under `set -u`.
+KERNEL_ARGS=(--gameJar "$MERGED" --runtimeJar "$FORGE_RT" --runtimeJar "$NEO_RT")
+if [ -n "$INTERMEDIARY_MAPPINGS" ] && [ -n "$MOJMAP_MAPPINGS" ]; then
+  KERNEL_ARGS+=(--mappings "$INTERMEDIARY_MAPPINGS:$MOJMAP_MAPPINGS")
+else
+  echo "[kernel-launch] WARN: no guest mapping data under $MAPPINGS_DIR — Fabric guests load unremapped" >&2
+fi
+KERNEL_ARGS+=(--libraryPath "$VANILLA_CP" --)
+echo "[kernel-launch] guest mappings: ${INTERMEDIARY_MAPPINGS:-none} ; ${MOJMAP_MAPPINGS:-none}"
+
 exec java -XstartOnFirstThread -Djava.library.path="$NATIVES" \
   -Dforbric.compatibilityPolicy="${FORBRIC_COMPAT_POLICY:-strict}" \
   -Dforbric.dependencyDialog="${FORBRIC_DEP_DIALOG:-off}" ${FORBRIC_JVM:-} \
-  -cp "$CP" net.forbric.kernel.boot.KernelClientLaunch \
-  --gameJar "$MERGED" --runtimeJar "$FORGE_RT" --runtimeJar "$NEO_RT" \
-  --libraryPath "$VANILLA_CP" \
-  -- --version "${MC_VERSION}-forbric-kernel" --gameDir "$RUNDIR" --assetsDir "$ASSETS" --assetIndex "$ASSET_INDEX" \
+  -cp "$CP" net.forbric.kernel.boot.KernelClientLaunch "${KERNEL_ARGS[@]}" \
+  --version "${MC_VERSION}-forbric-kernel" --gameDir "$RUNDIR" --assetsDir "$ASSETS" --assetIndex "$ASSET_INDEX" \
   --accessToken 0 --username ForbricKernel --uuid 00000000000000000000000000000000 \
   --userType legacy --versionType release "$@"

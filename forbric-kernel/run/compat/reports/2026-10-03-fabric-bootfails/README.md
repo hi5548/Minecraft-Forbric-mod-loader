@@ -39,9 +39,11 @@ public interface net.minecraft.server.packs.resources.ResourceManagerReloadListe
 ```
 
 `onResourceManagerReload(ResourceManager)` is declared, abstract, the same descriptor the mod implemented, and reached
-by the base's own default `reload`. It was neither renamed nor moved nor removed: the class is byte-identical to
-vanilla's across the merge (the same `javap` output comes from `server-official.jar`). Neither the merge nor the
-carrier has a hand in this one.
+by the base's own default `reload`. It was neither renamed nor moved nor removed, and this is not the mod's
+`ResourceManagerReloadListener` failing to find the base's: the merged class is NeoForge's recompile of the interface
+(the merged file is byte-identical to `patched-mc-neoforge-1.21.1.jar`'s, sha256 `d38a6b4b…`), and the disassembly —
+the declared method, its descriptor, the `invokeinterface` in `lambda$reload$0` — is identical in vanilla's own
+`server-official.jar`, both patched jars and the merged base. Neither the merge nor a carrier has a hand in this one.
 
 ### 1.3 What the remap actually emitted
 
@@ -130,3 +132,173 @@ variation; the stage is cached per boot.
 * The deeper alternative — putting the guest ecosystem's own jars on the remap classpath so the engine walks the
   whole hierarchy — is the shape `InheritedMemberRefs` already declined for the reference half, and it remains an
   N² change to the stage that still only reaches the hierarchy it is given.
+
+---
+
+## 2. `chipped` — `StackOverflowError` before `Preparing level`, on a self-dependency MinecraftForge ships
+
+### 2.1 The console, verbatim
+
+```
+[06:06:42] [main/WARN]: Failed to load datapacks, can't proceed with server load. You can either fix your datapacks or reset to vanilla with --safeMode
+java.util.concurrent.ExecutionException: java.lang.StackOverflowError
+	at java.base/java.util.concurrent.CompletableFuture.wrapInExecutionException(CompletableFuture.java:345) ~[?:?]
+	…
+	at forbric/net.minecraft.server.Main.main(Main.java:258) [patched-mc-merged-1.21.1.jar:?]
+Caused by: java.lang.StackOverflowError
+	at forbric/net.minecraft.resources.ResourceLocation.equals(ResourceLocation.java:150) ~[patched-mc-merged-1.21.1.jar:?]
+	at java.base/java.util.HashMap.getNode(HashMap.java:579) ~[?:?]
+	at java.base/java.util.HashMap.get(HashMap.java:565) ~[?:?]
+	at forbric/com.google.common.collect.AbstractMapBasedMultimap.get(AbstractMapBasedMultimap.java:291) ~[guava-32.1.2-jre.jar:?]
+	at forbric/net.minecraft.util.DependencySorter.isCyclic(DependencySorter.java:40) ~[patched-mc-merged-1.21.1.jar:?]
+	at forbric/net.minecraft.util.DependencySorter.lambda$isCyclic$1(DependencySorter.java:44) ~[patched-mc-merged-1.21.1.jar:?]
+	at java.base/java.util.stream.MatchOps$1MatchSink.accept(MatchOps.java:90) ~[?:?]
+	… (the anyMatch pipeline) …
+	at forbric/net.minecraft.util.DependencySorter.isCyclic(DependencySorter.java:44) ~[patched-mc-merged-1.21.1.jar:?]
+	at forbric/net.minecraft.util.DependencySorter.lambda$isCyclic$1(DependencySorter.java:44) ~[patched-mc-merged-1.21.1.jar:?]
+	… the same ten frames to the end of the log …
+```
+
+### 2.2 The recursion is by design; the merge did not write it
+
+The frames repeat `DependencySorter.isCyclic` ⇄ `DependencySorter.lambda$isCyclic$1` — the DFS calling itself through
+its own lambda. That is vanilla's code, untouched, and the disassembly of both methods is identical in all four jars
+of this generation. The class FILES are not the same bytes and are not claimed to be: `server-official.jar` and
+`patched-mc-neoforge-1.21.1.jar` carry the identical file (sha256 `11bb8f29…`), while `patched-mc-forge-1.21.1.jar`
+and the merged base are recompiles of the same code (sha256 `f8c51d77…` / `a36db36b…`), so only constant-pool
+numbering differs — the table quotes the instructions, which are the same:
+
+| jar | `isCyclic(Multimap,Object,Object)` + `lambda$isCyclic$1` |
+|---|---|
+| `server-official.jar` (vanilla, Mojmap) | `aload_2; Multimap.get; astore_3; contains(from); ifeq 20; iconst_1; ireturn; stream; anyMatch(lambda → isCyclic(mm, from, elem))` |
+| `patched-mc-forge-1.21.1.jar` | same, only constant-pool indices differ |
+| `patched-mc-neoforge-1.21.1.jar` | same |
+| `patched-mc-merged-1.21.1.jar` | same |
+
+So this is **not** a merge artefact and **not** a "self-calling lifted lambda": `isCyclic` is a recursive DFS with no
+visited set, which is correct on the acyclic graph it is written for. What the merge changed is the DATA it is handed.
+
+### 2.3 The hole the data walks through
+
+```
+private static <K> void addDependencyIfNotCyclic(Multimap<K,K> mm, K from, K to) { if (!isCyclic(mm, from, to)) mm.put(from, to); }
+private static <K> boolean isCyclic(Multimap<K,K> mm, K from, K to) {
+    Collection<K> collection = mm.get(to);              // ← what `to` already depends on
+    if (collection.contains(from)) return true;          // ← line 40: a cycle of length ≥ 2 is found here
+    return collection.stream().anyMatch(k -> isCyclic(mm, from, k));   // ← line 44
+}
+```
+
+The guard is sound for every cycle of length 2 or more and blind to `from == to`: `isCyclic(x, x)` asks whether `x`'s
+closure contains `x`, which it does not **yet**, so `x → x` is recorded. Every later query that walks into `x` then
+re-enters at that self-edge forever (`HashMap.get` → `AbstractMapBasedMultimap.get` → `ResourceLocation.equals` is
+where the deepest frame happened to be when the stack ran out). Since guarded insertion is the only way edges enter
+this multimap, a self-edge is the one insertion that can leave it cyclic — which is why the fix is to refuse it.
+
+### 2.4 The self-dependency is real Forge data, and the merged base is where it meets its caller
+
+MinecraftForge's own data pack, in the pristine `forge-1.21.1-52.1.16-universal.jar` (and its `-srg` twin — this is
+not the carrier build's doing):
+
+```
+data/forge/tags/item/feathers.json      ["minecraft:feather", {"id":"#forge:feathers","required":false}, "minecraft:feather"]
+data/forge/tags/item/mushrooms.json     ["minecraft:brown_mushroom", "minecraft:red_mushroom",
+                                         {"id":"#forge:mushrooms","required":false}, "minecraft:brown_mushroom", "minecraft:red_mushroom"]
+data/forge/tags/item/nether_stars.json  ["minecraft:nether_star", {"id":"#forge:nether_stars","required":false}, "minecraft:nether_star"]
+```
+
+NeoForge's convention tags point straight back at them (`neoforge-runtime.jar`):
+
+```
+data/c/tags/item/mushrooms.json         ["minecraft:brown_mushroom", "minecraft:red_mushroom", {"id":"#forge:mushrooms","required":false}]
+data/c/tags/item/feathers.json          ["minecraft:feather", {"id":"#forge:feathers","required":false}]
+data/c/tags/item/nether_stars.json      ["minecraft:nether_star", {"id":"#forge:nether_stars","required":false}]
+```
+
+On either native loader only one of those two packs is ever installed, so this combination has never cost anyone a
+boot: on NeoForge alone no pack defines a `forge:` tag and the query finds an empty closure; on MinecraftForge alone
+nothing declares a `c:` tag that walks into `forge:`. The merged base serves both runtime carriers at once, and the
+console says so:
+
+```
+[Forbric/DataPacks] served 2 datapack(s) to the server PackRepository — 2 loader carrier(s) (the c: convention tags live only here) …
+    : [forbric/carrier/1-forge-runtime-interop, forbric/carrier/2-neoforge-runtime]
+```
+
+### 2.5 Why nine subjects boot and `chipped` does not
+
+Both the self-edge and the query that walks into it happen inside the sorter's own walk over its key `HashMap`, so
+whether the recursion is reached is a function of that table's capacity — i.e. of how many tags the pack set
+declares. The item registry carries 604 tag ids in nine of the ten subjects and 881 in `chipped`'s run (its own 277
+item tags on top); `HashMap` resizes from 1024 to 2048 between those, and the two keys change order:
+
+| pack set | item tags | table | bucket `forge:mushrooms` | bucket `c:mushrooms` | walked | outcome |
+|---|---:|---:|---:|---:|---|---|
+| nine subjects | 604 | 1024 | 607 | 372 | `c:` first | the query runs before the self-edge exists — no crash |
+| `chipped` (881) | 881 | 2048 | 607 | 1396 | `forge:` first | the self-edge is recorded, then `c:mushrooms` walks into it — `StackOverflowError` |
+
+That model predicts the observed outcome for all ten subjects exactly (only `chipped`'s run has the
+`StackOverflowError`). So **the subject that fails is the one whose tag COUNT changes the table size**; chipped
+declares no self-reference of its own, and the data combination that breaks it is the merge's.
+
+### 2.6 The fix
+
+`ForbricMergedBaseCompatTransformer`, new repair `readASelfDependencyAsACycle`: one guard at the head of
+`DependencySorter.isCyclic`, `java.util.Objects.equals(from, to)` → jump to the `return true` the method already
+has. A dependency an entry declares on itself **is** a cycle, which is the guard's own semantics, and it is the only
+insertion that could escape — so the multimap is acyclic by induction and the walk terminates on any pack set,
+rather than on the pack sets that happen to order themselves helpfully. Idempotent (a second pass finds its own
+`Objects.equals` and stands down), one fixed target, declared REQUIRED in the claim ledger with the cost of its
+silence.
+
+Nothing else moves. The multimap feeds the cycle guard and the sort order only, and
+`visitDependenciesAndElement` adds a key to its `visited` set before walking that key's edges — so a self-edge was
+already a no-op there and the resulting order is unchanged. Tag CONTENTS are built from `TagLoader`'s own lookup,
+never from this multimap, so a `required:true` self-reference keeps behaving exactly as it did when the lookup called
+it unbuildable.
+
+### 2.7 Evidence
+
+`MergedBaseSelfDependencyTest`, 6 tests, 0 failed, on the real merged base's own `DependencySorter` (defined by a
+loader whose parent holds Guava, so the bytes under test are the bytes the game links against) and the real Guava
+multimap:
+
+* red, order-free and from the two real private methods: `addDependencyIfNotCyclic(edges, forge:mushrooms, forge:mushrooms)`
+  records the self-edge, and `isCyclic(edges, c:mushrooms, forge:mushrooms)` then throws `StackOverflowError`;
+* green: the repaired bytes refuse the self-edge (`edges.get(SELF)` is empty) and the same query returns `false`;
+* the guard still finds a dependency of length two (`forge:mushrooms → c:mushrooms` makes the reverse query `true`),
+  so a repair that answered "cyclic" too eagerly cannot pass;
+* the failing operation itself completes on the measured tag shape and yields `[forge:mushrooms, c:mushrooms]` —
+  a tag is built after the tags it includes;
+* a second pass changes nothing; a class outside the sorter is returned untouched.
+
+### 2.8 Cost
+
+One class-name test per transformed class and, for the one class that matches, a scan of one method's instructions
+and 3 new instructions. No new classpath entry, no runtime helper, no per-pack cost.
+
+### 2.9 What this does not cover
+
+* A **genuine** cycle of length ≥ 2 in a mod's tag data is still (correctly) refused by the existing guard, and a
+  pathological diamond in the dependency graph is still walked without memoisation — vanilla's shape, unchanged.
+* The other data half of this defect class — a pack whose `forge:`/`c:` tags reference a tag no other pack defines —
+  is not touched here, because on the merged base the tag IS defined and the reference is what the two carriers
+  mean together.
+* The claim is a `fixed` anchor on `net/minecraft/util/DependencySorter`, so on a base where that class or its
+  `isCyclic` is gone or reshaped the repair stands down and the ledger reports the miss rather than guessing. Only
+  the 1.21.1 staged base has been measured; `MergedBaseRepairClaimsStagedTest` reads whichever merged base is staged
+  (26.2 in this checkout's default `run/`), so the first 26.2 run should be read for that claim's verdict.
+
+---
+
+## Handoff
+
+Slice for W7Harness: rebuild the kernel from the second commit and re-run **only** the two subjects whose boot-fails
+this covers — `chipped` and `betterrailwaysystem` — with a fresh remap cache directory (the `REMAP_VERSION` moved to
+`1.21.1-11-inherited-member-decls`, so a warm cache must not be reused). Focused tests:
+`net.forbric.kernel.mapping.InheritedMemberDeclsTest` and
+`net.forbric.kernel.transform.MergedBaseSelfDependencyTest`. Expected: chipped reaches the world instead of
+`StackOverflowError` before `Preparing level`, and betterrailwaysystem reaches the world instead of dying on
+`onResourceManagerReload` being abstract, the latter's listener log line `Reloaded BetterRailwaySystem data-driven
+definitions` present at least once.
+

@@ -94,7 +94,7 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 	}
 
 	/** The repairs {@link #transform} runs, in its order; a test pins the two lists against each other. */
-	static final List<String> REPAIRS = List.of("repairLambdaBootstrapHandles", "addBlockStateModelConflictResolvers", "addBlockStateAppearanceResolver", "addMissingForgeFluidTypeBridge", "addMissingForgeKeyMappingLookupInitializer", "addMissingForgeKnownRegistriesInitializer", "addMissingIngredientInvalidationCounterInitializer", "routeKeyMappingClickToPopulatedLookup", "giveKeyMappingItsMinecraftForgeFace", "routeFabricParticleFactoriesThroughTheLiveMap", "giveFeaturesPerStepItsVanillaDescriptorBack", "letDungeonsGenerateWithoutTheDataMap", "restoreDoublePrecisionToTheRandomSources", "convertRadiansWithVanillasFoldedConstant", "saveTheHeightmapsVanillaSaves", "guardNeoForgesWorldModifierPass", "letForeignResourceConditionsThrough", "letForeignResourceConditionsThroughMinecraftForge", "letFabricResourceConditionsDecide", "translateAGuestsPrivateSkipMarker", "serveDefaultAttributesBothEcosystems", "restoreForgeClientInit", "restoreForgeGeometryReload", "nameTheReloadListenersNeoForgeRefusesToName", "dropInterfaceDefaultShadowingOverrides", "tolerateEmptyCreativeTabStacks", "routePlaceItemHookToNeoForge", "bridgeOrphanedPipRenderers", "keepForgeOutboundProtocolCurrent", "surviveTheMissingForgeModelDataManager", "dropTheWindowTitlesLoaderBrand", "keepTheSaveOffTheTeardownsFailurePath", "postNeoForgesItemTooltipEvent", "askNeoForgeWhatAnItemsAttributesAre", "readTheSpawnReasonThatIsActuallyWritten", "giveTheUnwrittenLoggerAValue", "addTheMissingCapabilityLifecycleStubs", "addTheMissingNbtBuilderFactory", "postMinecraftForgesReloadListenerEvent", "giveMinecraftForgesReloadEventItsConditionContext", "letMinecraftForgeIngredientTypesDecode", "letMinecraftForgeFluidsChooseTheirModel", "giveMinecraftForgesParticleLookupItsFirstVariant", "dropStubsThatBypassARealSuperclassMethod", "inlineTheSwitchMapTheMergeLost", "vetoUnjudgeableOverlayConditions", "hideTheLegacyLootModifierIndexFromTheDirectoryScan", "letModdedFeatureFlagsRegister", "dropTheKeyModifierSuffixBeforeParsingAKeyName", "letTheAtlasLowerItsMipLevelLikeVanilla", "wrapTheStreamsVanillaWraps", "returnFromANestedBootstrapBeforeItsTail", "letBothEcosystemsSetBurnTime", "letMinecraftForgeSeeSpawnerMobs", "letMinecraftForgeAddPackFinders", "giveForgeEventsTheConstructorTheEventBusWants");
+	static final List<String> REPAIRS = List.of("repairLambdaBootstrapHandles", "addBlockStateModelConflictResolvers", "addBlockStateAppearanceResolver", "addMissingForgeFluidTypeBridge", "addMissingForgeKeyMappingLookupInitializer", "addMissingForgeKnownRegistriesInitializer", "addMissingIngredientInvalidationCounterInitializer", "routeKeyMappingClickToPopulatedLookup", "giveKeyMappingItsMinecraftForgeFace", "routeFabricParticleFactoriesThroughTheLiveMap", "giveFeaturesPerStepItsVanillaDescriptorBack", "letDungeonsGenerateWithoutTheDataMap", "restoreDoublePrecisionToTheRandomSources", "convertRadiansWithVanillasFoldedConstant", "saveTheHeightmapsVanillaSaves", "guardNeoForgesWorldModifierPass", "letForeignResourceConditionsThrough", "letForeignResourceConditionsThroughMinecraftForge", "letFabricResourceConditionsDecide", "translateAGuestsPrivateSkipMarker", "serveDefaultAttributesBothEcosystems", "restoreForgeClientInit", "restoreForgeGeometryReload", "nameTheReloadListenersNeoForgeRefusesToName", "dropInterfaceDefaultShadowingOverrides", "tolerateEmptyCreativeTabStacks", "routePlaceItemHookToNeoForge", "bridgeOrphanedPipRenderers", "keepForgeOutboundProtocolCurrent", "surviveTheMissingForgeModelDataManager", "dropTheWindowTitlesLoaderBrand", "keepTheSaveOffTheTeardownsFailurePath", "postNeoForgesItemTooltipEvent", "askNeoForgeWhatAnItemsAttributesAre", "readTheSpawnReasonThatIsActuallyWritten", "giveTheUnwrittenLoggerAValue", "addTheMissingCapabilityLifecycleStubs", "addTheMissingNbtBuilderFactory", "postMinecraftForgesReloadListenerEvent", "giveMinecraftForgesReloadEventItsConditionContext", "letMinecraftForgeIngredientTypesDecode", "letMinecraftForgeFluidsChooseTheirModel", "giveMinecraftForgesParticleLookupItsFirstVariant", "dropStubsThatBypassARealSuperclassMethod", "inlineTheSwitchMapTheMergeLost", "vetoUnjudgeableOverlayConditions", "hideTheLegacyLootModifierIndexFromTheDirectoryScan", "letModdedFeatureFlagsRegister", "dropTheKeyModifierSuffixBeforeParsingAKeyName", "letTheAtlasLowerItsMipLevelLikeVanilla", "wrapTheStreamsVanillaWraps", "returnFromANestedBootstrapBeforeItsTail", "letBothEcosystemsSetBurnTime", "letMinecraftForgeSeeSpawnerMobs", "letMinecraftForgeAddPackFinders", "giveForgeEventsTheConstructorTheEventBusWants", "readASelfDependencyAsACycle");
 
 	private static final String NEO_EVENT_HOOKS_BINARY = "net.neoforged.neoforge.event.EventHooks";
 
@@ -266,6 +266,11 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 						+ "ServerLifecycleEvent, LevelEvent, ChunkEvent) makes EventBus 6 throw \"Error computing "
 						+ "listener list\" on the first post through its hierarchy — mob finalization during spawn-area "
 						+ "generation is where it is measured"));
+		out.add(fixed("readASelfDependencyAsACycle", DEPENDENCY_SORTER,
+				"the datapack load dies with a StackOverflowError before \"Preparing level\": the sorter records a "
+						+ "tag that depends on itself (MinecraftForge's forge: convention tags declare one) and then "
+						+ "re-enters its own cycle check on it forever, because NeoForge's c: tags point at #forge:* "
+						+ "and the merged base is the only place the two meet"));
 		return List.copyOf(out);
 	}
 
@@ -360,6 +365,7 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 		changed |= claim(reporter, "letMinecraftForgeSeeSpawnerMobs", letMinecraftForgeSeeSpawnerMobs(node));
 		changed |= claim(reporter, "letMinecraftForgeAddPackFinders", letMinecraftForgeAddPackFinders(node));
 			changed |= claim(reporter, "giveForgeEventsTheConstructorTheEventBusWants", giveForgeEventsTheConstructorTheEventBusWants(node));
+			changed |= claim(reporter, "readASelfDependencyAsACycle", readASelfDependencyAsACycle(node));
 			changed |= namedOldLoader && adoptInteropHooksTheBaseStillNamesAfterTheOldLoader(node);
 
 			byte[] result = classBytes;
@@ -595,6 +601,11 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 	private static final String NAME_FOR_CLASS =
 			"(Ljava/lang/Class;)Lnet/minecraft/resources/Identifier;";
 	private static final String KERNEL_RELOAD_NAMES = "net/forbric/kernel/runtime/KernelClientReloadNames";
+	/** The tag/registry dependency sort both families' data packs go through. */
+	private static final String DEPENDENCY_SORTER = "net/minecraft/util/DependencySorter";
+	private static final String IS_CYCLIC = "(Lcom/google/common/collect/Multimap;Ljava/lang/Object;Ljava/lang/Object;)Z";
+	private static final String OBJECTS = "java/util/Objects";
+	private static final String OBJECTS_EQUALS = "(Ljava/lang/Object;Ljava/lang/Object;)Z";
 	/** Each family's model-geometry loader manager: the merged reload inits NeoForge's and this seam adds Forge's. */
 	private static final String FORGE_GEOMETRY_LOADERS =
 			ForeignType.GEOMETRY_LOADER_MANAGER.internal(Ecosystem.FORGE);
@@ -2438,6 +2449,95 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 		ForbricLog.info("[Forbric/MergedBaseCompat] NeoForge's biome/structure modifier pass now runs through the "
 				+ "kernel's guard (%d call site(s)) — it used to be neutered outright, so every mod that changes a "
 				+ "biome through a neoforge:biome_modifier did nothing at all", guarded);
+		return true;
+	}
+
+	/**
+	 * Reads a dependency an entry declares on ITSELF as the cycle it is, so the sorter never records one.
+	 *
+	 * <h2>What the sorter does, and where its guard has a hole</h2>
+	 *
+	 * <p>{@code DependencySorter.orderByDependencies} builds a {@code HashMultimap} of dependencies and guards
+	 * every insertion with {@code addDependencyIfNotCyclic} → {@code isCyclic}: an edge {@code from → to} is
+	 * dropped when {@code to} already reaches {@code from}. The guard is sound for every cycle of length 2 or
+	 * more — but not for {@code from == to}. {@code isCyclic(x, x)} asks whether {@code x}'s closure contains
+	 * {@code x}, which it does not YET (nothing has been inserted for it), so {@code x → x} is recorded. From
+	 * then on any query whose walk reaches {@code x} re-enters itself at that self-edge and never returns:
+	 * {@code isCyclic} carries no visited set, and on an acyclic graph it never needed one.
+	 *
+	 * <h2>The self-dependency is real data, in one carrier only</h2>
+	 *
+	 * <p>MinecraftForge ships three of them. In the pristine
+	 * {@code forge-1.21.1-52.1.16-universal.jar} (and its {@code -srg} twin, so it is not the carrier build's
+	 * doing), {@code data/forge/tags/item/feathers.json} is
+	 * {@code ["minecraft:feather", {"id":"#forge:feathers","required":false}, "minecraft:feather"]}, and
+	 * {@code mushrooms.json} / {@code nether_stars.json} have the same shape with their own ids. NeoForge's
+	 * convention tags point straight back at them: {@code data/c/tags/item/mushrooms.json} is
+	 * {@code ["minecraft:brown_mushroom", "minecraft:red_mushroom", {"id":"#forge:mushrooms","required":false}]}.
+	 *
+	 * <p>On either native loader only one of those two packs is ever installed, which is why this has never cost
+	 * anyone a boot: on NeoForge alone no pack defines a {@code forge:} tag, so the query finds an empty closure,
+	 * and on MinecraftForge alone nothing declares a {@code c:} tag that walks into {@code forge:}. The merged
+	 * base serves BOTH runtime carriers at once (see {@code KernelDataPacks}), and that is a pack set neither
+	 * loader ever had.
+	 *
+	 * <h2>Why the whole sweep does not fall over, and one subject does</h2>
+	 *
+	 * <p>The recursion needs the self-edge recorded BEFORE a query that walks into it, and both happen in the
+	 * sorter's own walk over its key {@code HashMap} — so the outcome is a function of that table's capacity,
+	 * i.e. of how many tags the pack set declares. Measured on the 2026-10-03 fabric sweep: nine of ten subjects
+	 * carry 604 item tags (capacity 1024, where {@code c:mushrooms} is walked before {@code forge:mushrooms} and
+	 * nothing recurses) and {@code chipped} carries 881 with its own 277 (capacity 2048, where the two swap and
+	 * the optional loop reaches the self-edge). The subject that fails is the one whose tag COUNT changes the
+	 * table size; it declares no self-reference of its own, and the data combination that breaks it is the
+	 * merge's.
+	 *
+	 * <h2>Why refusing the self-edge is the whole fix</h2>
+	 *
+	 * <p>It is the guard's own semantics — an entry that depends on itself IS a cycle — and it is the only
+	 * insertion that could escape, so the multimap stays acyclic by induction and the walk terminates on any
+	 * pack set rather than on the pack sets that happen to order themselves helpfully. Nothing else moves: the
+	 * multimap feeds the cycle guard and the SORT ORDER only, and {@code visitDependenciesAndElement} adds a key
+	 * to its {@code visited} set before walking that key's edges, so a self-edge was already a no-op there; the
+	 * tag contents are built from {@code TagLoader}'s own lookup, never from this multimap. A required
+	 * self-reference keeps behaving exactly as it did when it was "unbuildable" — that decision is the lookup's.
+	 *
+	 * <p>One guard at the head of {@code isCyclic}, jumping to the {@code return true} the method already has.
+	 * Idempotent: a second pass finds the {@code Objects.equals} call it inserted and stands down. The guard is
+	 * also the reason a self-edge that somehow arrived by another route answers instead of recursing.
+	 */
+	private static boolean readASelfDependencyAsACycle(ClassNode node) {
+		if (!DEPENDENCY_SORTER.equals(node.name)) return false;
+
+		MethodNode isCyclic = findMethod(node, "isCyclic", IS_CYCLIC);
+		if (isCyclic == null) return false;
+
+		for (AbstractInsnNode insn = isCyclic.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+			if (insn instanceof MethodInsnNode call && call.getOpcode() == Opcodes.INVOKESTATIC
+					&& OBJECTS.equals(call.owner) && "equals".equals(call.name) && OBJECTS_EQUALS.equals(call.desc)) {
+				return false;
+			}
+		}
+
+		LabelNode walkOn = new LabelNode();
+		InsnList guard = new InsnList();
+		guard.add(new VarInsnNode(Opcodes.ALOAD, 1));
+		guard.add(new VarInsnNode(Opcodes.ALOAD, 2));
+		guard.add(new MethodInsnNode(Opcodes.INVOKESTATIC, OBJECTS, "equals", OBJECTS_EQUALS, false));
+		guard.add(new JumpInsnNode(Opcodes.IFEQ, walkOn));
+		guard.add(new InsnNode(Opcodes.ICONST_1));
+		guard.add(new InsnNode(Opcodes.IRETURN));
+		guard.add(walkOn);
+		// Method entry's own frame: two arguments and nothing on the stack.
+		guard.add(new FrameNode(Opcodes.F_SAME, 0, null, 0, null));
+		isCyclic.instructions.insert(guard);
+		isCyclic.maxStack = Math.max(isCyclic.maxStack, 2);
+
+		ForbricLog.info("[Forbric/MergedBaseCompat] DependencySorter now reads a self-dependency as the cycle it is "
+				+ "(1 guard in isCyclic) — the merged base serves MinecraftForge's forge: convention tags, whose "
+				+ "optional self-references the guard used to record, beside NeoForge's c: tags that point at them, "
+				+ "and the first such tag set whose key order walks into the self-edge died with a StackOverflowError "
+				+ "before the level loaded");
 		return true;
 	}
 

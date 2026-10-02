@@ -94,6 +94,15 @@ public final class KernelForgeContainers {
 		uset(ModContainer.class, "extensionPoints", container, new ConcurrentHashMap<>());
 		usetIfPresent(ModContainer.class, "activityMap", container, new HashMap<>());
 		usetIfPresent(ModContainer.class, "dependencies", container, new HashSet<>());
+		// The same skipped ctor sets configHandler (Optional<Consumer<IConfigEvent>>) to a dispatcher; left null,
+		// ModConfig.fireEvent -> ModContainer.dispatchConfigEvent NPEs. Measured cost: every dedicated-server stop
+		// threw out of DedicatedServer.onServerExit -> ConfigTracker.forceUnload ("Uncaught exception in server
+		// thread"), which skipped the injected exit hook, leaked night-config's non-daemon file-watchers and left the
+		// JVM parked after "Stopping server". Optional.empty() makes the dispatch a no-op — exactly the silence a mod
+		// with no config gets, and the honest state while the kernel drives no FancyModLoader config lifecycle, so no
+		// config event is invented. PORT(1.21.1): the kernel's container is built without the ctor, so every field
+		// that ctor initialises has to be seeded here, and this one was the last.
+		usetIfPresent(ModContainer.class, "configHandler", container, java.util.Optional.empty());
 		// getModInfo() is null without this (the ctor arg we skipped); Forge's own config + display-test paths read it.
 		usetIfPresent(ModContainer.class, "modInfo", container, new KernelForgeModInfo(modId));
 

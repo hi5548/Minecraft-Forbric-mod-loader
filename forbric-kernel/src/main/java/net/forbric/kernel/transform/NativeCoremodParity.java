@@ -31,8 +31,8 @@ import org.objectweb.asm.tree.MethodNode;
  *       {@code getModifiedSpecialEffects()}, and {@code Structure.settings} → {@code getModifiedStructureSettings()}.
  *       Without them NeoForge's (and the bridged MinecraftForge) biome and structure modifiers changed nothing that
  *       reads climate, colours, structure biomes, spawns, step or terrain adaptation.</li>
- *   <li>{@code mob.finalizeSpawn(...)} in the 26 classes of NeoForge's {@code finalize_spawn_targets.json} →
- *       its event hook. Neither family's finalization event was ever posted outside a spawner. Here the calls go
+ *   <li>{@code mob.finalizeSpawn(...)} in the 22 classes of the 1.21.1 finalize-spawn list ({@link #FINALIZE_TARGETS})
+ *       → its event hook. Neither family's finalization event was ever posted outside a spawner. Here the calls go
  *       to KernelFinalizeSpawn, which posts both families' events and finalizes once; TrialSpawner's call, which
  *       the merged base already routes to NeoForge's spawner hook, goes to its two-family twin.</li>
  * </ul>
@@ -62,13 +62,15 @@ public final class NativeCoremodParity {
 
 	static final String RUNTIME = "net/forbric/kernel/runtime/KernelFinalizeSpawn";
 	static final String FINALIZE_NAME = "finalizeSpawn";
+	// PORT(1.21.1): the reason argument is MobSpawnType here, not 26.2's EntitySpawnReason (javap:
+	// Mob.finalizeSpawn(ServerLevelAccessor, DifficultyInstance, MobSpawnType, SpawnGroupData)SpawnGroupData).
 	static final String FINALIZE_DESC = "(Lnet/minecraft/world/level/ServerLevelAccessor;Lnet/minecraft/world/DifficultyInstance;"
-			+ "Lnet/minecraft/world/entity/EntitySpawnReason;Lnet/minecraft/world/entity/SpawnGroupData;)Lnet/minecraft/world/entity/SpawnGroupData;";
+			+ "Lnet/minecraft/world/entity/MobSpawnType;Lnet/minecraft/world/entity/SpawnGroupData;)Lnet/minecraft/world/entity/SpawnGroupData;";
 	static final String TRIAL_SPAWNER = "net/minecraft/world/level/block/entity/trialspawner/TrialSpawner";
 	static final String NEO_HOOKS = "net/neoforged/neoforge/event/EventHooks";
 	static final String NEO_SPAWNER_HOOK = "finalizeMobSpawnSpawner";
 	static final String NEO_SPAWNER_DESC = "(Lnet/minecraft/world/entity/Mob;Lnet/minecraft/world/level/ServerLevelAccessor;"
-			+ "Lnet/minecraft/world/DifficultyInstance;Lnet/minecraft/world/entity/EntitySpawnReason;"
+			+ "Lnet/minecraft/world/DifficultyInstance;Lnet/minecraft/world/entity/MobSpawnType;"
 			+ "Lnet/minecraft/world/entity/SpawnGroupData;Lnet/neoforged/neoforge/common/extensions/IOwnedSpawner;Z)"
 			+ "Lnet/neoforged/neoforge/event/entity/living/FinalizeSpawnEvent;";
 
@@ -88,25 +90,29 @@ public final class NativeCoremodParity {
 					new FieldGetter("settings", "Lnet/minecraft/world/level/levelgen/structure/Structure$StructureSettings;",
 							"getModifiedStructureSettings", STRUCTURE)));
 
-	/** NeoForge 26.2.0.88's {@code finalize_spawn_targets.json}; MinecraftForge's list is the same plus TrialSpawner. */
+	/**
+	 * MinecraftForge 52.1.16's {@code coremods/finalize_spawn_targets.json} (the only coremod list the staged 1.21.1
+	 * carriers ship; NeoForge 21.1's own is not part of the staged tree), less its one entry that routes through
+	 * NeoForge's spawner hook instead — {@link #TRIAL_SPAWNER}. These 22 are exactly the classes on the merged base
+	 * that call {@code Mob.finalizeSpawn} with the 1.21.1 {@link #FINALIZE_DESC} (javap census; 26.2's list cannot be
+	 * carried over, its packages — {@code monster/zombie}, {@code animal/equine}, {@code npc/villager},
+	 * {@code monster/illager} — plus {@code GameTestEntityBuilder}, {@code Drowned}, {@code Husk} and
+	 * {@code ZombieHorse} do not exist here).
+	 */
 	static final Set<String> FINALIZE_TARGETS = Set.of(
-			"net/minecraft/gametest/framework/GameTestEntityBuilder",
 			"net/minecraft/server/commands/RaidCommand",
 			"net/minecraft/server/commands/SummonCommand",
 			"net/minecraft/world/entity/EntityType",
 			"net/minecraft/world/entity/ai/village/VillageSiege",
-			"net/minecraft/world/entity/animal/equine/SkeletonTrapGoal",
-			"net/minecraft/world/entity/animal/equine/ZombieHorse",
 			"net/minecraft/world/entity/animal/frog/Tadpole",
+			"net/minecraft/world/entity/animal/horse/SkeletonTrapGoal",
+			"net/minecraft/world/entity/monster/Evoker$EvokerSummonSpellGoal",
+			"net/minecraft/world/entity/monster/Spider",
 			"net/minecraft/world/entity/monster/Strider",
-			"net/minecraft/world/entity/monster/illager/Evoker$EvokerSummonSpellGoal",
-			"net/minecraft/world/entity/monster/spider/Spider",
-			"net/minecraft/world/entity/monster/zombie/Drowned",
-			"net/minecraft/world/entity/monster/zombie/Husk",
-			"net/minecraft/world/entity/monster/zombie/Zombie",
-			"net/minecraft/world/entity/monster/zombie/ZombieVillager",
+			"net/minecraft/world/entity/monster/Zombie",
+			"net/minecraft/world/entity/monster/ZombieVillager",
 			"net/minecraft/world/entity/npc/CatSpawner",
-			"net/minecraft/world/entity/npc/villager/Villager",
+			"net/minecraft/world/entity/npc/Villager",
 			"net/minecraft/world/entity/raid/Raid",
 			"net/minecraft/world/level/NaturalSpawner",
 			"net/minecraft/world/level/levelgen/PatrolSpawner",

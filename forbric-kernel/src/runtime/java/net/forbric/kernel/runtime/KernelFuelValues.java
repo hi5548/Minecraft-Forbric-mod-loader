@@ -22,6 +22,7 @@ import net.forbric.kernel.util.ForbricLog;
 import net.forbric.kernel.util.Reflect;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.RecipeType;
+import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
 import net.minecraftforge.event.ForgeEventFactory;
 import net.neoforged.neoforge.event.EventHooks;
 
@@ -57,16 +58,59 @@ import net.neoforged.neoforge.event.EventHooks;
  * {@code neoforge-runtime.jar} (21.1.252). The fourth parameter is dropped rather than replaced: there is no
  * 1.21.1 object that would mean the same thing.
  *
- * <p>Both the redirect's anchor and its descriptor therefore have to be re-derived for 1.21.1
- * ({@code getBurnDuration(ItemStack)I} instead of {@code FuelValues.burnDuration(ItemStack, RecipeType)}), which
- * is the transform layer's ({@code FabricFuelValuesInjector}/{@code ForbricMergedBaseCompatTransformer}) and not
- * this file's. Until it is done the merged base still asks MinecraftForge only.
+ * <p>{@code ForbricMergedBaseCompatTransformer.letBothEcosystemsSetBurnTime} has been re-derived onto that
+ * site: the one {@code ForgeHooks.getBurnTime(ItemStack, RecipeType)} call in
+ * {@code AbstractFurnaceBlockEntity.getBurnDuration} now names {@link #burnDuration(ItemStack, RecipeType)}
+ * instead, which is the two-argument shape this class did not need on 26.2. What that shape exists for is the
+ * other half of the same port.
+ *
+ * <h2>PORT(1.21.1): the table answer has to be routed onto the burn path</h2>
+ *
+ * <p>{@code ForgeHooks.getBurnTime} computes its base as {@code stack.getBurnTime(type)}, then falls back to
+ * {@code VANILLA_BURNS} only when that is {@code -1}. On this base {@code ItemStack.getBurnTime} is NeoForge's
+ * {@code IItemExtension.getBurnTime} — the {@code neoforge:furnace_fuels} data map — and it answers {@code 0},
+ * not {@code -1}, for an item with no entry ({@code javap -c}: {@code iconst_0} at offset 23 of that default
+ * method). A fuel a Fabric mod registers through fabric-content-registries' {@code FuelRegistry} is added to
+ * {@code AbstractFurnaceBlockEntity.getFuel()} and to nothing else, so the fallback never fires for it: the item
+ * is recognized as fuel and then burns for zero ticks, with nothing logged. So
+ * {@link #burnDuration(ItemStack, RecipeType)} reads that table itself whenever the data map gives nothing
+ * positive, and hands the result to the chaining method below as its base.
+ *
+ * <p>The LIVE table ({@code getFuel()}) is read rather than {@code ForgeHooks.VANILLA_BURNS}, which is a
+ * snapshot Forge takes on a reload and can predate a Fabric mod's registration; {@code getFuel()} is the map
+ * Forge's snapshot copies from, so this is the same table one step fresher.
  */
 public final class KernelFuelValues {
 	private static final AtomicBoolean WARNED = new AtomicBoolean();
 	private static final AtomicBoolean PROVED = new AtomicBoolean();
 
 	private KernelFuelValues() {
+	}
+
+	/**
+	 * The seam the merged {@code getBurnDuration} calls: the game's own table answer, then both ecosystems' hooks.
+	 *
+	 * <p>Kept as a pair with {@link #burnDuration(ItemStack, int, RecipeType)} rather than folded into it: the
+	 * three-argument form is the "someone already computed the base" half, and keeping it separate is what lets
+	 * the base be named and tested on its own.
+	 */
+	public static int burnDuration(ItemStack stack, RecipeType<?> type) {
+		return burnDuration(stack, theGamesOwnAnswer(stack, type), type);
+	}
+
+	/**
+	 * What the game's own tables say, before either ecosystem is consulted.
+	 *
+	 * <p>NeoForge's data map wins when it has an entry. When it does not (or answers {@code -1}, the Forge
+	 * convention for "ask the table"), the vanilla/Fabric fuel table answers instead — see the class doc for why
+	 * the second half cannot be left to {@code ForgeHooks.getBurnTime} on this base. {@code getFuel()} keyed by
+	 * {@code Item} is the same table Forge's {@code VANILLA_BURNS} is filled from, read live.
+	 */
+	private static int theGamesOwnAnswer(ItemStack stack, RecipeType<?> type) {
+		int value = stack.getBurnTime(type);
+		if (value > 0) return value;
+		Integer fromTable = AbstractFurnaceBlockEntity.getFuel().get(stack.getItem());
+		return fromTable == null ? value : fromTable;
 	}
 
 	/**

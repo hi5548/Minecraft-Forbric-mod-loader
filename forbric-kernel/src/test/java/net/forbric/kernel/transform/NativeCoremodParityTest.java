@@ -25,9 +25,12 @@ import org.objectweb.asm.tree.analysis.BasicVerifier;
 @ResourceLock("system-properties")
 class NativeCoremodParityTest {
 	private static final Path STAGED = Path.of(System.getProperty("forbric.stagedRoot", "../forbric-loader/run"));
-	private static final Path MERGED = STAGED.resolve("merged-base/patched-mc-merged-26.2.jar");
+	/** PORT(1.21.1): the merged base is named for the version the build targets, as in build.gradle. */
+	private static final String MC_VERSION = System.getProperty("forbric.mcVersion", "1.21.1");
+	private static final Path MERGED = STAGED.resolve("merged-base/patched-mc-merged-" + MC_VERSION + ".jar");
 	private static final Path FORGE = STAGED.resolve("merged-base/forge-runtime-interop.jar");
-	private static final Path VANILLA = TestFixtures.vanillaJar();
+	/** PORT(1.21.1): no named vanilla jar ships under versions/; DevPrepare stages the renamed client here. */
+	private static final Path VANILLA = TestFixtures.minecraftDir().resolve(".forbric-build/client-official.jar");
 	private static final Path NEO_COREMODS = Path.of("build/journeymap-native/instance/.cache/jij");
 	private static final String POT = "net/minecraft/world/level/block/FlowerPotBlock";
 	private static final String BIOME = "net/minecraft/world/level/biome/Biome";
@@ -41,7 +44,7 @@ class NativeCoremodParityTest {
 	@Test void everyFlowerPotReadGoesThroughTheGetterExceptTheGetter() throws Exception {
 		ClassNode after = rewritten(POT);
 		assertEquals(0, reads(after, POT, "potted", m -> !m.desc.equals("()Lnet/minecraft/world/level/block/Block;") && !m.name.equals("<init>")));
-		assertEquals(5, calls(after, POT, "getPotted"), "useWithoutItem, getCloneItemStack, isEmpty, randomTick and the codec");
+		assertEquals(4, calls(after, POT, "getPotted"), "the four non-getter reads of potted now go through getPotted()");
 		verify(after);
 		byte[] once = NativeCoremodParity.apply(POT, read(MERGED, POT));
 		assertSame(once, NativeCoremodParity.apply(POT, once), "a second pass changes nothing");
@@ -51,8 +54,8 @@ class NativeCoremodParityTest {
 		ClassNode biome = rewritten(BIOME);
 		assertEquals(0, reads(biome, BIOME, "climateSettings", m -> !m.desc.equals("()Lnet/minecraft/world/level/biome/Biome$ClimateSettings;") && !m.name.equals("<init>")));
 		assertEquals(0, reads(biome, BIOME, "specialEffects", m -> !m.desc.equals("()Lnet/minecraft/world/level/biome/BiomeSpecialEffects;") && !m.name.equals("<init>")));
-		assertEquals(10, calls(biome, BIOME, "getModifiedClimateSettings") - calls(node(read(MERGED, BIOME)), BIOME, "getModifiedClimateSettings"));
-		assertEquals(6, calls(biome, BIOME, "getModifiedSpecialEffects") - calls(node(read(MERGED, BIOME)), BIOME, "getModifiedSpecialEffects"));
+		assertEquals(8, calls(biome, BIOME, "getModifiedClimateSettings") - calls(node(read(MERGED, BIOME)), BIOME, "getModifiedClimateSettings"));
+		assertEquals(13, calls(biome, BIOME, "getModifiedSpecialEffects") - calls(node(read(MERGED, BIOME)), BIOME, "getModifiedSpecialEffects"));
 		assertEquals(1, reads(biome, BIOME, "specialEffects", m -> m.name.equals("getSpecialEffects")), "getSpecialEffects stays raw, as NeoForge leaves it");
 		verify(biome);
 		ClassNode structure = rewritten(STRUCTURE);
@@ -100,7 +103,9 @@ class NativeCoremodParityTest {
 		try (ZipFile zip = new ZipFile(FORGE.toFile())) {
 			Set<String> forge = new TreeSet<>();
 			String json = new String(zip.getInputStream(zip.getEntry("coremods/finalize_spawn_targets.json")).readAllBytes());
-			var match = java.util.regex.Pattern.compile("\"class\"\\s*:\\s*\"([^\"]+)\"").matcher(json);
+			// PORT(1.21.1): MinecraftForge 52's list is a plain JSON array of internal names, not 26.2's objects
+			// with a "class" key.
+			var match = java.util.regex.Pattern.compile("\"(net/minecraft/[^\"]+)\"").matcher(json);
 			while (match.find()) forge.add(match.group(1));
 			Set<String> expected = new TreeSet<>(NativeCoremodParity.FINALIZE_TARGETS);
 			expected.add(NativeCoremodParity.TRIAL_SPAWNER);
@@ -118,7 +123,7 @@ class NativeCoremodParityTest {
 	}
 
 	@Test void vanillasShapeAndTheSwitchesLeaveClassesAlone() throws Exception {
-		Assumptions.assumeTrue(Files.isRegularFile(VANILLA), "vanilla 26.2 absent");
+		Assumptions.assumeTrue(Files.isRegularFile(VANILLA), "renamed vanilla client absent");
 		byte[] vanillaPot = read(VANILLA, POT);
 		assertSame(vanillaPot, NativeCoremodParity.apply(POT, vanillaPot), "vanilla's getter reads the field; nothing to route");
 		for (String property : List.of(NativeCoremodParity.PROPERTY, NativeCoremodParity.FLOWER_POT)) {
@@ -128,8 +133,8 @@ class NativeCoremodParityTest {
 			System.clearProperty(property);
 		}
 		System.setProperty(NativeCoremodParity.FINALIZE, "off");
-		byte[] zombie = read(MERGED, "net/minecraft/world/entity/monster/zombie/Zombie");
-		assertSame(zombie, NativeCoremodParity.apply("net.minecraft.world.entity.monster.zombie.Zombie", zombie));
+		byte[] zombie = read(MERGED, "net/minecraft/world/entity/monster/Zombie");
+		assertSame(zombie, NativeCoremodParity.apply("net.minecraft.world.entity.monster.Zombie", zombie));
 		byte[] other = read(MERGED, "net/minecraft/world/level/block/Blocks");
 		assertSame(other, NativeCoremodParity.apply("net.minecraft.world.level.block.Blocks", other));
 	}

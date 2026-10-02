@@ -29,9 +29,10 @@ import net.forbric.kernel.util.ForbricLog;
  * Fires fabric-loot-api-v3's {@code LootTableEvents.REPLACE}, {@code MODIFY} and {@code ALL_LOADED} for the
  * loot tables NeoForge's own {@code LootTableLoadEvent} has just let through.
  *
- * <p>This is the pinned {@code ReloadableServerRegistriesMixin.modifyLootTable} sequence, performed through
- * fabric's PUBLIC surface instead of from inside the lambda the mixin could not bind to (see
- * {@link LootTableEventBridgeInjector}): source from {@code LootUtil.SOURCES} (default {@code DATA_PACK}),
+ * <p>This is the 1.21.1 {@code ReloadableRegistriesMixin.modifyLootTable} sequence (26.2 calls the class
+ * {@code ReloadableServerRegistriesMixin}), performed through fabric's PUBLIC surface instead of from inside the
+ * mixin, whose refmap still names the intermediary ids of a jar remapped to Mojmap and cannot be relied on to
+ * bind: source from {@code LootUtil.SOURCES} (default {@code DATA_PACK}),
  * {@code REPLACE} — a non-null answer swaps the table and marks the source {@code REPLACED} — then
  * {@code FabricLootTableBuilder.copyOf}, {@code MODIFY} on the builder, and {@code build()}. {@code ALL_LOADED}
  * fires after the loot-table registry's tags are loaded, and the source map is cleared, exactly as the mixin's
@@ -172,9 +173,9 @@ public final class LootTableEventDispatch {
 			}
 		}
 		ForbricLog.info("[Forbric/LootBridge] offered %d loot table(s) to fabric-loot-api-v3: REPLACE took %d, MODIFY "
-				+ "fired %d, ALL_LOADED fired with %d entries — ReloadableServerRegistriesMixin's modifyLootTable cannot "
-				+ "bind on the merged base (NeoForge swapped the lambda's parameters and split its one map into two), so "
-				+ "the kernel fires the events from NeoForge's own LootTableLoadEvent seam", OFFERED.getAndSet(0),
+				+ "fired %d, ALL_LOADED fired with %d entries — the kernel fires the events from "
+				+ "ReloadableServerRegistries' own loot-table load and registry-parse seams, the points the api's "
+				+ "1.21.1 mixin targets and the merged base's dropped NeoForge hook belong at", OFFERED.getAndSet(0),
 				REPLACE_TOOK.getAndSet(0), MODIFY_FIRED.getAndSet(0), sizeOf(registry));
 	}
 

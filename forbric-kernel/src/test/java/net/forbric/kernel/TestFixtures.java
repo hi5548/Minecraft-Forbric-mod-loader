@@ -45,7 +45,42 @@ public final class TestFixtures {
 	}
 
 	/**
-	 * The Minecraft directory the game-side compile read its libraries from. Gradle hands it to every test task as
+	 * The staged {@code run/} directory the build compiled against: {@code -Pforbric.stagedRoot} when the build
+	 * handed it over (it does, as {@code forbric.stagedRoot}), else {@code FORBRIC_OLD + "/run"} as the run/
+	 * scripts and every other staged test resolve it. Reading the property first is what keeps a test honest on a
+	 * retarget: the root moved, and a test that still named {@code ../forbric-loader/run} proved nothing about it.
+	 */
+	public static Path stagedRoot() {
+		String staged = System.getProperty("forbric.stagedRoot");
+		if (staged != null && !staged.isBlank()) return Path.of(staged).normalize();
+		return Path.of(System.getenv().getOrDefault("FORBRIC_OLD", System.getProperty("user.dir") + "/../forbric-loader"),
+				"run").normalize();
+	}
+
+	/**
+	 * The one staged jar in {@code subdirectory} whose file name starts with {@code prefix} — the merged base and
+	 * the two patched game jars carry the Minecraft version in their names, and that version is a build parameter
+	 * ({@code -Pforbric.mcVersion}), not a constant of the test. Null when the directory is absent or empty.
+	 */
+	public static Path stagedJar(String subdirectory, String prefix) {
+		Path directory = stagedRoot().resolve(subdirectory);
+		if (!Files.isDirectory(directory)) return null;
+		try (java.util.stream.Stream<Path> entries = Files.list(directory)) {
+			return entries.filter(Files::isRegularFile)
+					.filter(path -> path.getFileName().toString().startsWith(prefix))
+					.filter(path -> path.getFileName().toString().endsWith(".jar"))
+					.findFirst().orElse(null);
+		} catch (java.io.IOException unreadable) {
+			return null;
+		}
+	}
+
+	/** The staged merged game jar, whatever version this checkout was built for. */
+	public static Path mergedBase() {
+		return stagedJar("merged-base", "patched-mc-merged-");
+	}
+
+	/** The Minecraft directory the game-side compile read its libraries from. Gradle hands it to every test task as
 	 * {@code MC_DIR} (tools/dev.py's {@code .dev/minecraft} when prepared); outside Gradle it falls back to the
 	 * launcher's usual location on this platform, the same default build.gradle uses.
 	 */

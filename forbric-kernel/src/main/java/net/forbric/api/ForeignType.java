@@ -77,7 +77,10 @@ public enum ForeignType {
 	FLUID_INTERACTION_REGISTRY("net.minecraftforge.fluids.FluidInteractionRegistry",
 			"net.neoforged.neoforge.fluids.FluidInteractionRegistry"),
 	BLOCK_TINT_EVENT("net.minecraftforge.client.event.RegisterColorHandlersEvent$Block",
-			"net.neoforged.neoforge.client.event.RegisterColorHandlersEvent$BlockTintSources"),
+			// PORT(1.21.1): NeoForge 21.1 has RegisterColorHandlersEvent.Block, Item and ColorResolvers — no
+			// BlockTintSources (that is a later generation's name). Same constructor, same getBlockColors().
+			// Verified with javap against the staged neoforge-runtime.jar.
+			"net.neoforged.neoforge.client.event.RegisterColorHandlersEvent$Block"),
 	// The mod-lifecycle phases. Paired because the kernel posts each one at BOTH families and the two events are
 	// different classes on different bus shapes -- naming either half inline is how one family silently stops
 	// receiving a phase, which is exactly what happened to traditional MinecraftForge until 2026-09-13.

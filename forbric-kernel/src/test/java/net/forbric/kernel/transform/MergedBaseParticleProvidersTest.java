@@ -16,16 +16,21 @@
 
 package net.forbric.kernel.transform;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
+import java.util.zip.ZipInputStream;
 
 import org.junit.jupiter.api.Test;
 import org.objectweb.asm.ClassReader;
@@ -33,149 +38,196 @@ import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
+import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.TypeInsnNode;
+import org.objectweb.asm.tree.analysis.Analyzer;
+import org.objectweb.asm.tree.analysis.BasicVerifier;
+
+import net.forbric.kernel.TestFixtures;
 
 /**
- * Covers the repair of {@code ParticleResources}' split {@code providers} field, against the REAL staged base.
+ * Covers the 1.21.1 particle-provider read redirect against the REAL staged base and the REAL fabric-api build.
  *
- * <p>A synthetic fixture would be the wrong subject twice over: what can drift is what the other repository's
- * merge emits, and the exact instruction the repair has to land BEFORE is in that emitted {@code <init>}.
+ * <p>A synthetic fixture would be the wrong subject twice over: what can drift is what the merge emits (the one
+ * {@code providers} field and its descriptor) and what fabric-api's accessor actually declares (the
+ * {@code Int2ObjectMap} face and the {@code @Accessor} annotation), and both are read out of the shipped bytes
+ * here. The 26.2 write-side splice this test used to cover is gone — see
+ * {@link ForbricMergedBaseCompatTransformer#routeFabricParticleFactoriesThroughTheLiveMap} for why the two-field
+ * shape cannot exist on this base.
  */
 class MergedBaseParticleProvidersTest {
-	private static final Path MERGED_BASE =
-			Path.of(System.getenv().getOrDefault("FORBRIC_OLD", System.getProperty("user.dir") + "/../forbric-loader"), "run", "merged-base",
-					"patched-mc-merged-26.2.jar").normalize();
-	private static final String ENTRY = "net/minecraft/client/particle/ParticleResources.class";
-	private static final String ID_KEYED = "Lit/unimi/dsi/fastutil/ints/Int2ObjectMap;";
+	private static final String ENGINE = "net/minecraft/client/particle/ParticleEngine";
+	private static final String ENGINE_ENTRY = "net/minecraft/client/particle/ParticleEngine.class";
+	private static final String ACCESSOR = "net.fabricmc.fabric.mixin.client.particle.ParticleManagerAccessor";
+	private static final String ACCESSOR_ENTRY = "net/fabricmc/fabric/mixin/client/particle/ParticleManagerAccessor.class";
 	private static final String NAME_KEYED = "Ljava/util/Map;";
+	private static final String ID_KEYED = "Lit/unimi/dsi/fastutil/ints/Int2ObjectMap;";
 
+	/**
+	 * The fact the whole re-derivation rests on: ONE field, keyed by {@code ResourceLocation}. If a base ever
+	 * carried vanilla's {@code Int2ObjectMap} field beside it, the 26.2 write-side splice would be the right
+	 * repair and this redirect would be wrong to apply.
+	 */
 	@Test
-	void theVanillaTypedMapIsGivenAViewBeforeRegisterProvidersRuns() throws Exception {
-		ClassNode node = repaired();
-		MethodNode init = method(node, "<init>", "()V");
+	void theBaseDeclaresExactlyOneResourceLocationKeyedProvidersField() throws Exception {
+		ClassNode engine = parse(engine());
+		List<FieldNode> providers = engine.fields.stream().filter(field -> "providers".equals(field.name)).toList();
+		assertEquals(1, providers.size(),
+				"expected 1.21.1's single `providers` field, found " + providers.stream()
+						.map(field -> field.name + ':' + field.desc).toList());
+		assertEquals(NAME_KEYED, providers.getFirst().desc,
+				"the surviving field must be the ResourceLocation-keyed Map every reader of this base uses");
+	}
 
-		int put = -1;
-		int register = -1;
-		AbstractInsnNode[] body = init.instructions.toArray();
-		for (int i = 0; i < body.length; i++) {
-			if (body[i] instanceof FieldInsnNode f && f.getOpcode() == Opcodes.PUTFIELD
-					&& "providers".equals(f.name) && ID_KEYED.equals(f.desc) && put < 0) {
-				put = i;
-			} else if (body[i] instanceof MethodInsnNode m && "registerProviders".equals(m.name) && register < 0) {
-				register = i;
-			}
-		}
+	/** The engine's half: a bridge that reads the private field from inside the class that owns it. */
+	@Test
+	void theEngineCarriesTheProviderViewBridge() throws Exception {
+		byte[] original = engine();
+		byte[] repaired = new ForbricMergedBaseCompatTransformer().transform(ENGINE, original, null);
+		assertNotSame(original, repaired);
 
-		assertTrue(put >= 0, "<init> must write the vanilla-typed providers field — fabric-api reads it directly, "
-				+ "and the merged <init> writes only the NeoForge-typed one");
-		assertTrue(register >= 0, "<init> no longer calls registerProviders — the anchor this repair depends on");
-		assertTrue(put < register,
-				"the write must land BEFORE registerProviders. fabric-api's ParticleResourcesMixin injects at that "
-						+ "method's RETURN, so a repair placed at the end of <init> — where the merge tool puts its "
-						+ "own synthetic field inits — is still too late and reproduces the crash exactly");
+		MethodNode bridge = method(parse(repaired), ForbricMergedBaseCompatTransformer.PROVIDER_VIEW,
+				ForbricMergedBaseCompatTransformer.PROVIDER_VIEW_DESC);
+		assertTrue((bridge.access & Opcodes.ACC_PUBLIC) != 0 && (bridge.access & Opcodes.ACC_STATIC) != 0,
+				"the accessor mixin's default body has to be able to call it from outside the class");
+
+		AbstractInsnNode[] body = bridge.instructions.toArray();
+		assertEquals(Opcodes.ALOAD, body[0].getOpcode());
+		assertInstanceOf(FieldInsnNode.class, body[1]);
+		FieldInsnNode read = (FieldInsnNode) body[1];
+		assertEquals(Opcodes.GETFIELD, read.getOpcode());
+		assertEquals(ENGINE.replace('.', '/'), read.owner);
+		assertEquals("providers", read.name);
+		assertEquals(NAME_KEYED, read.desc, "the bridge must read the field that IS written, not a second one");
+		assertInstanceOf(MethodInsnNode.class, body[2]);
+		MethodInsnNode view = (MethodInsnNode) body[2];
+		assertEquals("net/forbric/kernel/runtime/KernelParticleProviders", view.owner);
+		assertEquals("intKeyedView", view.name);
+		assertEquals("(Ljava/util/Map;)Ljava/lang/Object;", view.desc);
+		assertEquals(Opcodes.ARETURN, body[3].getOpcode());
+		assertEquals(4, body.length, "nothing else may be in the bridge: the view is built from the live map");
+		new Analyzer<>(new BasicVerifier()).analyze(ENGINE.replace('.', '/'), bridge);
 	}
 
 	/**
-	 * The one assertion that rejects "just give it an empty map". An empty {@code Int2ObjectOpenHashMap} satisfies
-	 * every other check here and in the game: nothing NPEs, the mod registers happily, and the particle never
-	 * renders because the registration went into a map nothing reads.
+	 * fabric-api's half, and the reason the fix cannot be caller-side only: the {@code @Accessor} has to go. Mixin
+	 * resolves it by name AND descriptor, the descriptor it declares is the field this base does not have, and its
+	 * failure takes the whole interface mixin — including the two sprite accessors — with it.
 	 */
 	@Test
-	void theStoredValueIsAViewOfTheLiveMapNotAFreshOne() throws Exception {
-		MethodNode init = method(repaired(), "<init>", "()V");
+	void theAccessorReadsThroughThatBridge() throws Exception {
+		byte[] original = accessor();
+		byte[] repaired = new ForbricMergedBaseCompatTransformer().transform(ACCESSOR, original, null);
+		assertNotSame(original, repaired);
+		ClassNode node = parse(repaired);
 
-		boolean viewed = false;
-		AbstractInsnNode[] body = init.instructions.toArray();
-		for (int i = 0; i < body.length; i++) {
-			if (!(body[i] instanceof MethodInsnNode call) || call.getOpcode() != Opcodes.INVOKESTATIC
-					|| !"net/forbric/kernel/runtime/KernelParticleProviders".equals(call.owner)
-					|| !"intKeyedView".equals(call.name)) {
-				continue;
-			}
-			assertTrue(i >= 1 && body[i - 1] instanceof FieldInsnNode src
-							&& src.getOpcode() == Opcodes.GETFIELD && "providers".equals(src.name)
-							&& NAME_KEYED.equals(src.desc),
-					"the view must be built over the LIVE map — reading the field that <init> just wrote");
-			assertTrue(body[i + 1] instanceof TypeInsnNode cast && cast.getOpcode() == Opcodes.CHECKCAST,
-					"and cast to the field's own type, since the seam is declared in JDK types");
-			viewed = true;
+		MethodNode factories = method(node, "getFactories",
+				"()Lit/unimi/dsi/fastutil/ints/Int2ObjectMap;");
+		assertTrue((factories.access & Opcodes.ACC_ABSTRACT) == 0,
+				"getFactories must become a default method; Mixin cannot bind the field this base does not have");
+		assertTrue(factories.visibleAnnotations == null || factories.visibleAnnotations.stream()
+						.noneMatch(annotation -> "Lorg/spongepowered/asm/mixin/gen/Accessor;".equals(annotation.desc)),
+				"the @Accessor annotation must be gone, or Mixin resolves it again and throws");
+
+		AbstractInsnNode[] body = factories.instructions.toArray();
+		assertEquals(Opcodes.ALOAD, body[0].getOpcode());
+		assertInstanceOf(TypeInsnNode.class, body[1]);
+		assertEquals(ENGINE.replace('.', '/'), ((TypeInsnNode) body[1]).desc);
+		assertInstanceOf(MethodInsnNode.class, body[2]);
+		MethodInsnNode bridge = (MethodInsnNode) body[2];
+		assertEquals(ENGINE.replace('.', '/'), bridge.owner);
+		assertEquals(ForbricMergedBaseCompatTransformer.PROVIDER_VIEW, bridge.name);
+		assertEquals(ForbricMergedBaseCompatTransformer.PROVIDER_VIEW_DESC, bridge.desc);
+		assertInstanceOf(TypeInsnNode.class, body[3]);
+		assertEquals(Opcodes.CHECKCAST, body[3].getOpcode());
+		assertEquals("it/unimi/dsi/fastutil/ints/Int2ObjectMap", ((TypeInsnNode) body[3]).desc,
+				"the caller puts ints into it, so the Object the kernel seam returns has to be cast to its own face");
+		assertEquals(Opcodes.ARETURN, body[4].getOpcode());
+		assertEquals(5, body.length);
+		new Analyzer<>(new BasicVerifier()).analyze(ACCESSOR.replace('.', '/'), factories);
+
+		// The two accessors beside it bind on this base (both descriptors are Map), and must stay as shipped.
+		for (String name : List.of("getParticleAtlasTexture", "getSpriteAwareFactories")) {
+			MethodNode accessor = node.methods.stream().filter(m -> m.name.equals(name)).findFirst().orElseThrow();
+			assertTrue((accessor.access & Opcodes.ACC_ABSTRACT) != 0, name + " must stay an @Accessor method");
+			assertNotNull(accessor.visibleAnnotations);
+			assertTrue(accessor.visibleAnnotations.stream()
+							.anyMatch(annotation -> "Lorg/spongepowered/asm/mixin/gen/Accessor;".equals(annotation.desc)),
+					name + " must keep its @Accessor");
 		}
-		assertTrue(viewed, "the stored value must come from KernelParticleProviders.intKeyedView");
 	}
 
-	/**
-	 * MinecraftForge's {@code providersByName} lost its only producer in the merge, and the synthetic replacement
-	 * init runs AFTER {@code registerProviders} — so it is empty during the exact window that matters, and stays
-	 * empty afterwards.
-	 */
 	@Test
-	void getProviderReadsTheMapThatHasSomethingInIt() throws Exception {
-		MethodNode getProvider = method(repaired(), "getProvider",
-				"(Lnet/minecraft/core/particles/ParticleType;)Lnet/minecraft/client/particle/ParticleProvider;");
-		for (AbstractInsnNode insn : getProvider.instructions) {
-			if (insn instanceof FieldInsnNode f && f.getOpcode() == Opcodes.GETFIELD) {
-				assertTrue(!"providersByName".equals(f.name),
-						"getProvider still reads providersByName, which nothing ever writes");
-			}
-		}
-	}
+	void aSecondPassLeavesBothHalvesAlone() throws Exception {
+		ForbricMergedBaseCompatTransformer once = new ForbricMergedBaseCompatTransformer();
+		byte[] engine = once.transform(ENGINE, engine(), null);
+		assertSame(engine, once.transform(ENGINE, engine, null),
+				"a second pass over the engine must stand down, or every reload stacks another bridge");
 
-	@Test
-	void aSecondPassLeavesTheRepairedClassAlone() throws Exception {
-		byte[] once = new ForbricMergedBaseCompatTransformer().transform(
-				"net.minecraft.client.particle.ParticleResources", original(), null);
-		byte[] twice = new ForbricMergedBaseCompatTransformer().transform(
-				"net.minecraft.client.particle.ParticleResources", once, null);
-		assertSame(once, twice, "the repair must stand down once the field is written — otherwise every reload of "
-				+ "the class stacks another view on top of the last");
+		ForbricMergedBaseCompatTransformer twice = new ForbricMergedBaseCompatTransformer();
+		byte[] accessor = twice.transform(ACCESSOR, accessor(), null);
+		assertSame(accessor, twice.transform(ACCESSOR, accessor, null),
+				"a second pass over the accessor must stand down — its body is no longer abstract");
 	}
 
 	@Test
 	void anotherClassIsUntouched() throws Exception {
-		assumeTrue(Files.isRegularFile(MERGED_BASE), "staged merged base absent");
-		byte[] other = readClass("net/minecraft/client/particle/ParticleProvider.class");
+		byte[] other = read(TestFixtures.mergedBase(),
+				"net/minecraft/client/particle/ParticleProvider.class");
 		assumeTrue(other != null, "ParticleProvider absent from this base");
 		assertSame(other, new ForbricMergedBaseCompatTransformer()
 				.transform("net.minecraft.client.particle.ParticleProvider", other, null));
 	}
 
-	private static ClassNode repaired() throws Exception {
-		byte[] out = new ForbricMergedBaseCompatTransformer().transform(
-				"net.minecraft.client.particle.ParticleResources", original(), null);
+	private static byte[] engine() throws IOException {
+		Path base = TestFixtures.mergedBase();
+		assumeTrue(base != null && Files.isRegularFile(base), "staged merged base absent");
+		byte[] bytes = read(base, ENGINE_ENTRY);
+		assumeTrue(bytes != null, "ParticleEngine absent from this base");
+		return bytes;
+	}
+
+	/**
+	 * The accessor as the guest jar ships it: inside fabric-api's nested {@code fabric-particles-v1} module, which
+	 * is the unit the kernel remaps and loads. Read through both zips — the module is not a file on disk.
+	 */
+	private static byte[] accessor() throws IOException {
+		String configured = System.getProperty("forbric.fabricApi");
+		assumeTrue(configured != null && Files.isRegularFile(Path.of(configured)), "fabric-api fixture absent");
+		try (ZipFile api = new ZipFile(configured)) {
+			ZipEntry module = api.stream()
+					.filter(entry -> entry.getName().startsWith("META-INF/jars/fabric-particles-v1-"))
+					.findFirst().orElse(null);
+			assumeTrue(module != null, "fabric-api carries no fabric-particles-v1 module");
+			try (ZipInputStream nested = new ZipInputStream(api.getInputStream(module))) {
+				for (ZipEntry entry; (entry = nested.getNextEntry()) != null; ) {
+					if (ACCESSOR_ENTRY.equals(entry.getName())) return nested.readAllBytes();
+				}
+			}
+		}
+		throw new AssertionError("the fixture's fabric-particles-v1 does not carry " + ACCESSOR);
+	}
+
+	private static byte[] read(Path jar, String entry) throws IOException {
+		try (ZipFile zip = new ZipFile(jar.toFile())) {
+			ZipEntry found = zip.getEntry(entry);
+			return found == null ? null : zip.getInputStream(found).readAllBytes();
+		}
+	}
+
+	private static ClassNode parse(byte[] bytes) {
 		ClassNode node = new ClassNode();
-		new ClassReader(out).accept(node, 0);
+		new ClassReader(bytes).accept(node, 0);
 		return node;
 	}
 
-	private static byte[] original() throws IOException {
-		assumeTrue(Files.isRegularFile(MERGED_BASE), "staged merged base absent — skipping real-bytecode check");
-		byte[] in = readClass(ENTRY);
-		assumeTrue(in != null, "ParticleResources absent from this base");
-		ClassNode node = new ClassNode();
-		new ClassReader(in).accept(node, 0);
-		boolean split = node.fields.stream().anyMatch(f -> "providers".equals(f.name) && ID_KEYED.equals(f.desc))
-				&& node.fields.stream().anyMatch(f -> "providers".equals(f.name) && NAME_KEYED.equals(f.desc));
-		assumeTrue(split, "this base no longer splits ParticleResources.providers — nothing to repair");
-		return in;
-	}
-
 	private static MethodNode method(ClassNode node, String name, String desc) {
-		for (MethodNode m : node.methods) {
-			if (m.name.equals(name) && m.desc.equals(desc)) return m;
-		}
-		assertNotNull(null, "missing " + name + desc);
-		throw new AssertionError();
-	}
-
-	private static byte[] readClass(String entry) throws IOException {
-		try (ZipFile jar = new ZipFile(MERGED_BASE.toFile())) {
-			var e = jar.getEntry(entry);
-			if (e == null) return null;
-			try (InputStream in = jar.getInputStream(e)) {
-				return in.readAllBytes();
-			}
-		}
+		MethodNode method = node.methods.stream()
+				.filter(candidate -> candidate.name.equals(name) && candidate.desc.equals(desc))
+				.findFirst().orElse(null);
+		assertNotNull(method, node.name + " has no " + name + desc);
+		return method;
 	}
 }

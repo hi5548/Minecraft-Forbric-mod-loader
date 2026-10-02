@@ -11,6 +11,7 @@ import java.util.zip.ZipFile;
 
 import net.forbric.api.Ecosystem;
 import net.forbric.api.ForeignType;
+import net.forbric.kernel.TestFixtures;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.objectweb.asm.ClassReader;
@@ -30,7 +31,7 @@ class ForgeBlockTintInjectorTest {
 		byte[] before = fixture(1, true);
 		byte[] after = INJECTOR.transform(ForgeBlockTintInjector.TARGET, before, null);
 		assertNotSame(before, after);
-		MethodNode original = createDefault(before), changed = createDefault(after);
+		MethodNode original = site(before), changed = site(after);
 		assertEquals(opcodes(original), opcodes(changed));
 		assertEquals(0, posts(changed, ForeignType.FML_MOD_LOADER.internal(Ecosystem.NEOFORGE)));
 		assertEquals(1, posts(changed, ForgeBlockTintInjector.HOOK));
@@ -52,18 +53,36 @@ class ForgeBlockTintInjectorTest {
 		assertSame(bytes, INJECTOR.transform(ForgeBlockTintInjector.TARGET, bytes, null));
 	}
 
-	@Test void theActualMergedClassHasExactlyThisSeam() throws Exception {
-		Path stage = Path.of(System.getenv().getOrDefault("FORBRIC_OLD", "../forbric-loader"));
-		Path jar = stage.resolve("run/merged-base/patched-mc-merged-26.2.jar");
-		assumeTrue(Files.isRegularFile(jar), "requires merged base");
+	/**
+	 * The anchor against the real carrier: 1.21.1's {@code BlockColors.createDefault} names no colour-handler
+	 * event, and this method is where NeoForge builds and posts it. The Item event lives in the same class and
+	 * must stay untouched.
+	 */
+	@Test void theActualNeoForgeCarrierHasExactlyThisSeam() throws Exception {
+		Path root = TestFixtures.stagedRoot();
+		Path jar = root.resolve("neoforge-runtime/neoforge-runtime.jar");
+		assumeTrue(Files.isRegularFile(jar), "requires the staged NeoForge carrier");
 		try (ZipFile zip = new ZipFile(jar.toFile())) {
-			byte[] before = zip.getInputStream(zip.getEntry(ForgeBlockTintInjector.TARGET.replace('.', '/') + ".class")).readAllBytes();
-			assertEquals(1, posts(createDefault(before), ForeignType.FML_MOD_LOADER.internal(Ecosystem.NEOFORGE)));
+			var entry = zip.getEntry(ForgeBlockTintInjector.TARGET.replace('.', '/') + ".class");
+			assumeTrue(entry != null, "ClientHooks absent from this carrier");
+			byte[] before = zip.getInputStream(entry).readAllBytes();
+			assertEquals(1, posts(site(before), ForeignType.FML_MOD_LOADER.internal(Ecosystem.NEOFORGE)),
+					"onBlockColorsInit must post exactly one event — the seam this injector moves");
 			byte[] after = INJECTOR.transform(ForgeBlockTintInjector.TARGET, before, null);
 			assertNotSame(before, after);
-			assertEquals(opcodes(createDefault(before)), opcodes(createDefault(after)));
-			assertEquals(1, posts(createDefault(after), ForgeBlockTintInjector.HOOK));
+			assertEquals(opcodes(site(before)), opcodes(site(after)));
+			assertEquals(1, posts(site(after), ForgeBlockTintInjector.HOOK));
 			assertSame(after, INJECTOR.transform(ForgeBlockTintInjector.TARGET, after, null));
+
+			// The sibling that posts the Item event is not this seam and must come back byte-identical.
+			var items = zip.getEntry(ForgeBlockTintInjector.TARGET.replace('.', '/') + ".class");
+			byte[] all = zip.getInputStream(items).readAllBytes();
+			assertEquals(1, posts(method(all, "onItemColorsInit",
+					"(Lnet/minecraft/client/color/item/ItemColors;Lnet/minecraft/client/color/block/BlockColors;)V"),
+					ForeignType.FML_MOD_LOADER.internal(Ecosystem.NEOFORGE)));
+			assertEquals(0, posts(method(after, "onItemColorsInit",
+					"(Lnet/minecraft/client/color/item/ItemColors;Lnet/minecraft/client/color/block/BlockColors;)V"),
+					ForgeBlockTintInjector.HOOK));
 		}
 	}
 
@@ -84,9 +103,11 @@ class ForgeBlockTintInjectorTest {
 	}
 
 	private static ClassNode parse(byte[] bytes) { ClassNode n = new ClassNode(); new ClassReader(bytes).accept(n, 0); return n; }
-	private static MethodNode createDefault(byte[] bytes) {
-		return parse(bytes).methods.stream().filter(m -> m.name.equals("createDefault")).findFirst().orElseThrow();
+	private static MethodNode method(byte[] bytes, String name, String desc) {
+		return parse(bytes).methods.stream()
+				.filter(m -> m.name.equals(name) && m.desc.equals(desc)).findFirst().orElseThrow();
 	}
+	private static MethodNode site(byte[] bytes) { return method(bytes, ForgeBlockTintInjector.SITE, ForgeBlockTintInjector.SITE_DESC); }
 	private static List<Integer> opcodes(MethodNode m) {
 		return Arrays.stream(m.instructions.toArray()).filter(i -> i.getOpcode() >= 0).map(i -> i.getOpcode()).toList();
 	}
@@ -98,16 +119,17 @@ class ForgeBlockTintInjectorTest {
 		ClassWriter out = new ClassWriter(ClassWriter.COMPUTE_MAXS);
 		String target = ForgeBlockTintInjector.TARGET.replace('.', '/');
 		out.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, target, null, "java/lang/Object", null);
-		var method = out.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "createDefault", "()L" + target + ";", null, null);
+		var method = out.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, ForgeBlockTintInjector.SITE,
+				ForgeBlockTintInjector.SITE_DESC, null, null);
 		method.visitCode();
 		for (int i = 0; i < posts; i++) {
 			String event = expectedEvent ? ForeignType.BLOCK_TINT_EVENT.internal(Ecosystem.NEOFORGE) : "example/OtherEvent";
-			method.visitTypeInsn(Opcodes.NEW, event); method.visitInsn(Opcodes.DUP); method.visitInsn(Opcodes.ACONST_NULL);
-			method.visitMethodInsn(Opcodes.INVOKESPECIAL, event, "<init>", "(L" + target + ";)V", false);
+			method.visitTypeInsn(Opcodes.NEW, event); method.visitInsn(Opcodes.DUP); method.visitVarInsn(Opcodes.ALOAD, 0);
+			method.visitMethodInsn(Opcodes.INVOKESPECIAL, event, "<init>", ForgeBlockTintInjector.EVENT_DESC, false);
 			method.visitMethodInsn(Opcodes.INVOKESTATIC, ForeignType.FML_MOD_LOADER.internal(Ecosystem.NEOFORGE),
 					"postEvent", ForgeBlockTintInjector.POST, false);
 		}
-		method.visitInsn(Opcodes.ACONST_NULL); method.visitInsn(Opcodes.ARETURN); method.visitMaxs(0, 0); method.visitEnd();
+		method.visitInsn(Opcodes.RETURN); method.visitMaxs(0, 0); method.visitEnd();
 		out.visitEnd(); return out.toByteArray();
 	}
 }

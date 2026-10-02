@@ -96,9 +96,14 @@ public final class SupersededMixins {
 						+ "ejectItems and suckInItems instead (KernelFabricHopperStorage)",
 						"forbric.hopperFabricStorage", "net.minecraft.world.level.block.entity.HopperBlockEntity",
 						SupersededMixins::hopperAsksFabric));
-		map.put("net.fabricmc.fabric.mixin.loot.ReloadableServerRegistriesMixin",
+		// PORT(1.21.1): the api's loot mixin is `ReloadableRegistriesMixin` in this generation — Mojang renamed
+		// the class it mixes into (26.2: ReloadableServerRegistriesMixin). Its refmap still names the
+		// intermediary ids of a jar that was remapped to Mojmap, so binding is not something to bet on; the
+		// kernel's own route through the two seams does the whole job either way.
+		map.put("net.fabricmc.fabric.mixin.loot.ReloadableRegistriesMixin",
 				new Replacement("KernelLootBridge supplies all Fabric loot REPLACE, MODIFY and ALL_LOADED callbacks "
-						+ "through the surviving native loot and tag loading calls",
+						+ "through ReloadableServerRegistries' own loot-table load and registry-parse seams, and posts "
+						+ "the NeoForge LootTableLoadEvent the merge dropped",
 						"forbric.lootBridge", "net.minecraft.server.ReloadableServerRegistries",
 						SupersededMixins::lootCallbacksRouted));
 		return Map.copyOf(map);
@@ -108,13 +113,13 @@ public final class SupersededMixins {
 	}
 
 	private static boolean lootCallbacksRouted(ClassNode node) {
-		int load = 0, tags = 0;
+		int load = 0, parsed = 0;
 		for (MethodNode method : node.methods) for (AbstractInsnNode instruction : method.instructions) {
 			if (!(instruction instanceof MethodInsnNode call) || !"net/forbric/kernel/runtime/KernelLootBridge".equals(call.owner)) continue;
 			if ("loadLootTable".equals(call.name)) load++;
-			if ("loadTagsForRegistry".equals(call.name)) tags++;
+			if ("registryParsed".equals(call.name)) parsed++;
 		}
-		return load == 1 && tags == 1;
+		return load == 1 && parsed == 1;
 	}
 
 	static boolean enabled() {

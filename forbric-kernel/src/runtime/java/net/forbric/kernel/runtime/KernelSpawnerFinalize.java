@@ -45,9 +45,11 @@ import net.neoforged.neoforge.event.entity.living.FinalizeSpawnEvent;
  *
  * <p>{@code PORT(1.21.1)}: 26.2's call site threads the entity's {@code ValueInput} through. 1.21.1 has no
  * {@code ValueInput} — its spawner loads entities from the spawn tag, a {@code CompoundTag} — and Forge's own
- * {@code onFinalizeSpawnSpawner} takes a {@code CompoundTag} here, so the tag is the carrier. The kernel's
- * {@code SpawnerFinalizeInjector}, which used to prove the ValueInput reaches the hook, has to move its anchor
- * to the tag the 1.21.1 {@code BaseSpawner.serverTick} hands to {@code EntityType.loadEntityRecursive}.
+ * {@code onFinalizeSpawnSpawner} takes a {@code CompoundTag} here, so the tag is the carrier.
+ * {@code SpawnerFinalizeInjector} proves that tag reaches the hook (the one {@code SpawnData.getEntityToSpawn()}
+ * the caller handed to {@code EntityType.loadEntityRecursive}) and supplies it as the one extra trailing
+ * argument; {@link #finalizeMobSpawnSpawner} without it is the native path for a call site that was never
+ * routed.
  */
 public final class KernelSpawnerFinalize {
 

@@ -39,15 +39,17 @@ public final class SpawnPositionCallsInjector implements ClassTransformer {
 	static final List<String> TARGETS = List.of(TARGET, NATURAL, SUMMON);
 	static final String HOST_DESC = "(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;)V";
 	static final String NEO = "net/neoforged/neoforge/event/EventHooks", NEO_NAME = "checkSpawnPositionSpawner";
+	// PORT(1.21.1): the reason argument is MobSpawnType here, not 26.2's EntitySpawnReason (javap on the staged
+	// NeoForge 21.1 EventHooks and the merged Mob for both hook and vanilla descriptors).
 	static final String NEO_DESC = "(Lnet/minecraft/world/entity/Mob;Lnet/minecraft/world/level/ServerLevelAccessor;"
-			+ "Lnet/minecraft/world/entity/EntitySpawnReason;Lnet/minecraft/world/level/SpawnData;Lnet/minecraft/world/level/BaseSpawner;)Z";
+			+ "Lnet/minecraft/world/entity/MobSpawnType;Lnet/minecraft/world/level/SpawnData;Lnet/minecraft/world/level/BaseSpawner;)Z";
 	static final String NEO_POSITION = "checkSpawnPosition", NEO_POSITION_DESC = "(Lnet/minecraft/world/entity/Mob;"
-			+ "Lnet/minecraft/world/level/ServerLevelAccessor;Lnet/minecraft/world/entity/EntitySpawnReason;)Z";
+			+ "Lnet/minecraft/world/level/ServerLevelAccessor;Lnet/minecraft/world/entity/MobSpawnType;)Z";
 	static final String RUNTIME = "net/forbric/kernel/runtime/KernelSpawnPosition";
 	static final String DECIDE_DESC = "(Lnet/minecraft/world/entity/Mob;Lnet/minecraft/world/level/ServerLevelAccessor;"
-			+ "Lnet/minecraft/world/entity/EntitySpawnReason;Lnet/minecraft/world/level/BaseSpawner;)I";
+			+ "Lnet/minecraft/world/entity/MobSpawnType;Lnet/minecraft/world/level/BaseSpawner;)I";
 	static final String MOB = "net/minecraft/world/entity/Mob";
-	static final String CHECK_RULES = "checkSpawnRules", CHECK_RULES_DESC = "(Lnet/minecraft/world/level/LevelAccessor;Lnet/minecraft/world/entity/EntitySpawnReason;)Z";
+	static final String CHECK_RULES = "checkSpawnRules", CHECK_RULES_DESC = "(Lnet/minecraft/world/level/LevelAccessor;Lnet/minecraft/world/entity/MobSpawnType;)Z";
 	static final String CHECK_OBSTRUCTION = "checkSpawnObstruction", CHECK_OBSTRUCTION_DESC = "(Lnet/minecraft/world/level/LevelReader;)Z";
 
 	private final MergedBaseFrameRecomputer hierarchy;

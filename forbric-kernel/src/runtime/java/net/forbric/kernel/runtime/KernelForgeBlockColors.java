@@ -16,11 +16,11 @@ import net.minecraftforge.client.ForgeHooksClient;
  * still MinecraftForge's half. So the body changes by one type name.
  *
  * <p>The SEAM is what moved, not the body: 26.2's {@code ForgeBlockTintInjector} rewrote the
- * {@code ModLoader.postEvent(<event ctor>)} call inside {@code BlockColors.createDefault}, and the merged 1.21.1
- * base names no colour-handler event anywhere in that class (checked against the class's constant pool), so the
- * injector's REQUIRED anchor no longer matches and this method has no caller until the seam is re-derived —
- * against whichever 1.21.1 method really posts the event. It is kept CORRECT rather than deleted, because
- * deleting it would hide the seam that has to come back.
+ * {@code ModLoader.postEvent(<event ctor>)} call inside {@code BlockColors.createDefault}. On 1.21.1
+ * {@code createDefault} names no colour-handler event at all; it calls NeoForge's own
+ * {@code ClientHooks.onBlockColorsInit(BlockColors)}, which is where the event is built and posted
+ * (javap -c against the staged merged base and {@code neoforge-runtime.jar}). The injector has been re-anchored
+ * onto that method, so both families' colour-handler registrations reach this one live instance again.
  */
 public final class KernelForgeBlockColors {
 	private KernelForgeBlockColors() { }

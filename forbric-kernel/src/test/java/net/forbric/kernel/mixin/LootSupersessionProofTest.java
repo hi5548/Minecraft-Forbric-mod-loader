@@ -8,9 +8,11 @@ import net.forbric.kernel.transform.LootTableEventBridgeInjector;
 @ResourceLock(Resources.SYSTEM_PROPERTIES)
 class LootSupersessionProofTest {
 	@Test void aNameOrAnUnmodifiedLoaderCannotResolveTheMissingLootMixin() throws Exception {
-		String mixin="net.fabricmc.fabric.mixin.loot.ReloadableServerRegistriesMixin";
+		// PORT(1.21.1): the api's loot mixin class is ReloadableRegistriesMixin in this generation; the class it
+		// mixes into kept its name across the retarget.
+		String mixin="net.fabricmc.fabric.mixin.loot.ReloadableRegistriesMixin";
 		String target="net.minecraft.server.ReloadableServerRegistries";
-		byte[] raw=StagedFabricMixinFixture.bytes(StagedFabricMixinFixture.game(target.replace('.','/'),false));
+		byte[] raw=StagedFabricMixinFixture.bytes(StagedFabricMixinFixture.merged(target.replace('.','/')));
 		byte[] repaired=new LootTableEventBridgeInjector().transform(target,raw,null);
 		SupersededMixins.reset();
 		try{

@@ -79,10 +79,13 @@ check "JiJ nested mod initialized"             "\[ForbricFabricLib\] JiJ nested 
 check "Jade (real third-party mod) loaded"     "invoked main entrypoint of jade" "$LOG"
 
 step "the server actually works (must PASS)"
-# F3: fabric-loot-api-v3's LootTableEvents fire from NeoForge's LootTableLoadEvent seam (the mixin is pinned).
+# F3: fabric-loot-api-v3's LootTableEvents, and NeoForge's dropped LootTableLoadEvent, fire from
+# ReloadableServerRegistries' own two seams (the api's mixin is pinned).
 # RED with FORBRIC_JVM=-Dforbric.lootBridge=off (no 'offered' line; the audit then names the canary DEGRADED).
 check "kernel offered the loot tables to fabric" "Forbric/LootBridge\] offered [1-9][0-9]* loot table" "$LOG"
-check "the loot seams were routed"             "Forbric/LootBridge\] routed 1 loot-table load site\(s\) and 1 tag-load site" "$LOG"
+# PORT(1.21.1): the two seams are the one LootDataType.deserialize call and the registry-parse lambda's tail, not
+# 26.2's loot and tag hooks.
+check "the loot seams were routed"             "Forbric/LootBridge\] routed 1 loot-table load site and 1 registry-parse site" "$LOG"
 # F5: the canary's own listeners, registered like balm-fabric's. Both KINDS of line are asserted: the kernel's
 # 'offered' count proves the bridge ran, the canary's lines prove a mod's listener was actually called.
 check "the canary registered on LootTableEvents" "ForbricFabricLive\] LootTableEvents listeners registered" "$LOG"
@@ -137,8 +140,9 @@ SUPPRESSED=$(grep -aoE 'suppressed mixin .*' "$LOG" | sort -u)
 # RegistryDataLoaderMixin is restored by FabricRegistryLoaderMixinAdapter; BootstrapMixin/MainMixin are
 # restored by FabricRegistryInitializationMixinAdapter. ForbricMixinService.suppressedMixinsFor removes those
 # pins only while the adapters are enabled (covered by ForbricMixinServiceTest). Loot remains kernel-owned.
+# PORT(1.21.1): the api's loot mixin class is ReloadableRegistriesMixin in this generation.
 assert_eq "suppressed mixins are the documented set" \
-  "suppressed mixin ReloadableServerRegistriesMixin from fabric-loot-api-v3 (fabric-loot-api-v3.mixins.json)" \
+  "suppressed mixin ReloadableRegistriesMixin from fabric-loot-api-v3 (fabric-loot-api-v3.mixins.json)" \
   "$SUPPRESSED"
 # DISABLED_CONFIGS ships EMPTY on purpose (a whole-config entry hides which single mixin is at fault) and this
 # gate passes no -Dforbric.disableMixinConfigs, so zero is the only correct answer and a count was never the

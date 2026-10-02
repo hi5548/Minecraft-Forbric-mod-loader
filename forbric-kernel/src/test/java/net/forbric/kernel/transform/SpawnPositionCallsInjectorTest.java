@@ -18,7 +18,9 @@ import org.objectweb.asm.tree.analysis.BasicVerifier;
 /** The merged BaseSpawner, rewritten, on the real staged jars; architectury's real mixin is the witness. */
 class SpawnPositionCallsInjectorTest {
 	private static final Path STAGED = Path.of(System.getProperty("forbric.stagedRoot", "../forbric-loader/run"));
-	private static final Path MERGED = STAGED.resolve("merged-base/patched-mc-merged-26.2.jar");
+	/** PORT(1.21.1): the merged base is named for the version the build targets, as in build.gradle. */
+	private static final String MC_VERSION = System.getProperty("forbric.mcVersion", "1.21.1");
+	private static final Path MERGED = STAGED.resolve("merged-base/patched-mc-merged-" + MC_VERSION + ".jar");
 	private static final Path NEO = STAGED.resolve("neoforge-runtime/neoforge-runtime.jar");
 	private static final Path ARCHITECTURY = Path.of("run/client-popular/mods/architectury-fabric-21.1.10.jar");
 
@@ -46,7 +48,8 @@ class SpawnPositionCallsInjectorTest {
 	}
 
 	@Test void naturalAndSummonedSpawnsGetVanillasCallsBackInEveryMethodVanillaMadeThem() throws Exception {
-		Path vanilla = TestFixtures.vanillaJar();
+		// PORT(1.21.1): no named vanilla jar ships under versions/; DevPrepare stages the renamed client here.
+		Path vanilla = TestFixtures.minecraftDir().resolve(".forbric-build/client-official.jar");
 		for (String target : List.of(SpawnPositionCallsInjector.NATURAL, SpawnPositionCallsInjector.SUMMON)) {
 			String entry = target.replace('.', '/') + ".class";
 			byte[] original = read(MERGED, entry);

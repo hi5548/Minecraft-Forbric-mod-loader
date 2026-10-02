@@ -16,9 +16,24 @@ import org.objectweb.asm.tree.MethodInsnNode;
 
 /** Redirect one post call without changing the event object, descriptor or surrounding instructions. */
 public final class ForgeBlockTintInjector implements ClassTransformer {
-	static final String TARGET = "net.minecraft.client.color.block.BlockColors";
+	/**
+	 * PORT(1.21.1): 26.2's seam was {@code BlockColors.createDefault}, which posted
+	 * {@code RegisterColorHandlersEvent.BlockTintSources} itself through {@code ModLoader.postEvent}. On 1.21.1
+	 * {@code createDefault} names no colour-handler event at all (constant-pool scan of the staged merged base):
+	 * it ends in a call to NeoForge's own {@code ClientHooks.onBlockColorsInit(BlockColors)}, and THAT is where
+	 * {@code new RegisterColorHandlersEvent.Block(blockColors)} is built and posted —
+	 * {@code javap -c} on the staged {@code neoforge-runtime.jar} shows the constructor, the {@code postEvent},
+	 * and nothing else in the method. So the anchor moves there; {@code onItemColorsInit} in the same class posts
+	 * the Item event and is excluded by the constructor's descriptor.
+	 */
+	static final String TARGET = "net.neoforged.neoforge.client.ClientHooks";
+	/** The one method of it that posts a block colour-handler event. */
+	static final String SITE = "onBlockColorsInit";
+	static final String SITE_DESC = "(Lnet/minecraft/client/color/block/BlockColors;)V";
 	static final String HOOK = "net/forbric/kernel/runtime/KernelForgeBlockColors";
 	static final String POST = "(Lnet/neoforged/bus/api/Event;)V";
+	/** The event's constructor, the instruction before the post that identifies which event is being posted. */
+	static final String EVENT_DESC = "(Lnet/minecraft/client/color/block/BlockColors;)V";
 
 	@Override public String name() { return "forbric-forge-block-tints"; }
 	@Override public AnchorSet anchors() {
@@ -33,7 +48,7 @@ public final class ForgeBlockTintInjector implements ClassTransformer {
 		List<MethodInsnNode> candidates = new ArrayList<>();
 		int repaired = 0;
 		for (var method : node.methods) {
-			if (!method.name.equals("createDefault") || !method.desc.equals("()Lnet/minecraft/client/color/block/BlockColors;")) continue;
+			if (!method.name.equals(SITE) || !method.desc.equals(SITE_DESC)) continue;
 			for (var instruction : method.instructions) {
 				if (!(instruction instanceof MethodInsnNode call)) continue;
 				if (call.owner.equals(HOOK) && call.name.equals("postBlockTintSources") && call.desc.equals(POST)) repaired++;
@@ -45,7 +60,7 @@ public final class ForgeBlockTintInjector implements ClassTransformer {
 				if (!(previous instanceof MethodInsnNode constructor)
 						|| constructor.getOpcode() != Opcodes.INVOKESPECIAL || !constructor.name.equals("<init>")
 						|| !constructor.owner.equals(ForeignType.BLOCK_TINT_EVENT.internal(Ecosystem.NEOFORGE))
-						|| !constructor.desc.equals("(Lnet/minecraft/client/color/block/BlockColors;)V")) return bytes;
+						|| !constructor.desc.equals(EVENT_DESC)) return bytes;
 				candidates.add(call);
 			}
 		}

@@ -81,17 +81,22 @@ public final class MergedBaseMixinCompat {
 	 *       server/client context during datapack registry load. FabricRegistryLoaderMixinAdapter now restores
 	 *       the original ScopedValue bindings and async propagation on both widened overloads; this pin returns
 	 *       only with that adapter switched off.</li>
-	 *   <li><b>loot-api-v3 {@code ReloadableServerRegistriesMixin}</b> — its generated callback loads a local slot
-	 *       the merged base's method does not have: {@code VerifyError: Bad local variable type} at
-	 *       {@code ReloadableServerRegistries.handler$…$modifyLootTable} — NeoForge swapped the last two parameters
-	 *       of {@code lambda$scheduleRegistryLoad$0} and split vanilla's one element map into two, so
-	 *       {@code modifyLootTable}'s {@code @Local Map} can never bind. Its sibling {@code onLootTablesLoaded}
-	 *       (an {@code @Inject} at RETURN in vanilla's shape) is a different matter: {@code MixinHandlerShim} wraps
-	 *       it along that lambda's row of {@code lambda-permutations.txt}, so it WOULD bind. The pin stays, and it no
-	 *       longer costs the API: {@link net.forbric.kernel.boot.LootTableEventDispatch} fires REPLACE / MODIFY /
-	 *       ALL_LOADED from NeoForge's own {@code LootTableLoadEvent} seam ({@code -Dforbric.lootBridge=off} to see
-	 *       the old behaviour). Lifting the pin on the strength of the shim would fire ALL_LOADED twice, once from the
-	 *       bridge and once from {@code onLootTablesLoaded}, and still fail on {@code modifyLootTable}.</li>
+	 *   <li><b>loot-api-v3 {@code ReloadableServerRegistriesMixin}</b> —
+	 *       <b>PORT(1.21.1): the class is {@code ReloadableRegistriesMixin} in this generation.</b> Mojang renamed
+	 *       the class it mixes into ({@code class_9383} is {@code ReloadableServerRegistries} in 26.2 and
+	 *       {@code ReloadableRegistries} in the Yarn names its refmap was built against), and the 26.2 failure it
+	 *       was pinned for is gone with the merge that caused it: 1.21.1's merged
+	 *       {@code ReloadableServerRegistries} is vanilla-shaped ({@code scheduleElementParse}/{@code reload}/
+	 *       {@code apply}), and the api's two targets there ({@code method_58278}/{@code method_58279}, torn off
+	 *       the real jar's annotations) exist verbatim. What replaces the pin's original reason is its own
+	 *       refmap: the module was remapped intermediary→Mojmap at the class level, so its annotations still name
+	 *       intermediary ids the runtime does not have, and half-binding its two injectors would fire
+	 *       {@code ALL_LOADED} twice — once there and once from the bridge. The pin stays and it does not cost the
+	 *       API: {@link net.forbric.kernel.boot.LootTableEventDispatch} fires REPLACE / MODIFY / ALL_LOADED from
+	 *       {@code ReloadableServerRegistries}' own two seams — its single {@code LootDataType.deserialize} call
+	 *       and the registry-parse lambda's tail — and {@code KernelLootBridge} posts the NeoForge
+	 *       {@code LootTableLoadEvent} the merge dropped ({@code -Dforbric.lootBridge=off} to see the old
+	 *       behaviour).</li>
 	 *   <li><b>creative-tab CLIENT {@code CreativeModeInventoryScreenMixin}</b> — Fabric's creative-screen PAGER.
 	 *       The merged screen already carries NeoForge's pager as a base patch ({@code CreativeTabsScreenPage},
 	 *       the "&lt; N/M &gt;" buttons), so with this mixin woven BOTH pagers run at once — and they fight:
@@ -165,7 +170,8 @@ public final class MergedBaseMixinCompat {
 			"fabric-registry-sync-v0.mixins.json:BootstrapMixin",
 			"fabric-registry-sync-v0.mixins.json:MainMixin",
 			"fabric-registry-sync-v0.client.mixins.json:MinecraftMixin",
-			"fabric-loot-api-v3.mixins.json:ReloadableServerRegistriesMixin",
+			// PORT(1.21.1): the api's loot mixin class is ReloadableRegistriesMixin here; see the entry above.
+			"fabric-loot-api-v3.mixins.json:ReloadableRegistriesMixin",
 			"fabric-creative-tab-api-v1.client.mixins.json:CreativeModeInventoryScreenMixin",
 			// MOD-vs-MOD, not merged-base: Shoulder Surfing's @Redirect deletes the call site CustomSkinLoader's
 			// raw-ASM cape patch needs. See the javadoc entry below — this one arbitrates between two mods.

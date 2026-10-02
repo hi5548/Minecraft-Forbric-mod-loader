@@ -20,6 +20,12 @@ final class StagedFabricMixinFixture {
  static ClassNode living(boolean vanilla)throws Exception{
   return game("net/minecraft/world/entity/LivingEntity",vanilla);
  }
+ /** The merged base under the root this build compiled against, whatever version is staged there. */
+ static ClassNode merged(String name)throws Exception{
+  Path p=TestFixtures.mergedBase();
+  TestFixtures.requireFiles("staged merged base",p);
+  try(ZipFile z=new ZipFile(p.toFile())){return MixinFit.parse(z.getInputStream(z.getEntry(name+".class")).readAllBytes());}
+ }
  static ClassNode game(String name,boolean vanilla)throws Exception{
   Path p=vanilla?TestFixtures.vanillaJar():
     Path.of(System.getenv().getOrDefault("FORBRIC_OLD","../forbric-loader"),"run/merged-base/patched-mc-merged-26.2.jar");

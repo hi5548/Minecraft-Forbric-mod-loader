@@ -27,7 +27,8 @@ import org.junit.jupiter.api.Test;
 /**
  * Source-text pins on the runtime shim, in the {@code KernelGameTickEventsTest} shape: the runtime set compiles
  * only against the staged game jars, which are not on every machine, but the FILE always is. What matters is
- * ORDER and the one guard — NeoForge's hook first, its {@code null} respected, Fabric only for a survivor.
+ * ORDER and the one guard — the native load first (that is where MinecraftForge's hook runs in the merged base),
+ * the family the merge dropped next, Fabric only for a survivor.
  */
 class KernelLootBridgeTest {
 	private static final Path SOURCE = Path.of("src/runtime/java/net/forbric/kernel/runtime/KernelLootBridge.java");
@@ -43,24 +44,34 @@ class KernelLootBridgeTest {
 	}
 
 	@Test
-	void neoForgesHookRunsFirstAndItsNullDropsTheTableBeforeFabricIsAsked() throws Exception {
-		String body = bodyOf("public static LootTable loadLootTable(HolderLookup.Provider provider, Identifier id, LootTable table)");
-		int neo = body.indexOf("EventHooks.loadLootTable(");
-		int guard = body.indexOf("if (neo == null) return null;");
+	void theNativeLoadRunsFirstAndItsNullDropsTheTableBeforeFabricIsAsked() throws Exception {
+		String body = bodyOf("public static <T> Optional<T> loadLootTable(LootDataType<T> type, ResourceLocation id, "
+				+ "DynamicOps<?> ops, Object json)");
+		int nativeLoad = body.indexOf("type.deserialize(");
+		int dropped = body.indexOf("EventHooks.loadLootTable(");
+		int guard = body.indexOf("if (neo == null) return Optional.empty();");
 		int fabric = body.indexOf("LootTableEventDispatch.afterLoad(");
-		assertTrue(neo >= 0, "NeoForge's own hook must be called, not re-implemented");
-		assertTrue(guard > neo, "a null from NeoForge (EMPTY, or a cancelled event) must drop the table exactly as before");
+		assertTrue(nativeLoad >= 0, "the native load must be called, not re-implemented — it is where the surviving "
+				+ "hook (MinecraftForge's, in the merged 1.21.1 base) runs");
+		assertTrue(dropped > nativeLoad, "the family the merge orphaned is posted after the surviving one, never instead of it");
+		assertTrue(guard > dropped, "a null from NeoForge (EMPTY, or a cancelled event) must drop the table exactly as "
+				+ "its own deserialize did");
 		assertTrue(fabric > guard, "Fabric is offered only a survivor");
 		assertTrue(body.contains("Registries.LOOT_TABLE"), "the ResourceKey is built for the LOOT_TABLE registry");
+		assertTrue(body.contains("CommonHooks.extractLookupProvider("),
+				"the HolderLookup.Provider fabric's callbacks are typed against comes from the ops the load was parsed with");
+		assertTrue(body.contains("neoLinked"),
+				"the switch gates the DROPPED family; MinecraftForge's link is native here and cannot be switched off");
 	}
 
 	@Test
-	void tagsLoadFirstAndAllLoadedFiresOnlyForTheLootTableRegistry() throws Exception {
-		String body = bodyOf("public static void loadTagsForRegistry(ResourceManager resources, WritableRegistry<?> registry)");
-		int tags = body.indexOf("TagLoader.loadTagsForRegistry(");
-		int key = body.indexOf("Registries.LOOT_TABLE.equals(registry.key())");
+	void allLoadedFiresOnlyForTheLootTableRegistryItJustBuilt() throws Exception {
+		String body = bodyOf("public static void registryParsed(LootDataType<?> type, ResourceManager resources, "
+				+ "WritableRegistry<?> registry)");
+		int table = body.indexOf("type == LootDataType.TABLE");
 		int all = body.indexOf("LootTableEventDispatch.allLoaded(");
-		assertTrue(tags >= 0, "vanilla's tag load must still run");
-		assertTrue(key > tags && all > key, "ALL_LOADED fires after the tags load, and only for the loot-table registry");
+		assertTrue(table >= 0, "ALL_LOADED is for the loot-table data type only — the same check fabric's own 1.21.1 "
+				+ "mixin makes before firing it");
+		assertTrue(all > table, "ALL_LOADED fires at the point the registry is returned, not before it is filled");
 	}
 }

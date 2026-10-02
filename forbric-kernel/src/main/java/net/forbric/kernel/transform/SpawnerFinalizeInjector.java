@@ -25,7 +25,38 @@ import net.forbric.api.CompatibilityFinding;
 import net.forbric.api.CompatibilityFindings;
 import net.forbric.kernel.util.ForbricLog;
 
-/** Adds the caller's proven ValueInput to the spawner hook; register after the legacy merged-base repair. */
+/**
+ * Adds the caller's proven spawn tag to the spawner hook; register after the legacy merged-base repair.
+ *
+ * <p><b>PORT(1.21.1): the carrier changed, the proof did not.</b> 26.2 threaded the entity's {@code ValueInput}
+ * from {@code TagValueInput.create} through {@code EntityType.loadEntityRecursive} to the hook. 1.21.1 has
+ * neither class: its one entity load is
+ * {@code EntityType.loadEntityRecursive(CompoundTag, Level, Function)}, called from
+ * {@code BaseSpawner.serverTick} with the tag {@code SpawnData.getEntityToSpawn()} read once per attempt
+ * ({@code astore 7} at offset 78 of the merged base's disassembly). That tag is the carrier, and MinecraftForge's
+ * 1.21.1 {@code onFinalizeSpawnSpawner} takes the same {@code CompoundTag} where 26.2 took the {@code ValueInput}
+ * — so the kernel entry can hand both families one value and the splice is the same shape: one {@code ALOAD} of
+ * the proven local, then the descriptor with the extra trailing parameter.
+ *
+ * <p>The evidence is the same shape of argument, re-derived against the 1.21.1 disassembly rather than assumed.
+ * {@code serverTick} calls the hook at offset 620 (the class's only {@code finalizeMobSpawnSpawner} call):
+ * <pre>
+ *   382: aload 7                      // the tag, read at 78 from SpawnData.getEntityToSpawn()
+ *   396: invokestatic EntityType.loadEntityRecursive(CompoundTag, Level, Function)Entity
+ *   ...
+ *   542: checkcast Mob ; astore 20     // the mob the hook is given IS that entity's widening
+ *   620: invokestatic EventHooks.finalizeMobSpawnSpawner(Mob, ServerLevelAccessor, DifficultyInstance,
+ *                                                       MobSpawnType, SpawnGroupData, IOwnedSpawner, Z)
+ *                                                       FinalizeSpawnEvent
+ *   623: pop                          // the returned event is still discarded here
+ * </pre>
+ * The two facts pinned below are read off the real frames: the seventh-from-top operand of the hook traces back
+ * (through the {@code ASTORE 18}/{@code ALOAD 18}, the {@code instanceof}, {@code CHECKCAST}, and the
+ * {@code ASTORE 20}/{@code ALOAD 20}) to the {@code loadEntityRecursive} call, and that call's first operand
+ * traces back to the one {@code SpawnData.getEntityToSpawn()} whose result is also what the live local holds at
+ * the hook. A local whose value reaches through anything but those unambiguous copies and casts — a branch join,
+ * an overwrite, a second reaching store — is refused rather than guessed.
+ */
 public final class SpawnerFinalizeInjector implements ClassTransformer {
 	static final String PROPERTY = "forbric.spawnerFinalize";
 	private static boolean enabled() { return !"off".equalsIgnoreCase(System.getProperty(PROPERTY, "on")); }
@@ -35,26 +66,29 @@ public final class SpawnerFinalizeInjector implements ClassTransformer {
 	static final String RUNTIME = "net/forbric/kernel/runtime/KernelSpawnerFinalize";
 	static final String FORGE = "net/minecraftforge/event/ForgeEventFactory";
 	static final String FORGE_HOOK = "onFinalizeSpawnSpawner";
+	/** The one thing the two ecosystems agree on in 1.21.1: the spawn tag, not 26.2's ValueInput. */
+	static final String INPUT = "Lnet/minecraft/nbt/CompoundTag;";
+	/** MinecraftForge 1.21.1 — {@code (Mob, ServerLevelAccessor, DifficultyInstance, SpawnGroupData, tag, spawner)}. */
 	static final String FORGE_DESC = "(Lnet/minecraft/world/entity/Mob;Lnet/minecraft/world/level/ServerLevelAccessor;"
-			+ "Lnet/minecraft/world/DifficultyInstance;Lnet/minecraft/world/entity/SpawnGroupData;"
-			+ "Lnet/minecraft/world/level/storage/ValueInput;Lnet/minecraft/world/level/BaseSpawner;)"
+			+ "Lnet/minecraft/world/DifficultyInstance;Lnet/minecraft/world/entity/SpawnGroupData;" + INPUT
+			+ "Lnet/minecraft/world/level/BaseSpawner;)"
 			+ "Lnet/minecraftforge/event/entity/living/MobSpawnEvent$FinalizeSpawn;";
-	static final String INPUT = "Lnet/minecraft/world/level/storage/ValueInput;";
 	static final String OLD_DESC = "(Lnet/minecraft/world/entity/Mob;Lnet/minecraft/world/level/ServerLevelAccessor;"
-			+ "Lnet/minecraft/world/DifficultyInstance;Lnet/minecraft/world/entity/EntitySpawnReason;"
+			+ "Lnet/minecraft/world/DifficultyInstance;Lnet/minecraft/world/entity/MobSpawnType;"
 			+ "Lnet/minecraft/world/entity/SpawnGroupData;Lnet/neoforged/neoforge/common/extensions/IOwnedSpawner;Z)"
 			+ "Lnet/neoforged/neoforge/event/entity/living/FinalizeSpawnEvent;";
 	static final String NEW_DESC = OLD_DESC.replace(")", INPUT + ")");
-	static final String CREATE_DESC = "(Lnet/minecraft/util/ProblemReporter;Lnet/minecraft/core/HolderLookup$Provider;"
-			+ "Lnet/minecraft/nbt/CompoundTag;)" + INPUT;
+	static final String ENTITY_TYPE = "net/minecraft/world/entity/EntityType";
 	static final String ENTITY_LOAD_DESC = "(" + INPUT + "Lnet/minecraft/world/level/Level;"
-			+ "Lnet/minecraft/world/entity/EntitySpawnReason;Lnet/minecraft/world/entity/EntityProcessor;)Lnet/minecraft/world/entity/Entity;";
+			+ "Ljava/util/function/Function;)Lnet/minecraft/world/entity/Entity;";
+	static final String SPAWN_DATA = "net/minecraft/world/level/SpawnData";
+	static final String SPAWN_TAG_DESC = "()" + INPUT;
 
 	@Override public String name() { return "forbric-spawner-finalize-input"; }
 	@Override public AnchorSet anchors() {
 		if (!enabled()) return AnchorSet.scanned("spawner input repair explicitly disabled with -D" + PROPERTY + "=off");
 		return AnchorSet.of(new AnchorSet.Anchor(TARGET, AnchorSet.Severity.REQUIRED,
-				"Forge spawner listeners need the actual ValueInput before the only mob initialization"));
+				"Forge spawner listeners need the actual spawn tag before the only mob initialization"));
 	}
 
 	@Override public byte[] transform(String className, byte[] bytes, TransformContext context) {
@@ -81,12 +115,12 @@ public final class SpawnerFinalizeInjector implements ClassTransformer {
 		int inputSlot;
 		try { inputSlot = inputSlot(node.name, host, target); }
 		catch (AnalyzerException malformed) { return declined(bytes, "cannot establish the caller's data flow: " + malformed.getMessage()); }
-		if (inputSlot < 0) return declined(bytes, "no unique live ValueInput from TagValueInput.create reaches the hook");
+		if (inputSlot < 0) return declined(bytes, "no unique live spawn tag from SpawnData.getEntityToSpawn reaches the hook");
 		host.instructions.insertBefore(target, new VarInsnNode(Opcodes.ALOAD, inputSlot));
 		target.owner = RUNTIME; target.desc = NEW_DESC;
 		host.maxStack++;
 		ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS); node.accept(writer);
-		ForbricLog.info("[Forbric/Spawner] finalization now supplies the proven ValueInput before both event families decide");
+		ForbricLog.info("[Forbric/Spawner] finalization now supplies the proven spawn tag before both event families decide");
 		return writer.toByteArray();
 	}
 
@@ -109,17 +143,17 @@ public final class SpawnerFinalizeInjector implements ClassTransformer {
 		if (atCall == null || atCall.getStackSize() < 7) return -1;
 		MethodInsnNode entityLoad = producer(host, frames, atCall.getStack(atCall.getStackSize() - 7));
 		if (entityLoad == null || entityLoad.getOpcode() != Opcodes.INVOKESTATIC || entityLoad.itf
-				|| !entityLoad.owner.equals("net/minecraft/world/entity/EntityType")
+				|| !entityLoad.owner.equals(ENTITY_TYPE)
 				|| !entityLoad.name.equals("loadEntityRecursive") || !entityLoad.desc.equals(ENTITY_LOAD_DESC)) return -1;
 		Frame<SourceValue> atEntityLoad = frames[host.instructions.indexOf(entityLoad)];
-		if (atEntityLoad == null || atEntityLoad.getStackSize() < 4) return -1;
-		MethodInsnNode inputCreated = producer(host, frames, atEntityLoad.getStack(atEntityLoad.getStackSize() - 4));
-		if (inputCreated == null || inputCreated.getOpcode() != Opcodes.INVOKESTATIC || inputCreated.itf
-				|| !inputCreated.owner.equals("net/minecraft/world/level/storage/TagValueInput")
-				|| !inputCreated.name.equals("create") || !inputCreated.desc.equals(CREATE_DESC)) return -1;
+		if (atEntityLoad == null || atEntityLoad.getStackSize() < 3) return -1;
+		MethodInsnNode tagRead = producer(host, frames, atEntityLoad.getStack(atEntityLoad.getStackSize() - 3));
+		if (tagRead == null || tagRead.getOpcode() != Opcodes.INVOKEVIRTUAL || tagRead.itf
+				|| !tagRead.owner.equals(SPAWN_DATA)
+				|| !tagRead.name.equals("getEntityToSpawn") || !tagRead.desc.equals(SPAWN_TAG_DESC)) return -1;
 		int found = -1;
 		for (int slot = 0; slot < atCall.getLocals(); slot++) {
-			if (producer(host, frames, atCall.getLocal(slot)) != inputCreated) continue;
+			if (producer(host, frames, atCall.getLocal(slot)) != tagRead) continue;
 			if (found >= 0) return -1;
 			found = slot;
 		}

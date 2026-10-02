@@ -93,7 +93,7 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 	}
 
 	/** The repairs {@link #transform} runs, in its order; a test pins the two lists against each other. */
-	static final List<String> REPAIRS = List.of("repairLambdaBootstrapHandles", "addBlockStateModelConflictResolvers", "addBlockStateAppearanceResolver", "addMissingForgeFluidTypeBridge", "addMissingForgeKeyMappingLookupInitializer", "routeKeyMappingClickToPopulatedLookup", "giveKeyMappingItsMinecraftForgeFace", "giveTheVanillaParticleMapAViewOfTheLiveOne", "giveFeaturesPerStepItsVanillaDescriptorBack", "letDungeonsGenerateWithoutTheDataMap", "restoreDoublePrecisionToTheRandomSources", "convertRadiansWithVanillasFoldedConstant", "saveTheHeightmapsVanillaSaves", "guardNeoForgesWorldModifierPass", "letForeignResourceConditionsThrough", "letForeignResourceConditionsThroughMinecraftForge", "letFabricResourceConditionsDecide", "translateAGuestsPrivateSkipMarker", "serveDefaultAttributesBothEcosystems", "restoreForgeClientInit", "restoreForgeGeometryReload", "nameTheReloadListenersNeoForgeRefusesToName", "dropInterfaceDefaultShadowingOverrides", "tolerateEmptyCreativeTabStacks", "routePlaceItemHookToNeoForge", "bridgeOrphanedPipRenderers", "keepForgeOutboundProtocolCurrent", "surviveTheMissingForgeModelDataManager", "dropTheWindowTitlesLoaderBrand", "keepTheSaveOffTheTeardownsFailurePath", "postNeoForgesItemTooltipEvent", "askNeoForgeWhatAnItemsAttributesAre", "readTheSpawnReasonThatIsActuallyWritten", "giveTheUnwrittenLoggerAValue", "addTheMissingCapabilityLifecycleStubs", "addTheMissingNbtBuilderFactory", "postMinecraftForgesReloadListenerEvent", "giveMinecraftForgesReloadEventItsConditionContext", "letMinecraftForgeIngredientTypesDecode", "letMinecraftForgeFluidsChooseTheirModel", "giveMinecraftForgesParticleLookupItsFirstVariant", "dropStubsThatBypassARealSuperclassMethod", "inlineTheSwitchMapTheMergeLost", "vetoUnjudgeableOverlayConditions", "hideTheLegacyLootModifierIndexFromTheDirectoryScan", "letModdedFeatureFlagsRegister", "dropTheKeyModifierSuffixBeforeParsingAKeyName", "letTheAtlasLowerItsMipLevelLikeVanilla", "wrapTheStreamsVanillaWraps", "returnFromANestedBootstrapBeforeItsTail", "letBothEcosystemsSetBurnTime", "letMinecraftForgeSeeSpawnerMobs", "letMinecraftForgeAddPackFinders");
+	static final List<String> REPAIRS = List.of("repairLambdaBootstrapHandles", "addBlockStateModelConflictResolvers", "addBlockStateAppearanceResolver", "addMissingForgeFluidTypeBridge", "addMissingForgeKeyMappingLookupInitializer", "routeKeyMappingClickToPopulatedLookup", "giveKeyMappingItsMinecraftForgeFace", "routeFabricParticleFactoriesThroughTheLiveMap", "giveFeaturesPerStepItsVanillaDescriptorBack", "letDungeonsGenerateWithoutTheDataMap", "restoreDoublePrecisionToTheRandomSources", "convertRadiansWithVanillasFoldedConstant", "saveTheHeightmapsVanillaSaves", "guardNeoForgesWorldModifierPass", "letForeignResourceConditionsThrough", "letForeignResourceConditionsThroughMinecraftForge", "letFabricResourceConditionsDecide", "translateAGuestsPrivateSkipMarker", "serveDefaultAttributesBothEcosystems", "restoreForgeClientInit", "restoreForgeGeometryReload", "nameTheReloadListenersNeoForgeRefusesToName", "dropInterfaceDefaultShadowingOverrides", "tolerateEmptyCreativeTabStacks", "routePlaceItemHookToNeoForge", "bridgeOrphanedPipRenderers", "keepForgeOutboundProtocolCurrent", "surviveTheMissingForgeModelDataManager", "dropTheWindowTitlesLoaderBrand", "keepTheSaveOffTheTeardownsFailurePath", "postNeoForgesItemTooltipEvent", "askNeoForgeWhatAnItemsAttributesAre", "readTheSpawnReasonThatIsActuallyWritten", "giveTheUnwrittenLoggerAValue", "addTheMissingCapabilityLifecycleStubs", "addTheMissingNbtBuilderFactory", "postMinecraftForgesReloadListenerEvent", "giveMinecraftForgesReloadEventItsConditionContext", "letMinecraftForgeIngredientTypesDecode", "letMinecraftForgeFluidsChooseTheirModel", "giveMinecraftForgesParticleLookupItsFirstVariant", "dropStubsThatBypassARealSuperclassMethod", "inlineTheSwitchMapTheMergeLost", "vetoUnjudgeableOverlayConditions", "hideTheLegacyLootModifierIndexFromTheDirectoryScan", "letModdedFeatureFlagsRegister", "dropTheKeyModifierSuffixBeforeParsingAKeyName", "letTheAtlasLowerItsMipLevelLikeVanilla", "wrapTheStreamsVanillaWraps", "returnFromANestedBootstrapBeforeItsTail", "letBothEcosystemsSetBurnTime", "letMinecraftForgeSeeSpawnerMobs", "letMinecraftForgeAddPackFinders");
 
 	private static final String NEO_EVENT_HOOKS_BINARY = "net.neoforged.neoforge.event.EventHooks";
 
@@ -122,8 +122,10 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 				"key presses are looked up in the lookup registration never populated — MinecraftForge mods' keys never fire"));
 		out.add(fixed("giveKeyMappingItsMinecraftForgeFace", KEY_MAPPING,
 				"KeyMapping lacks the MinecraftForge-typed accessors — a Forge mod setting a conflict context NoSuchMethodErrors"));
-		out.add(fixed("giveTheVanillaParticleMapAViewOfTheLiveOne", PARTICLE_RESOURCES,
-				"the vanilla-typed particle provider map stays empty — particles registered the vanilla way never render"));
+		out.add(fixed("routeFabricParticleFactoriesThroughTheLiveMap", PARTICLE_ENGINE,
+				"fabric-api's Int2ObjectMap read of ParticleEngine.providers binds to no field on this base — its "
+						+ "@Accessor throws and takes the sprite accessors beside it with it, so every Fabric particle "
+						+ "registration fails at class-load and the particles never render"));
 		out.add(fixed("giveFeaturesPerStepItsVanillaDescriptorBack", CHUNK_GENERATOR,
 				"ChunkGenerator.featuresPerStep keeps MinecraftForge's descriptor — the server cannot start (NoSuchFieldError)"));
 		out.add(fixed("letDungeonsGenerateWithoutTheDataMap", MONSTER_ROOM_FEATURE,
@@ -241,9 +243,10 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 				"MinecraftForge's ForgeRegistries re-enters Bootstrap.bootStrap() from inside the first one, so every "
 						+ "mixin at its TAIL runs twice, the first time half-way through bootstrap — a Fabric mod that "
 						+ "initialises there once (cristellib) throws and the server does not start"));
-		out.add(fixed("letBothEcosystemsSetBurnTime", FUEL_VALUES,
+		out.add(fixed("letBothEcosystemsSetBurnTime", ABSTRACT_FURNACE,
 				"NeoForge's FurnaceFuelBurnTimeEvent is never posted, so a NeoForge mod cannot change how long "
-						+ "anything burns while a MinecraftForge one can"));
+						+ "anything burns while a MinecraftForge one can — and a fuel a Fabric mod registers burns "
+						+ "for zero ticks, because the table it lands in is never consulted"));
 		out.add(fixed("letMinecraftForgeSeeSpawnerMobs", BASE_SPAWNER,
 				"MobSpawnEvent$FinalizeSpawn is never posted, so a MinecraftForge mod can neither see nor refuse "
 						+ "a mob a spawner produces"));
@@ -293,7 +296,7 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 			changed |= claim(reporter, "addMissingForgeKeyMappingLookupInitializer", addMissingForgeKeyMappingLookupInitializer(node));
 			changed |= claim(reporter, "routeKeyMappingClickToPopulatedLookup", routeKeyMappingClickToPopulatedLookup(node));
 			changed |= claim(reporter, "giveKeyMappingItsMinecraftForgeFace", giveKeyMappingItsMinecraftForgeFace(node));
-			changed |= claim(reporter, "giveTheVanillaParticleMapAViewOfTheLiveOne", giveTheVanillaParticleMapAViewOfTheLiveOne(node));
+			changed |= claim(reporter, "routeFabricParticleFactoriesThroughTheLiveMap", routeFabricParticleFactoriesThroughTheLiveMap(node));
 			changed |= claim(reporter, "giveFeaturesPerStepItsVanillaDescriptorBack", giveFeaturesPerStepItsVanillaDescriptorBack(node));
 			changed |= claim(reporter, "letDungeonsGenerateWithoutTheDataMap", letDungeonsGenerateWithoutTheDataMap(node));
 			changed |= claim(reporter, "restoreDoublePrecisionToTheRandomSources", restoreDoublePrecisionToTheRandomSources(node));
@@ -423,7 +426,22 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 	private static final String INPUT_KEY = "Lcom/mojang/blaze3d/platform/InputConstants$Key;";
 	private static final String KERNEL_KEYS = "net/forbric/kernel/runtime/KernelForgeKeyBindings";
 
-	private static final String PARTICLE_RESOURCES = "net/minecraft/client/particle/ParticleResources";
+	/** 1.21.1's particle engine. 26.2 called it {@code ParticleResources} and split its provider field in two. */
+	private static final String PARTICLE_ENGINE = "net/minecraft/client/particle/ParticleEngine";
+	private static final String PARTICLE_ENGINE_INTERNAL = "net/minecraft/client/particle/ParticleEngine";
+	/**
+	 * fabric-api's accessor mixin on that class — the reader of the {@code providers} field, which on this base is
+	 * keyed by {@code ResourceLocation} and not by particle id.
+	 */
+	private static final String FABRIC_PARTICLE_ACCESSOR =
+			"net/fabricmc/fabric/mixin/client/particle/ParticleManagerAccessor";
+	private static final String MIXIN_ACCESSOR_ANNOTATION = "Lorg/spongepowered/asm/mixin/gen/Accessor;";
+	private static final String GET_FACTORIES = "getFactories";
+	/** fabric-api 0.116.17's own signature for it: the face the merge could not give the field. */
+	private static final String GET_FACTORIES_DESC = "()Lit/unimi/dsi/fastutil/ints/Int2ObjectMap;";
+	/** The bridge written into {@code ParticleEngine}; named here so both halves of the redirect agree. */
+	static final String PROVIDER_VIEW = "forbric$providerFactories";
+	static final String PROVIDER_VIEW_DESC = "(L" + PARTICLE_ENGINE_INTERNAL + ";)Ljava/lang/Object;";
 
 	private static final String CHUNK_GENERATOR = "net/minecraft/world/level/chunk/ChunkGenerator";
 	private static final String FEATURES_PER_STEP = "featuresPerStep";
@@ -440,12 +458,15 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 	private static final String NEO_RESOURCE_PACK_LOADER = "net/neoforged/neoforge/resource/ResourcePackLoader";
 	private static final String BASE_SPAWNER = "net/minecraft/world/level/BaseSpawner";
 	private static final String NEO_EVENT_HOOKS = "net/neoforged/neoforge/event/EventHooks";
-	private static final String FUEL_VALUES = "net/minecraft/world/level/block/entity/FuelValues";
+	/** 1.21.1's burn-time site. 26.2 asked {@code FuelValues.burnDuration(ItemStack, RecipeType)} instead. */
+	private static final String ABSTRACT_FURNACE =
+			"net/minecraft/world/level/block/entity/AbstractFurnaceBlockEntity";
+	private static final String FORGE_HOOKS = "net/minecraftforge/common/ForgeHooks";
 	private static final String FORGE_BURN_TIME_DESC =
-			"(Lnet/minecraft/world/item/ItemStack;ILnet/minecraft/world/item/crafting/RecipeType;)I";
+			"(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/item/crafting/RecipeType;)I";
+	/** The 1.21.1 seam: same argument types as MinecraftForge's, so the redirect moves no stack slot at all. */
 	private static final String KERNEL_BURN_TIME_DESC =
-			"(Lnet/minecraft/world/item/ItemStack;ILnet/minecraft/world/item/crafting/RecipeType;"
-					+ "Lnet/minecraft/world/level/block/entity/FuelValues;)I";
+			"(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/item/crafting/RecipeType;)I";
 	private static final String MONSTER_ROOM_FEATURE = "net/minecraft/world/level/levelgen/feature/MonsterRoomFeature";
 	private static final String MONSTER_ROOM_HOOKS = "net/neoforged/neoforge/common/MonsterRoomHooks";
 	private static final String RANDOM_MONSTER_ROOM_MOB =
@@ -529,6 +550,7 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 	private static final String NAME_KEYED = "Ljava/util/Map;";
 	/** Vanilla's own descriptor for it, and the one fabric-api reads. */
 	private static final String ID_KEYED = "Lit/unimi/dsi/fastutil/ints/Int2ObjectMap;";
+	private static final String ID_KEYED_INTERNAL = "it/unimi/dsi/fastutil/ints/Int2ObjectMap";
 	private static final String KERNEL_PARTICLES = "net/forbric/kernel/runtime/KernelParticleProviders";
 	/** Old owner → the kernel class that now carries the method, for hooks the merged base still names. */
 	private static final Map<String, String> LEGACY_INTEROP_OWNERS = Map.of(
@@ -1279,85 +1301,107 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 	}
 
 	/**
-	 * Gives {@code ParticleResources}' vanilla-typed {@code providers} field a live view of the one that is written.
+	 * Sends fabric-api's read of the particle provider map through the kernel, because the field it reads is not
+	 * the shape fabric-api was compiled against.
 	 *
-	 * <p>The same failure class as {@link #routeKeyMappingClickToPopulatedLookup}, at field level. Vanilla declares
-	 * {@code providers} as {@code Int2ObjectMap} keyed by particle id; NeoForge 26.2.0.88 RE-TYPES that field to
-	 * {@code Map<Identifier, ?>}. Same name, different descriptor is legal, so the merge keeps both and the
-	 * surviving {@code <init>} writes only NeoForge's. The vanilla-typed one is null for the life of the process.
+	 * <p>PORT(1.21.1): 26.2 repaired this from the WRITE side. There, vanilla declared {@code providers} as an
+	 * {@code Int2ObjectMap} keyed by particle id and NeoForge RE-TYPED the same field to
+	 * {@code Map<Identifier, ?>}; the merge kept BOTH (same name, different descriptor is legal) and wrote only
+	 * NeoForge's, so this transformer gave the unwritten vanilla-typed one a live view ({@code intKeyedView}) right
+	 * after {@code <init>} wrote the live map. That splice stands down here — and must: {@code javap -p -s} on the
+	 * staged {@code patched-mc-merged-1.21.1.jar} shows {@code ParticleEngine} declaring {@code providers} exactly
+	 * ONCE, as {@code java.util.Map<ResourceLocation, ParticleProvider<?>>} (descriptor {@code Ljava/util/Map;}),
+	 * the shape BOTH 1.21.1 families ship — there is no {@code Int2ObjectMap} field to install a view into, and
+	 * writing one into the single surviving field would break every {@code ResourceLocation}-keyed reader.
 	 *
-	 * <p>The merge tool sees this pair and correctly declines to delete either — deleting the unwritten one trades
-	 * an NPE for a {@code NoSuchFieldError} at the same instruction — and it cannot repair it: its
-	 * exclusive-added-field initializer is scoped to fields an ecosystem ADDED, and this is a RE-TYPED VANILLA
-	 * field, outside that set by construction. So the repair belongs here, where the whole class is in hand.
+	 * <p>So the repair moves to the READ side. fabric-api 0.116.17's
+	 * {@code ParticleManagerAccessor.getFactories()} is declared {@code Int2ObjectMap<ParticleProvider<?>>} and its
+	 * refmap maps that read to {@code field_3835:Lit/unimi/dsi/fastutil/ints/Int2ObjectMap;} — a field that does not
+	 * exist on this base. Two halves, one mechanism:
+	 * <ul>
+	 *   <li>{@code ParticleEngine} gets {@link #PROVIDER_VIEW}, a public static bridge whose body is
+	 *       {@code KernelParticleProviders.intKeyedView(this.providers)} — the private field read from inside the
+	 *       class that owns it, exactly the shape the 26.2 splice wrote, minus the second field;</li>
+	 *   <li>the accessor mixin's {@code getFactories()} stops being an {@code @Accessor} and becomes a default
+	 *       method over that bridge. It has to: Mixin resolves an {@code @Accessor} by NAME AND DESCRIPTOR
+	 *       ({@code MemberInfo.matches} answers {@code NONE} on a descriptor mismatch), so on this base the accessor
+	 *       binds to nothing and its {@code InvalidAccessorException} takes the whole interface mixin down with it —
+	 *       including the two accessors beside it that DO bind ({@code particleAtlasTexture}, {@code spriteSets}),
+	 *       which is how a sprite-aware registration would have stopped working for a second, unrelated reason.</li>
+	 * </ul>
 	 *
-	 * <p>A view rather than a second map, because the two halves have to stay ONE mechanism. fabric-api's
-	 * {@code DirectParticleProviderRegistry.register} reads the field DIRECTLY — {@code getfield providers} of the
-	 * {@code Int2ObjectMap} descriptor, then {@code PARTICLE_TYPE.getId(type)}, then {@code put(int, provider)} —
-	 * so rewriting accessors cannot reach it, and an empty map of its own would swallow the registration and leave
-	 * the particle silently unrendered. Writes through the int-keyed face have to be visible to
-	 * {@code ParticleEngine.makeParticle}, which reads the {@code Identifier}-keyed one.
+	 * <p>The view is built from the live map on every call rather than stored, so nothing has to know when the
+	 * field is written; the map is {@code final} and written once in {@code <init>}, so the wrapper is cheap and
+	 * cannot go stale.
 	 *
-	 * <p>The insert goes immediately after {@code <init>}'s write of the live map and BEFORE its
-	 * {@code registerProviders()} call, not before {@code RETURN}: fabric-api's {@code ParticleResourcesMixin}
-	 * injects at {@code registerProviders}'s RETURN, so a repair placed at the end of the constructor is still too
-	 * late and reproduces the crash while looking correct.
-	 *
-	 * <p>It also repoints {@code getProvider} at the live map. MinecraftForge added {@code providersByName} and
-	 * filled it from its own {@code register}, which the merge dropped — so the merged class initializes it, from
-	 * a synthetic default AFTER {@code registerProviders} has already run, and nothing ever puts anything in it.
-	 * The two maps held the same thing by construction (both keyed {@code getKey(type)}, same descriptor), so this
-	 * is a rename.
+	 * <p>The mixin half only fires when fabric-api is installed (the class is a guest jar's); the
+	 * {@code ParticleEngine} half fires whenever the single-field shape is present, which is every load. Either one
+	 * alone leaves the other half inert rather than wrong.
 	 */
-	private static boolean giveTheVanillaParticleMapAViewOfTheLiveOne(ClassNode node) {
-		if (!PARTICLE_RESOURCES.equals(node.name)) return false;
-		// Only when the merge actually split it. A single-ecosystem or rebuilt base is already coherent.
-		if (!hasField(node, "providers", NAME_KEYED) || !hasField(node, "providers", ID_KEYED)) return false;
+	private static boolean routeFabricParticleFactoriesThroughTheLiveMap(ClassNode node) {
+		if (PARTICLE_ENGINE.equals(node.name)) return installTheProviderViewBridge(node);
+		if (FABRIC_PARTICLE_ACCESSOR.equals(node.name)) return readTheFactoriesThroughThatBridge(node);
+		return false;
+	}
 
-		MethodNode init = findMethod(node, "<init>", "()V");
-		if (init == null) return false;
+	/** {@code ParticleEngine} half: one public static bridge over the one {@code providers} field there is. */
+	private static boolean installTheProviderViewBridge(ClassNode node) {
+		// A base that still carries vanilla's Int2ObjectMap field is the 26.2 shape: it has somewhere to write the
+		// view, and this read-side redirect is not the repair for it. Stand down whole rather than do both.
+		if (!hasField(node, "providers", NAME_KEYED) || hasField(node, "providers", ID_KEYED)) return false;
+		if (hasMethod(node, PROVIDER_VIEW, PROVIDER_VIEW_DESC)) return false; // this pass having run before
 
-		FieldInsnNode anchor = null;
-		for (MethodNode method : node.methods) {
-			for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
-				if (!(insn instanceof FieldInsnNode field) || field.getOpcode() != Opcodes.PUTFIELD
-						|| !node.name.equals(field.owner) || !"providers".equals(field.name)) {
-					continue;
-				}
-				if (ID_KEYED.equals(field.desc)) {
-					// Already written by something — a rebuilt base, or this pass having run before. Stand down:
-					// this is also what makes the pass idempotent.
-					return false;
-				}
-				if (!NAME_KEYED.equals(field.desc)) continue;
-				if (anchor != null || method != init) {
-					ForbricLog.warn("[Forbric/MergedBaseCompat] ParticleResources writes its provider map more than "
-							+ "once, or outside <init> — the view below would capture a map that is later replaced, "
-							+ "so it is not installed");
-					return false;
-				}
-				anchor = field;
-			}
-		}
-		if (anchor == null) return false;
-
-		InsnList view = new InsnList();
-		view.add(new VarInsnNode(Opcodes.ALOAD, 0));
-		view.add(new VarInsnNode(Opcodes.ALOAD, 0));
-		view.add(new FieldInsnNode(Opcodes.GETFIELD, node.name, "providers", NAME_KEYED));
-		view.add(new MethodInsnNode(Opcodes.INVOKESTATIC, KERNEL_PARTICLES, "intKeyedView",
+		MethodNode bridge = new MethodNode(
+				Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC, PROVIDER_VIEW, PROVIDER_VIEW_DESC,
+				null, null);
+		bridge.instructions.add(new VarInsnNode(Opcodes.ALOAD, 0));
+		bridge.instructions.add(new FieldInsnNode(Opcodes.GETFIELD, node.name, "providers", NAME_KEYED));
+		bridge.instructions.add(new MethodInsnNode(Opcodes.INVOKESTATIC, KERNEL_PARTICLES, "intKeyedView",
 				"(Ljava/util/Map;)Ljava/lang/Object;", false));
-		view.add(new TypeInsnNode(Opcodes.CHECKCAST, ID_KEYED.substring(1, ID_KEYED.length() - 1)));
-		view.add(new FieldInsnNode(Opcodes.PUTFIELD, node.name, "providers", ID_KEYED));
-		init.instructions.insert(anchor, view);
-		init.maxStack = Math.max(init.maxStack, 2);
+		bridge.instructions.add(new InsnNode(Opcodes.ARETURN));
+		bridge.maxStack = 1;
+		bridge.maxLocals = 1;
+		node.methods.add(bridge);
+		ForbricLog.warn("[Forbric/MergedBaseCompat] ParticleEngine.providers is a single ResourceLocation-keyed map "
+				+ "on this base, so fabric-api's Int2ObjectMap read of it has no field to bind to; " + PROVIDER_VIEW
+				+ "(ParticleEngine) now answers with a live int-keyed view of that map");
+		return true;
+	}
 
-		routeGetProviderAtTheLiveMap(node);
+	/**
+	 * fabric-api half: {@code getFactories()} becomes a default method over the bridge.
+	 *
+	 * <p>The {@code @Accessor} annotation is removed rather than left in place: Mixin would otherwise resolve it and
+	 * fail (see {@link #routeFabricParticleFactoriesThroughTheLiveMap}), and the method's declared
+	 * {@code Int2ObjectMap} face is exactly what the callers want — {@code DirectParticleFactoryRegistry.register}
+	 * {@code put(int, provider)}s into it, so the accessor cannot simply be widened to {@code Map}.
+	 */
+	private static boolean readTheFactoriesThroughThatBridge(ClassNode node) {
+		MethodNode factories = findMethod(node, GET_FACTORIES, GET_FACTORIES_DESC);
+		if (factories == null) return false;
+		// Abstract means the accessor is still the shipped @Accessor; a body means this pass already ran.
+		if ((factories.access & Opcodes.ACC_ABSTRACT) == 0) return false;
 
-		ForbricLog.warn("[Forbric/MergedBaseCompat] ParticleResources had two `providers` fields and only one was "
-				+ "ever written — the vanilla-typed one, which fabric-api's particle registry reads directly, was "
-				+ "null, so any mod using that API crashed inside Minecraft.<init>. It is now a live view of the "
-				+ "map that IS written");
+		if (factories.visibleAnnotations != null) {
+			factories.visibleAnnotations.removeIf(annotation -> MIXIN_ACCESSOR_ANNOTATION.equals(annotation.desc));
+		}
+		factories.access &= ~Opcodes.ACC_ABSTRACT;
+
+		InsnList body = factories.instructions;
+		body.clear();
+		body.add(new VarInsnNode(Opcodes.ALOAD, 0));
+		body.add(new TypeInsnNode(Opcodes.CHECKCAST, PARTICLE_ENGINE_INTERNAL));
+		body.add(new MethodInsnNode(Opcodes.INVOKESTATIC, PARTICLE_ENGINE_INTERNAL, PROVIDER_VIEW,
+				PROVIDER_VIEW_DESC, false));
+		body.add(new TypeInsnNode(Opcodes.CHECKCAST, ID_KEYED_INTERNAL));
+		body.add(new InsnNode(Opcodes.ARETURN));
+		factories.maxStack = 1;
+		factories.maxLocals = 1;
+
+		ForbricLog.warn("[Forbric/MergedBaseCompat] fabric-api's ParticleManagerAccessor.getFactories() read a "
+				+ "provider field this base does not have — the @Accessor it shipped with cannot bind, and its "
+				+ "failure would have taken the two sprite accessors beside it down too. It is now a default method "
+				+ "over ParticleEngine." + PROVIDER_VIEW + "(ParticleEngine)");
 		return true;
 	}
 
@@ -1365,13 +1409,13 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 	 * Gives {@code ChunkGenerator.featuresPerStep} vanilla's descriptor back, and routes the one use that needed
 	 * MinecraftForge's through a guard.
 	 *
-	 * <h2>Why this one is not the ParticleResources shape</h2>
+	 * <h2>Why this one is not the re-typed-field shape</h2>
 	 *
-	 * <p>{@link #giveTheVanillaParticleMapAViewOfTheLiveOne} repairs a field the merge kept TWICE, one of them
-	 * unwritten. This is the other half of that family, and the worse half: MinecraftForge RE-TYPES the vanilla
-	 * field — {@code Supplier<List<StepFeatureData>>} becomes its own {@code ClearableLazy<...>}, so that
-	 * {@code refreshFeaturesPerStep()} has something to invalidate — and the merge keeps only MinecraftForge's
-	 * declaration. Vanilla's descriptor does not exist at all, so there is no unwritten field to give a view to.
+	 * <p>This is the worse half of the family 26.2's particle repair belonged to: a vanilla field that an
+	 * ecosystem RE-TYPED. {@code Supplier<List<StepFeatureData>>} becomes MinecraftForge's own
+	 * {@code ClearableLazy<...>}, so that {@code refreshFeaturesPerStep()} has something to invalidate — and the
+	 * merge keeps only MinecraftForge's declaration. Vanilla's descriptor does not exist at all, so there is no
+	 * unwritten field to give a view to (and no second descriptor to redirect a reader onto).
 	 *
 	 * <p>A whole-artifact census of the merged base against stock 26.2 finds six vanilla fields in this state;
 	 * this is the one that costs a boot. fabric-api's {@code fabric-biome-api-v1} does not use an {@code @Accessor}
@@ -2481,36 +2525,6 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 					+ "command, natural) all took the same branch. It now reads the field the game writes");
 		}
 		return changed;
-	}
-
-	/**
-	 * Points {@code getProvider} at the live map instead of the empty {@code providersByName}.
-	 *
-	 * <p>Only when nothing outside {@code <init>} writes {@code providersByName}: if a base ever keeps
-	 * MinecraftForge's {@code register}, the field is live again and must be left alone. The declaration stays
-	 * either way — removing it would break any access widener that named it, for no gain.
-	 */
-	private static void routeGetProviderAtTheLiveMap(ClassNode node) {
-		if (!hasField(node, "providersByName", NAME_KEYED)) return;
-		for (MethodNode method : node.methods) {
-			if ("<init>".equals(method.name)) continue;
-			for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
-				if (insn instanceof FieldInsnNode field && field.getOpcode() == Opcodes.PUTFIELD
-						&& node.name.equals(field.owner) && "providersByName".equals(field.name)) {
-					return; // a live producer survived; nothing to reroute
-				}
-			}
-		}
-		MethodNode getProvider = findMethod(node, "getProvider",
-				"(Lnet/minecraft/core/particles/ParticleType;)Lnet/minecraft/client/particle/ParticleProvider;");
-		if (getProvider == null) return;
-		for (AbstractInsnNode insn = getProvider.instructions.getFirst(); insn != null; insn = insn.getNext()) {
-			if (insn instanceof FieldInsnNode field && field.getOpcode() == Opcodes.GETFIELD
-					&& node.name.equals(field.owner) && "providersByName".equals(field.name)
-					&& NAME_KEYED.equals(field.desc)) {
-				field.name = "providers";
-			}
-		}
 	}
 
 	/**
@@ -4184,42 +4198,62 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 	/**
 	 * Sends the burn-time question through the kernel so both ecosystems answer it.
 	 *
-	 * <p>The merged {@code FuelValues.burnDuration} calls MinecraftForge's {@code getItemBurnTime} and nothing
-	 * else, so NeoForge's {@code FurnaceFuelBurnTimeEvent} is never posted — measured, and {@code balm} in the
-	 * test pack subscribes to it. This is the reverse of every bridge in this tree, where NeoForge won and
-	 * MinecraftForge is re-emitted, and it cannot be fixed by a listener: NeoForge's side is a static call, not
-	 * something to subscribe to.
+	 * <p>PORT(1.21.1): 26.2 asked {@code FuelValues.burnDuration(ItemStack, RecipeType)}, whose body was one call
+	 * to MinecraftForge's {@code ForgeEventFactory.getItemBurnTime(ItemStack, int, RecipeType)}; the redirect
+	 * replaced that call and pushed the receiver, because NeoForge's hook carried the enclosing {@code FuelValues}.
+	 * 1.21.1 has no {@code FuelValues} class at all (checked in the staged merged base) and the burn time is the
+	 * instance method {@code AbstractFurnaceBlockEntity.getBurnDuration(ItemStack)}, whose whole body is
+	 * {@code ForgeHooks.getBurnTime(stack, this.recipeType)} — {@code javap -c} on the staged base shows exactly one
+	 * such call, and {@code ForgeHooks.getBurnTime} is itself the three-argument shape that posts MinecraftForge's
+	 * event. So the redirect is one owner/name swap on that call, with the descriptor UNCHANGED
+	 * ({@code (ItemStack, RecipeType)I}): {@code KernelFuelValues.burnDuration(ItemStack, RecipeType)} computes the
+	 * game's own table answer, then chains MinecraftForge's hook and NeoForge's exactly as the 26.2 body did.
+	 * Nothing is pushed and no {@code maxStack} moves.
 	 *
-	 * <p>NeoForge's hook needs the {@code FuelValues} instance, which MinecraftForge's three-argument shape does
-	 * not carry, so the receiver is pushed before the call and the descriptor widened. Only in INSTANCE methods:
-	 * in a static one, slot 0 is the first parameter and pushing it would hand NeoForge an ItemStack typed as a
-	 * FuelValues.
+	 * <p>The table answer is why the seam takes a new overload rather than the existing 3-argument one. On this
+	 * base the game's own answer is {@code ItemStack.getBurnTime}, which is NeoForge's data map and answers
+	 * {@code 0} — not {@code -1} — for an item with no entry (javap: {@code iconst_0} at offset 23 of
+	 * {@code IItemExtension.getBurnTime}), while {@code ForgeHooks.getBurnTime} only consults {@code VANILLA_BURNS}
+	 * on {@code -1}. A fuel a Fabric mod adds at runtime lands in {@code AbstractFurnaceBlockEntity.getFuel()} and
+	 * nowhere else, so without the fallback it would be visible as fuel and burn for zero ticks — silently.
+	 * {@code KernelFuelValues} routes that table answer onto the burn path; see its javadoc.
+	 *
+	 * <p>Exactly one call site, or nothing is edited: two would mean an unrecognised base, and redirecting only one
+	 * of them would ask both ecosystems for some burn times and not others. Idempotent: a second pass finds the
+	 * kernel owner where MinecraftForge's was.
 	 */
 	private static boolean letBothEcosystemsSetBurnTime(ClassNode node) {
-		if (!FUEL_VALUES.equals(node.name)) return false;
-		int redirected = 0;
-		for (MethodNode method : node.methods) {
-			if ((method.access & Opcodes.ACC_STATIC) != 0) continue;
-			if (method.instructions == null) continue;
-			for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
-				if (!(insn instanceof MethodInsnNode call) || call.getOpcode() != Opcodes.INVOKESTATIC
-						|| !"net/minecraftforge/event/ForgeEventFactory".equals(call.owner)
-						|| !"getItemBurnTime".equals(call.name)
-						|| !FORGE_BURN_TIME_DESC.equals(call.desc)) {
-					continue;
-				}
-				method.instructions.insertBefore(call, new VarInsnNode(Opcodes.ALOAD, 0));
-				call.owner = KERNEL_FUEL_VALUES;
-				call.name = "burnDuration";
-				call.desc = KERNEL_BURN_TIME_DESC;
-				method.maxStack = Math.max(method.maxStack, 5);
-				redirected++;
+		if (!ABSTRACT_FURNACE.equals(node.name)) return false;
+		MethodNode getBurnDuration = findMethod(node, "getBurnDuration",
+				"(Lnet/minecraft/world/item/ItemStack;)I");
+		if (getBurnDuration == null) return false;
+
+		List<MethodInsnNode> calls = new ArrayList<>();
+		for (AbstractInsnNode insn = getBurnDuration.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+			if (insn instanceof MethodInsnNode call && call.getOpcode() == Opcodes.INVOKESTATIC
+					&& FORGE_HOOKS.equals(call.owner) && "getBurnTime".equals(call.name)
+					&& FORGE_BURN_TIME_DESC.equals(call.desc)) {
+				calls.add(call);
 			}
 		}
-		if (redirected == 0) return false;
-		ForbricLog.info("[Forbric/MergedBaseCompat] FuelValues now asks both ecosystems how long something burns "
-				+ "(%d call site(s)) — the merge kept only MinecraftForge's hook, so NeoForge's "
-				+ "FurnaceFuelBurnTimeEvent was posted nowhere", redirected);
+		if (calls.size() != 1) {
+			if (!calls.isEmpty()) {
+				ForbricLog.warn("[Forbric/MergedBaseCompat] AbstractFurnaceBlockEntity.getBurnDuration asks "
+						+ "MinecraftForge for a burn time %d times, not once — not redirecting any of them, because "
+						+ "NeoForge's FurnaceFuelBurnTimeEvent would then be posted for some fuels and not others",
+						calls.size());
+			}
+			return false;
+		}
+
+		MethodInsnNode call = calls.getFirst();
+		call.owner = KERNEL_FUEL_VALUES;
+		call.name = "burnDuration";
+		call.desc = KERNEL_BURN_TIME_DESC;
+		ForbricLog.info("[Forbric/MergedBaseCompat] AbstractFurnaceBlockEntity.getBurnDuration now asks both "
+				+ "ecosystems how long something burns (1 call site) — the merged base kept only MinecraftForge's "
+				+ "hook, so NeoForge's FurnaceFuelBurnTimeEvent was posted nowhere, and the Fabric fuel table it "
+				+ "never consulted left those fuels burning for zero ticks");
 		return true;
 	}
 

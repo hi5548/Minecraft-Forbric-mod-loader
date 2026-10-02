@@ -85,6 +85,12 @@ class MixinNamesTest {
 				"ItemStack is constructed in the merged doBrew, but the target still says class_1799");
 	}
 
+	/** A class target with its descriptor wrapping removed, so the two accepted spellings compare equal. */
+	private static String bare(String selector) {
+		return selector.startsWith("L") && selector.endsWith(";")
+				? selector.substring(1, selector.length() - 1) : selector;
+	}
+
 	private static ForbricMappings spine() throws Exception {
 		return FabricGuestMappings.of(MappingFixtures.intermediary(), MappingFixtures.mojmap()).mappings();
 	}
@@ -194,5 +200,31 @@ class MixinNamesTest {
 				atTargets(jar),
 				"the refmap's own key is the dotted spelling of the very member the annotation names; the ambiguous "
 						+ "bare name must not be the only path to it");
+	}
+
+	/**
+	 * An `@At(value="NEW", target="L<class>;")`: the refmap keys the class BARE and answers bare too
+	 * (`net/minecraft/village/TradeOffer -> net/minecraft/world/item/trading/MerchantOffer`, verbatim from
+	 * fabric-object-builder-api-v1), while the annotation wraps it as a descriptor. Neither the exact lookup nor
+	 * any member path can join those, so the construction site was never found and the injector was a required
+	 * loss on every subject that reached the audit (8 of 10 in the 10-subject slice).
+	 */
+	@Test
+	void aNewTargetClassResolvesThroughItsBareRefmapKey(@TempDir Path dir) throws Exception {
+		Path jar = dir.resolve("probe.jar");
+		writeJar(jar,
+				"{\"mappings\":{\"" + MIXIN + "\":{"
+						+ "\"net/minecraft/village/TradeOffer\":\"net/minecraft/world/item/trading/MerchantOffer\"}}}",
+				"Lnet/minecraft/village/TradeOffer;", "NEW");
+
+		MixinNames.translate(jar, spine());
+
+		// The CONTRACT is which class the anchor names. Mixin accepts a class target either bare or wrapped, and
+		// which spelling comes back depends on which of the refmap's two tables answered (the per-mixin one, or the
+		// flattened namespace one the real module also ships) — asserting one of them would pin an implementation
+		// detail rather than the resolution. The real object-builder module comes back bare; both name MerchantOffer.
+		assertEquals(List.of("net/minecraft/world/item/trading/MerchantOffer"),
+				atTargets(jar).stream().map(MixinNamesTest::bare).toList(),
+				"an @At(NEW) target written with the Yarn class name must name the class the merged base constructs");
 	}
 }

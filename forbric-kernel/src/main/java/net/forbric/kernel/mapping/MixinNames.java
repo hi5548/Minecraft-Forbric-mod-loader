@@ -264,7 +264,11 @@ public final class MixinNames {
 	 */
 	private static String selector(ForbricMappings spine, List<String> mixinTargets, Refmap refmap, String value) {
 		String exact = refmap.bySelector().get(value);
-		if (exact != null) return translateSelector(spine, mixinTargets, exact);
+		// sameShape on BOTH lookups: whichever table answers (the per-mixin one or the flattened namespace one),
+		// the reply must be spelled the way the annotation wrote it or `@At(NEW target="L…;")` would receive a bare
+		// name and a member selector a bare one — measured on the real object-builder module, whose flattened table
+		// answers the TradeOffer construction with the bare class name.
+		if (exact != null) return sameShape(value, translateSelector(spine, mixinTargets, exact));
 
 		// The SAME member in the refmap key's own spelling. A Fabric refmap may key a member by its dotted name —
 		// `net/minecraft/…/SynchronizeRecipesS2CPacket.<init>(Ljava/util/Collection;)V` — while the annotation
@@ -276,7 +280,7 @@ public final class MixinNames {
 		// the other way, and the refmap's answer is the one Mixin itself would use.
 		String alternate = otherSpelling(value);
 		String alternateExact = alternate == null ? null : refmap.bySelector().get(alternate);
-		if (alternateExact != null) return translateSelector(spine, mixinTargets, alternateExact);
+		if (alternateExact != null) return sameShape(value, translateSelector(spine, mixinTargets, alternateExact));
 
 		String translated = translateSelector(spine, mixinTargets, value);
 		String name = memberName(value);
@@ -311,7 +315,19 @@ public final class MixinNames {
 		int paren = selector.indexOf('(');
 		int colon = selector.indexOf(':');
 		int memberStart = paren > 0 ? paren : colon > 0 ? colon : -1;
-		if (memberStart < 0) return null;
+		if (memberStart < 0) {
+			// A CLASS, not a member — an `@At(NEW target="…")` construction site, or a bare type selector. Same two
+			// spellings, and Fabric refmaps key the BARE one where the annotation wraps it: object-builder's
+			// `net/minecraft/village/TradeOffer -> net/minecraft/world/item/trading/MerchantOffer` is what an
+			// `@At(NEW, target="Lnet/minecraft/village/TradeOffer;")` needs, and without it that injector was a
+			// required loss on every subject that reached the audit.
+			if (selector.startsWith("L") && selector.endsWith(";")) {
+				String cls = selector.substring(1, selector.length() - 1);
+				return cls.isEmpty() ? null : cls;
+			}
+			// The reverse only when it is unmistakably a class path, never a constant like HEAD or a slice name.
+			return selector.indexOf('/') > 0 && !selector.contains(".") ? "L" + selector + ";" : null;
+		}
 		if (semi >= 0 && semi < memberStart) {
 			// Lowner;member… -> owner.member…
 			String owner = selector.substring(selector.startsWith("L") ? 1 : 0, semi);
@@ -324,6 +340,19 @@ public final class MixinNames {
 			return "L" + selector.substring(0, dot) + ";" + selector.substring(dot + 1);
 		}
 		return null;
+	}
+
+	/**
+	 * The answer in the SHAPE the selector was written in. An {@code @At(value="NEW", target="L…;")} wants a class
+	 * descriptor and a member selector wants the reference, while a refmap may key and answer in the other shape;
+	 * handing back the wrong one would parse as neither and be a silent loss again.
+	 */
+	private static String sameShape(String asWritten, String answer) {
+		boolean wrapped = asWritten.startsWith("L") && asWritten.endsWith(";");
+		boolean answerWrapped = answer.startsWith("L") && answer.endsWith(";");
+		if (wrapped && !answerWrapped) return "L" + answer + ";";
+		if (!wrapped && answerWrapped) return answer.substring(1, answer.length() - 1);
+		return answer;
 	}
 
 	/**

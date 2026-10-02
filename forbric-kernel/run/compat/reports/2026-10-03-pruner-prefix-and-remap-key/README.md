@@ -100,10 +100,14 @@ named 变回 intermediary）。
   `SpawnerFinalizeInjectorTest.theSplicedDescriptorIsTheOneTheGameSideEntryActuallyDeclares`、
   `LootTableEventBridgeInjectorTest.theRoutedNameAndDescriptorMatchTheCompiledGameSideClass`。
   新增 `everyPinNamesAPrunerEntry` 通过。
-- **切片（进行中）**：W7Harness 以干净 worktree 于 `e322c8e8` 构建（jar sha
-  `f7714ea18e20104f0ead41f96d5c995abd96af8f019e0a52efe9f7fd4ab79436`，3,230,766 B，含
-  `InheritedMemberDecls`、0 个重名类），**全新空缓存目录 `/tmp/w7-remap-cache-11`**（`-11` 因此真正被走到），
-  10 个 fabric 主体；覆盖本报告两处修复 + FabricBootFails2 的 betterrailwaysystem 单元，不含尚未落地的 chipped。
-  判据见第 1、2 节末尾。
+- **切片（已跑完，判据成立）**：冷缓存、干净 worktree、kernel `553ecf7a`（jar sha `e696e712…`）⇒
+  **10/10 `cr=0`、9/10 进世界、8/10 STRICT PASS**（fabric 侧第一次干净退出），本报告的两条 id
+  （`disableVanillaCheck` 8×、lifecycle `hookOnPlayerConnect` 7×）全部消失且**没有新 id 顶上来**。
+  两条残留是**主体侧闭包**问题、非内核缺陷：`cobblemon_skills_api` 的入口抛 `NoClassDefFoundError`
+  （未声明的 Pufferfish 依赖）、`cobblemon-auto-battle` 自身数据点名 `cobblemon:medicinal_leek`。
+  报告目录 `2026-10-03-fabric-cold-fixed/`（W7Harness）。
+- **第一次冷跑并不绿**：`cr=88–90`、`cause=mixin-apply`——那是 `a08a03cd` 的成员选择器回复形状回归
+  （本报告两处修复之外的另一件事），已由 `e4afa796` 修掉，证据见 `2026-10-03-member-selector-reply-shape/`。
+  **热缓存对判 remap 阶段无效**：它只能报告建它那次的内核产物；本报告第 2 节的整条推理正建立在这条上。
 - 共享树仍带一条**未跟踪且不编译**的他人测试文件 `MergedBaseSelfDependencyTest.java`（其 lambda 第 235 行返回类型
   错误）：它只影响**共享树**的 `compileTestJava`，干净 worktree 于 HEAD 不受影响；已告知该 lane。

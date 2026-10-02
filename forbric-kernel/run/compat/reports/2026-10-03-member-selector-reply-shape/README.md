@@ -63,6 +63,13 @@ if (!wrapped && answerWrapped) return answer.substring(1, answer.length() - 1); 
 
 `e4afa796`:`sameShape` 只服务类选择器;回复里带描述符的成员选择器原样返回。回归测试同上。
 
+## 验证(冷缓存切片,判据预先写定)
+
+`553ecf7a` / 干净 worktree / 全新空缓存 ⇒ **10/10 主体 `cr=0`、9/10 进世界、8/10 STRICT PASS**
+(此前同一 10 主体在冷缓存上 `cr=88–90`、`cause=mixin-apply`,每个都到不了世界)。两条残留是主体侧闭包问题
+(`cobblemon_skills_api` 未声明的 Pufferfish 依赖、`cobblemon-auto-battle` 自身数据):**没有新 id 顶上来**。
+报告目录 `2026-10-03-fabric-cold-fixed/`。
+
 ## 无关项(排除)
 
 `InheritedMemberDecls` 与此无关,两条独立证据:该 pass 只改**声明**(`node.methods[].name`)且对 `@Mixin` 类 stand-down,

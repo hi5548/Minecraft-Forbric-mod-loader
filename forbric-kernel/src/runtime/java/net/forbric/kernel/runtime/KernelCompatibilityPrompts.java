@@ -13,7 +13,16 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
 
-/** The only place late compatibility findings change client state: a normal render-thread tick. */
+/**
+ * The only place late compatibility findings change client state: a normal render-thread tick.
+ *
+ * <p>PORT(1.21.1): 26.2 moved screen management onto {@code Minecraft.gui} ({@code gui.screen()} /
+ * {@code gui.setScreen(...)} / {@code gui.overlay()}). 1.21.1 keeps it on {@code Minecraft} itself — the public
+ * {@code screen} field, {@link Minecraft#setScreen}, and {@link Minecraft#getOverlay()} — which is what this
+ * class uses. 26.2's {@code disconnectWithSavingScreen()} is 1.21.1's {@code Minecraft.disconnect()}, whose first
+ * act is to show vanilla's "Saving world" {@code ProgressScreen}; there is no separate client {@code gui} null to
+ * guard, since 1.21.1's {@code gui} field is final and non-null.
+ */
 public final class KernelCompatibilityPrompts {
 	/**
 	 * How many findings one prompt names. The rest wait for the next prompt rather than riding along unseen: a
@@ -31,9 +40,11 @@ public final class KernelCompatibilityPrompts {
 	private KernelCompatibilityPrompts() { }
 
 	public static void tick(Minecraft minecraft) {
-		if (stopping || !minecraft.isRunning() || minecraft.gui == null || minecraft.gui.overlay() != null) return;
+		// PORT(1.21.1): minecraft.getOverlay() is 26.2's minecraft.gui.overlay(); 1.21.1's gui field is final and
+		// never null, so the old null guard is gone with it.
+		if (stopping || !minecraft.isRunning() || minecraft.getOverlay() != null) return;
 		if (prompt != null) {
-			if (minecraft.gui.screen() == prompt) return;
+			if (minecraft.screen == prompt) return;
 			// Another screen replacing the prompt -- a death screen, a kick, a mod's own menu -- is neither the
 			// player's consent nor their refusal. The question is asked again, now, over whatever replaced it, and
 			// the answer returns there.
@@ -68,11 +79,11 @@ public final class KernelCompatibilityPrompts {
 		List<CompatibilityFinding> shown = List.copyOf(pending.subList(0, Math.min(PAGE, pending.size())));
 		// The rest stay queued for the prompt after this one; drain() emptied the queue.
 		if (shown.size() < pending.size()) CompatibilityDecision.queue();
-		previous = minecraft.gui.screen();
+		previous = minecraft.screen;
 		active = shown;
 		try {
 			prompt = new KernelCompatibilityScreen(shown, pending.size() - shown.size(), continued -> answer(minecraft, continued));
-			minecraft.gui.setScreen(prompt);
+			minecraft.setScreen(prompt);
 		} catch (RuntimeException | LinkageError unavailable) {
 			prompt = null;
 			stopNormally(minecraft, "confirmation could not be displayed; continuation was not approved");
@@ -101,7 +112,7 @@ public final class KernelCompatibilityPrompts {
 		previous = null;
 		if (continued) {
 			CompatibilityDecision.acknowledge(answered);
-			minecraft.gui.setScreen(restore);
+			minecraft.setScreen(restore);
 			return;
 		}
 		// A refusal answers for what is still waiting as well: continuing needs every loss accepted, and none was.
@@ -112,12 +123,14 @@ public final class KernelCompatibilityPrompts {
 		ForbricLog.warn("[Forbric/Compatibility] continuation was declined for %d required feature loss(es); %s",
 				refused.size(), minecraft.level != null ? "saving and leaving this world" : "nothing to leave");
 		if (minecraft.level != null) {
-			minecraft.disconnectWithSavingScreen();
-			minecraft.gui.setScreen(new TitleScreen());
+			// PORT(1.21.1): 26.2's Minecraft.disconnectWithSavingScreen() is 1.21.1's Minecraft.disconnect(),
+			// which shows vanilla's "Saving world" ProgressScreen first.
+			minecraft.disconnect();
+			minecraft.setScreen(new TitleScreen());
 		} else {
 			// Not in a world: nothing to save, and whatever was on screen -- the title, or a disconnect screen still
 			// carrying the server's reason -- stays.
-			minecraft.gui.setScreen(restore == null ? new TitleScreen() : restore);
+			minecraft.setScreen(restore == null ? new TitleScreen() : restore);
 		}
 	}
 
@@ -126,7 +139,7 @@ public final class KernelCompatibilityPrompts {
 		// Recorded before the stop, so the launcher's boundary reports this policy stop as 78 once Main returns.
 		CompatibilityDecision.recordPolicyStop();
 		ForbricLog.error("[Forbric/Compatibility] FATAL: %s; saving and stopping normally", reason);
-		if (minecraft.level != null) minecraft.disconnectWithSavingScreen();
+		if (minecraft.level != null) minecraft.disconnect();
 		minecraft.stop();
 	}
 }

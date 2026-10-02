@@ -28,7 +28,7 @@ import com.mojang.serialization.DataResult;
 import com.mojang.serialization.DynamicOps;
 import com.mojang.serialization.MapCodec;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.storage.loot.LootPool;
 import net.minecraftforge.common.crafting.conditions.ICondition;
 import net.minecraftforge.registries.ForgeRegistries;
@@ -96,7 +96,7 @@ public final class KernelForgeConditions {
 	/** Whether a condition type id is registered; substitutable so a unit test never initialises the registry. */
 	private static volatile java.util.function.Predicate<String> known = id -> {
 		// An id that does not even parse is "known": the strict codec then fails it exactly as before.
-		Identifier parsed = Identifier.tryParse(id);
+		ResourceLocation parsed = ResourceLocation.tryParse(id);
 		return parsed == null || ForgeRegistries.CONDITION_SERIALIZERS.get().containsKey(parsed);
 	};
 
@@ -228,6 +228,18 @@ public final class KernelForgeConditions {
 				@Override
 				public <T> java.util.Collection<net.minecraft.core.Holder<T>> getTag(net.minecraft.tags.TagKey<T> key) {
 					return neo.getTag(key);
+				}
+
+				// PORT(1.21.1): Forge 52's ICondition.IContext declares getAllTags as well as getTag
+				// ({@code Map<ResourceLocation, Collection<Holder<T>>> getAllTags(ResourceKey<? extends
+				// Registry<T>>)}, verified with javap against forge-runtime.jar 52.1.16); 26.2's interface had
+				// getTag alone. It must be implemented or the anonymous class does not compile, and it is
+				// delegated rather than defaulted: NeoForge's own condition context is the live tag view.
+				@Override
+				public <T> java.util.Map<net.minecraft.resources.ResourceLocation,
+						java.util.Collection<net.minecraft.core.Holder<T>>>
+						getAllTags(net.minecraft.resources.ResourceKey<? extends net.minecraft.core.Registry<T>> key) {
+					return neo.getAllTags(key);
 				}
 			};
 		} catch (Throwable t) {

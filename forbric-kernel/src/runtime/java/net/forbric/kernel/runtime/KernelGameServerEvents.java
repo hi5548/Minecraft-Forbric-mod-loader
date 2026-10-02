@@ -9,6 +9,7 @@ import net.forbric.kernel.util.ForbricLog;
 import net.forbric.kernel.util.Reflect;
 import net.minecraft.world.flag.FeatureFlagSet;
 import net.minecraft.world.item.alchemy.PotionBrewing;
+import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.ForgeEventFactory;
 import net.neoforged.bus.api.Event;
 import net.neoforged.bus.api.EventPriority;
@@ -48,7 +49,7 @@ public final class KernelGameServerEvents {
 			var forge = new net.minecraftforge.event.entity.living.LivingExperienceDropEvent(event.getEntity(),
 					event.getAttackingPlayer(), event.getOriginalExperience());
 			forge.setDroppedExperience(event.getDroppedExperience());
-			if (net.minecraftforge.event.entity.living.LivingExperienceDropEvent.BUS.post(forge)) {
+			if (MinecraftForge.EVENT_BUS.post(forge)) {
 				event.setCanceled(true);
 				return;
 			}
@@ -56,11 +57,13 @@ public final class KernelGameServerEvents {
 		});
 	}
 
-	/** NeoForge {@code ExplosionEvent.Detonate} → MinecraftForge's, on the same two lists. */
+	/** NeoForge {@code ExplosionEvent.Detonate} → MinecraftForge's, on the same affected-entity list. */
 	public static void installExplosionDetonate(Object neoBus) {
 		forward((IEventBus) neoBus, ExplosionEvent.Detonate.class, "ExplosionEvent.Detonate",
+				// PORT(1.21.1): 1.21.1's Forge onExplosionDetonate has no affected-blocks argument; Forge's event
+				// keeps its own (empty) block list here, so a Forge mod reading affected blocks sees none.
 				event -> ForgeEventFactory.onExplosionDetonate(event.getLevel(), event.getExplosion(),
-						event.getAffectedBlocks(), event.getAffectedEntities(), 0.0D));
+						event.getAffectedEntities(), 0.0D));
 	}
 
 	/**

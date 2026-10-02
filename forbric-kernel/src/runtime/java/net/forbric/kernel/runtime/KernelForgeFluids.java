@@ -1,19 +1,4 @@
-/*
- * Copyright 2026 The Forbric Project
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
+/* Copyright 2026 The Forbric Project. Licensed under the Apache License, Version 2.0. */
 package net.forbric.kernel.runtime;
 
 import java.util.Set;
@@ -21,29 +6,48 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import net.forbric.kernel.util.ForbricLog;
 import net.forbric.kernel.util.Reflect;
-import net.minecraft.client.renderer.block.BlockAndTintGetter;
-import net.minecraft.client.renderer.block.FluidModel;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.BlockAndTintGetter;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.level.material.FluidState;
-import net.minecraftforge.client.extensions.common.IClientFluidTypeExtensions;
+import net.neoforged.neoforge.client.extensions.common.IClientFluidTypeExtensions;
+import net.neoforged.neoforge.client.textures.FluidSpriteCache;
 
 /**
- * Lets a MinecraftForge fluid supply its own render model and tint from the merged {@code FluidRenderer.tesselate}.
+ * Lets a MinecraftForge fluid supply its own sprites and tint from the merged {@code LiquidBlockRenderer.tesselate}.
  *
- * <p>Vanilla 26.2's {@code FluidStateModelSet.bake()} hard-codes water and lava and answers the missing model for
- * anything else. Genuine Forge's only seam is inside {@code tesselate}: after the model lookup it asks
- * {@code IClientFluidTypeExtensions.of(fluidState).getModel(state, level, pos, model)}, and where the model has
- * no tint source it asks {@code getTintColor()} instead of {@code -1}. The byte merge kept NeoForge's tesselate,
- * which has neither ask, so every MinecraftForge modded fluid drew as the missing texture. The transformer
- * re-inserts both asks as calls here (six instructions after the model's {@code ASTORE}, and the {@code ICONST_M1}
- * replaced by a call pushing an int) — stack-shape identical to Forge's own.
+ * <p>Genuine MinecraftForge patches that method to take both from the fluid's client extensions: the sprite array
+ * from {@code ForgeHooksClient.getFluidSprites(level, pos, state)} and the colour from
+ * {@code IClientFluidTypeExtensions.of(state).getTintColor(state, level, pos)}. The merged base kept NeoForge's
+ * body — verified with {@code javap -c}: the merged call site reaches
+ * {@code net.neoforged.neoforge.client.textures.FluidSpriteCache.getFluidSprites(...)} and NeoForge's
+ * {@code IClientFluidTypeExtensions}, and there is no {@code net/minecraftforge/} reference in the method at all
+ * (both the {@code patched-mc-forge-1.21.1.jar} and {@code patched-mc-neoforge-1.21.1.jar} bodies were compared).
+ * So every MinecraftForge modded fluid drew with NeoForge's sprites and colour.
+ *
+ * <p>Each site is one same-descriptor substitution, which is what the transformer wants: NeoForge's
+ * {@code FluidSpriteCache.getFluidSprites(BlockAndTintGetter, BlockPos, FluidState)[TextureAtlasSprite]} is
+ * replaced by {@link #sprites} with the identical descriptor, and the interface call
+ * {@code IClientFluidTypeExtensions.getTintColor(FluidState, BlockAndTintGetter, BlockPos)I} by {@link #tintColor}
+ * with the receiver as its first parameter. Neither moves anything on the stack, so no frame is recomputed.
  *
  * <p>Hot path: this runs once per fluid tesselation, the same cost genuine Forge pays. The count line is gated by
  * a contains-check before an add, and only the first sighting of a fluid logs. Forge's {@code DEFAULT} extension
- * (vanilla fluids, and any Forge fluid whose {@code initClient} never ran) short-circuits to the model by identity
- * and {@code -1}, so vanilla rendering is byte-for-byte what it was. {@code -Dforbric.forgeFluidModels=off}
- * returns the model by identity and {@code -1} at both sites.
+ * (vanilla fluids, and any Forge fluid whose {@code initClient} never ran) short-circuits to NeoForge's own answer
+ * by identity, so vanilla rendering is byte-for-byte what it was. {@code -Dforbric.forgeFluidModels=off} returns
+ * NeoForge's answer at both sites.
+ *
+ * <h2>PORT(1.21.1): what the two asks are made of</h2>
+ *
+ * <p>26.2's fluid renderer chose a {@code FluidModel} and consulted Forge's extensions for a model plus a
+ * no-argument tint; neither type exists on 1.21.1. There the renderer's two data are the sprite array and the
+ * packed ARGB colour, and Forge 52 asks for them exactly as described above — verified against
+ * {@code forge-runtime.jar} (52.1.16). The sprites are <em>computed</em> here (Forge's own
+ * {@code ForgeHooksClient.getFluidSprites}) rather than returned from the caller, because the substitution
+ * happens at the call site and its return value is not on the stack; the tint method takes NeoForge's extension
+ * as its first parameter for the same reason. {@code -1} needs no special case: NeoForge's renderer unpacks the
+ * colour into components directly, and {@code -1} unpacks to white, which is what Forge's default tint means.
  */
 public final class KernelForgeFluids {
 	public static final String PROPERTY = "forbric.forgeFluidModels";
@@ -54,47 +58,59 @@ public final class KernelForgeFluids {
 	private KernelForgeFluids() {
 	}
 
-	/** Site A: the model NeoForge's set chose, or what the fluid's own client extensions supply instead. */
-	public static FluidModel model(FluidModel model, FluidState state, BlockAndTintGetter level, BlockPos pos) {
-		if ("off".equalsIgnoreCase(System.getProperty(PROPERTY, "on"))) return model;
+	/**
+	 * Site A: what the fluid's own Forge client extensions supply, or NeoForge's cache answer. Forge's extension
+	 * type is spelled in full because NeoForge's has the same simple name and both are needed in this file.
+	 */
+	public static TextureAtlasSprite[] sprites(BlockAndTintGetter level, BlockPos pos, FluidState state) {
+		if ("off".equalsIgnoreCase(System.getProperty(PROPERTY, "on"))) return FluidSpriteCache.getFluidSprites(level, pos, state);
 		try {
-			IClientFluidTypeExtensions extensions = IClientFluidTypeExtensions.of(state);
+			net.minecraftforge.client.extensions.common.IClientFluidTypeExtensions extensions =
+					net.minecraftforge.client.extensions.common.IClientFluidTypeExtensions.of(state);
 			Fluid fluid = state.getType();
 			// Counted before the DEFAULT short-circuit, so a vanilla fluid in view proves the funnel is on the render
 			// path even when no Forge fluid exists to answer; the contains-check keeps the hot path cheap.
 			boolean first = !ASKED.contains(fluid) && ASKED.add(fluid);
-			if (extensions == IClientFluidTypeExtensions.DEFAULT) {
+			if (extensions == net.minecraftforge.client.extensions.common.IClientFluidTypeExtensions.DEFAULT) {
 				if (first) report(fluid);
-				return model;
+				return FluidSpriteCache.getFluidSprites(level, pos, state);
 			}
-			FluidModel own = extensions.getModel(state, level, pos, model);
+			TextureAtlasSprite[] own = net.minecraftforge.client.ForgeHooksClient.getFluidSprites(level, pos, state);
 			if (first) {
-				if (own != null && own != model) ANSWERED.add(fluid);
+				if (own != null) ANSWERED.add(fluid);
 				report(fluid);
 			}
-			return own == null ? model : own;
+			return own == null ? FluidSpriteCache.getFluidSprites(level, pos, state) : own;
 		} catch (Throwable t) {
 			if (!failureReported) {
 				failureReported = true;
-				ForbricLog.warn("[Forbric/Fluids] MinecraftForge fluid extensions threw while choosing a model — "
-						+ "NeoForge's model is used", Reflect.unwrap(t));
+				ForbricLog.warn("[Forbric/Fluids] MinecraftForge fluid extensions threw while choosing sprites — "
+						+ "NeoForge's are used", Reflect.unwrap(t));
 			}
-			return model;
+			return FluidSpriteCache.getFluidSprites(level, pos, state);
 		}
 	}
 
 	private static void report(Fluid fluid) {
 		ForbricLog.info("[Forbric/Fluids] MinecraftForge client extensions consulted for %d fluid(s) so far, %d "
-				+ "supplied their own model (%s)", ASKED.size(), ANSWERED.size(), fluid);
+				+ "supplied their own sprites (%s)", ASKED.size(), ANSWERED.size(), fluid);
 	}
 
-	/** Site B: the tint for a model without a tint source — Forge's extension answer, or vanilla's -1. */
-	public static int tintColor(FluidState state) {
-		if ("off".equalsIgnoreCase(System.getProperty(PROPERTY, "on"))) return -1;
+	/**
+	 * Site B: the tint for a fluid — Forge's extension answer, or NeoForge's. The first parameter is the
+	 * receiver the substituted interface call was made on, so the call site's stack is untouched.
+	 */
+	public static int tintColor(IClientFluidTypeExtensions neo, FluidState state, BlockAndTintGetter level, BlockPos pos) {
+		if ("off".equalsIgnoreCase(System.getProperty(PROPERTY, "on"))) return neo.getTintColor(state, level, pos);
 		try {
-			return IClientFluidTypeExtensions.of(state).getTintColor();
+			net.minecraftforge.client.extensions.common.IClientFluidTypeExtensions extensions =
+					net.minecraftforge.client.extensions.common.IClientFluidTypeExtensions.of(state);
+			if (extensions == net.minecraftforge.client.extensions.common.IClientFluidTypeExtensions.DEFAULT) {
+				return neo.getTintColor(state, level, pos);
+			}
+			return extensions.getTintColor(state, level, pos);
 		} catch (Throwable t) {
-			return -1;
+			return neo.getTintColor(state, level, pos);
 		}
 	}
 }

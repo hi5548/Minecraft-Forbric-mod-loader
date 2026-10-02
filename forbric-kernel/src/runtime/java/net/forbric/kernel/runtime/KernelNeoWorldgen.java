@@ -31,7 +31,6 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.util.profiling.InactiveProfiler;
 import net.minecraft.util.profiling.ProfilerFiller;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.EntityTypes;
 import net.neoforged.neoforge.common.conditions.ICondition;
 import net.neoforged.neoforge.common.MonsterRoomHooks;
 import net.neoforged.neoforge.registries.DataMapLoader;
@@ -56,10 +55,12 @@ import net.forbric.kernel.util.Reflect;
  * <h2>Monster rooms</h2>
  *
  * <p>The visible half of that. The merged {@code MonsterRoomFeature.randomEntityId} is two instructions —
- * {@code invokestatic MonsterRoomHooks.getRandomMonsterRoomMob} — reading a static {@code WeightedList} that only
- * a {@code DataMapsUpdatedEvent} listener fills, so it was null and threw. The kernel had answered that by
- * neutering {@code MonsterRoomFeature.place} outright, which means NO dungeon, therefore no spawner and no
- * dungeon chest, in EVERY world every player generated, mods or no mods.
+ * {@code invokestatic MonsterRoomHooks.getRandomMonsterRoomMob} — reading a static list that only
+ * a {@code DataMapsUpdatedEvent} listener fills, so it was null and threw. (26.2 backed that list with a
+ * {@code WeightedList}, which 1.21.1 does not have; here it is NeoForge's own {@code List<MobEntry>}, and the
+ * reflective default check below reads each entry's type and weight off those same objects.) The kernel had
+ * answered that by neutering {@code MonsterRoomFeature.place} outright, which means NO dungeon, therefore no
+ * spawner and no dungeon chest, in EVERY world every player generated, mods or no mods.
  *
  * <p>So the call goes through {@link #randomMonsterRoomMob} instead, which falls back to vanilla's own set when
  * the data map is not there. The fallback is not a guess: vanilla's {@code MonsterRoomFeature.MOBS} is
@@ -82,7 +83,7 @@ public final class KernelNeoWorldgen {
 	 * Vanilla's own monster-room set, in vanilla's own proportions — {@code ZOMBIE} twice, as the array has it.
 	 */
 	private static final EntityType<?>[] VANILLA_MONSTER_ROOM_MOBS = {
-			EntityTypes.SKELETON, EntityTypes.ZOMBIE, EntityTypes.ZOMBIE, EntityTypes.SPIDER,
+			EntityType.SKELETON, EntityType.ZOMBIE, EntityType.ZOMBIE, EntityType.SPIDER,
 	};
 
 	/**
@@ -91,7 +92,7 @@ public final class KernelNeoWorldgen {
 	 * <p>Read as a question, not as a table: while the live map still says exactly this, nobody has changed it.
 	 */
 	private static final Map<EntityType<?>, Integer> NEOFORGE_SHIPPED_MONSTER_ROOM_MOBS = Map.of(
-			EntityTypes.SKELETON, 100, EntityTypes.SPIDER, 100, EntityTypes.ZOMBIE, 200);
+			EntityType.SKELETON, 100, EntityType.SPIDER, 100, EntityType.ZOMBIE, 200);
 
 	private static volatile boolean reportedFallback;
 	private static volatile boolean reportedVanillaDraw;
@@ -152,6 +153,11 @@ public final class KernelNeoWorldgen {
 	 * {@code DataMapsUpdatedEvent} listener; there is no accessor that returns it. Any failure answers "not the
 	 * default", which keeps the data map in charge — the conservative direction, since that is what this method
 	 * would have done unconditionally before.
+	 *
+	 * <p>{@code PORT(1.21.1)}: 26.2's field held a {@code WeightedList}, so it was {@code unwrap()}ped first.
+	 * 1.21.1's is already the plain {@code List<MobEntry>} that {@code onDataMapsUpdated} builds with
+	 * {@code Stream.toList()} (disassembled from the staged neoforge-runtime.jar), and it has no {@code unwrap};
+	 * a list is therefore used as it stands, and only a non-list still takes the 26.2 route.
 	 */
 	private static boolean monsterRoomMobsAreStillNeoForgesDefault() {
 		try {
@@ -159,21 +165,37 @@ public final class KernelNeoWorldgen {
 			field.setAccessible(true);
 			Object live = field.get(null);
 			if (live == null) return false;
-			Object unwrapped = live.getClass().getMethod("unwrap").invoke(live);
+			Object unwrapped = live instanceof List<?> list ? list : live.getClass().getMethod("unwrap").invoke(live);
 			if (!(unwrapped instanceof List<?> items)
 					|| items.size() != NEOFORGE_SHIPPED_MONSTER_ROOM_MOBS.size()) {
 				return false;
 			}
 			Map<Object, Integer> live_weights = new HashMap<>();
 			for (Object item : items) {
-				Object value = item.getClass().getMethod("value").invoke(item);
-				Object weight = item.getClass().getMethod("weight").invoke(item);
+				// PORT(1.21.1): 26.2's entries were Weighted<E> (value() : E, weight() : int); 1.21.1's
+				// MonsterRoomHooks$MobEntry is a record with type() : EntityType and weight() : Weight, whose
+				// int is asInt(). Both names and both weight shapes are accepted.
+				Object value = member(item, "value", "type");
+				Object weight = member(item, "weight");
+				if (weight instanceof net.minecraft.util.random.Weight measured) weight = measured.asInt();
 				if (!(weight instanceof Integer count) || live_weights.put(value, count) != null) return false;
 			}
 			return NEOFORGE_SHIPPED_MONSTER_ROOM_MOBS.equals(live_weights);
 		} catch (Throwable t) {
 			return false;
 		}
+	}
+
+	/** The first of {@code names} the entry answers; a missing one throws, which the caller reads as "not the default". */
+	private static Object member(Object target, String... names) throws ReflectiveOperationException {
+		for (String name : names) {
+			try {
+				return target.getClass().getMethod(name).invoke(target);
+			} catch (NoSuchMethodException absent) {
+				// the next generation's name, if any
+			}
+		}
+		throw new NoSuchMethodException(names[0] + " on " + target.getClass());
 	}
 
 	/** {@code -Dforbric.neoDataMapFallback=off}: never run the kernel's about-to-start load, so a gate can prove NeoForge's path alone. */
@@ -196,7 +218,10 @@ public final class KernelNeoWorldgen {
 	 */
 	private static void loadDataMaps(MinecraftServer server) {
 		try {
-			DataMapLoader loader = new DataMapLoader();
+			// PORT(1.21.1): 1.21.1's DataMapLoader has no no-arg constructor (javap: (ICondition.IContext,
+			// RegistryAccess) and (RegistryAccess)) and its apply() takes nothing — it reads the `results` field
+			// itself. The registry access is handed to the constructor, and the live context is injected below.
+			DataMapLoader loader = new DataMapLoader(server.registryAccess());
 			ICondition.IContext context;
 			try {
 				context = server.getServerResources().managers().getConditionContext();
@@ -214,12 +239,12 @@ public final class KernelNeoWorldgen {
 			java.lang.reflect.Field resultsField = DataMapLoader.class.getDeclaredField("results");
 			resultsField.setAccessible(true);
 			resultsField.set(loader, results);
-			loader.apply(server.registryAccess());
+			loader.apply();
 			int loaded = results instanceof Map<?, ?> map ? map.size() : -1;
 
 			if (!reportedDataMaps) {
 				reportedDataMaps = true;
-				Registry<EntityType<?>> entityTypes = server.registryAccess().lookupOrThrow(Registries.ENTITY_TYPE);
+				Registry<EntityType<?>> entityTypes = server.registryAccess().registryOrThrow(Registries.ENTITY_TYPE);
 				int monsterRoom = entityTypes
 						.getDataMap(net.neoforged.neoforge.registries.datamaps.builtin.NeoForgeDataMaps
 								.MONSTER_ROOM_MOBS)
@@ -285,7 +310,7 @@ public final class KernelNeoWorldgen {
 
 	private static int countOrMinusOne(MinecraftServer server, ResourceKey<? extends Registry<?>> key) {
 		try {
-			return server.registryAccess().lookupOrThrow(key).size();
+			return server.registryAccess().registryOrThrow(key).size();
 		} catch (Throwable t) {
 			return -1;
 		}

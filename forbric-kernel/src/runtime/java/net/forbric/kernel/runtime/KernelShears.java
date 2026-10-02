@@ -5,7 +5,8 @@ import java.util.function.BiPredicate;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 
-import net.minecraft.core.TypedInstance;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
 /**
@@ -28,7 +29,9 @@ public final class KernelShears {
 	 */
 	@SuppressWarnings({ "rawtypes", "unchecked" })
 	public static Operation<Boolean> relay(Operation<Boolean> carrier, Object ability) {
-		return relay(carrier, ability, Items.SHEARS, (stack, item) -> ((TypedInstance) stack).is(item));
+		// PORT(1.21.1): the type that answers is(Item) is ItemStack itself; 26.2's TypedInstance
+		// (the item-stack/block-state common view) does not exist on 1.21.1. Verified: ItemStack.is(Item).
+		return relay(carrier, ability, Items.SHEARS, (stack, item) -> ((ItemStack) stack).is((Item) item));
 	}
 
 	/** {@link #relay(Operation, Object)} over a given "shears" and vanilla {@code is}; the seam the unit test drives. */

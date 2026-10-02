@@ -16,27 +16,26 @@
 
 package net.forbric.kernel.runtime;
 
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.function.Consumer;
 
 import net.forbric.kernel.util.ForbricLog;
 import net.forbric.kernel.util.Reflect;
-import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.PackType;
 import net.minecraft.server.packs.resources.PreparableReloadListener;
 import net.minecraft.server.packs.resources.ReloadableResourceManager;
-import net.minecraftforge.client.event.RegisterClientReloadListenersEvent;
+import net.minecraftforge.common.MinecraftForge;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.IEventBus;
-import net.neoforged.neoforge.client.event.AddClientReloadListenersEvent;
+import net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent;
 
 /**
- * Collects traditional MinecraftForge's client reload listeners and hands them to NeoForge's sorted graph.
+ * Collects traditional MinecraftForge's client reload listeners and re-registers them with NeoForge.
  *
  * <p>The restored Forge client hook posts its own registration event first. This bridge consumes that capture
- * while NeoForge builds its sorted graph. With the client-init repair disabled it retains its original fallback:
- * posting Forge's event against a scratch manager itself.
+ * while NeoForge posts its registration event. With the client-init repair disabled it retains its original
+ * fallback: posting Forge's event against a scratch manager itself.
  *
  * <h2>The scratch manager</h2>
  *
@@ -44,12 +43,11 @@ import net.neoforged.neoforge.client.event.AddClientReloadListenersEvent;
  * {@code ReloadableResourceManager} it was constructed with. So one is constructed purely as a capture buffer,
  * the Forge event is posted against it, and whatever landed inside is read back out and re-registered on
  * NeoForge's event. A captured empty list still means the event has already been posted. The manager is never
- * used to reload anything; its constructor seeds an empty list, which is
- * why it is safe to read immediately.
+ * used to reload anything.
  *
- * <p>Each listener gets a synthetic {@code Identifier} because NeoForge's graph is sorted by id and requires
- * one. The id is derived from the listener's own class name, reduced to the characters an {@code Identifier}
- * path allows, plus its index — so two listeners of the same class do not collide.
+ * <p>PORT(1.21.1): 26.2's NeoForge sorted its client listeners in a graph keyed by a resource id, so this bridge
+ * gave every listener a synthetic one. 1.21.1's {@code RegisterClientReloadListenersEvent} takes no id —
+ * {@code registerReloadListener(listener)} only — so nothing is named here.
  */
 public final class KernelGameClientReload {
 	private KernelGameClientReload() {
@@ -60,21 +58,21 @@ public final class KernelGameClientReload {
 	 *               not a game-bus one, which is why it is a separate pass from the other four bridges.
 	 */
 	public static void install(Object modBus) {
-		Consumer<AddClientReloadListenersEvent> bridge = event -> {
+		Consumer<RegisterClientReloadListenersEvent> bridge = event -> {
 			List<PreparableReloadListener> captured = ForgeClientReloadCapture.drain();
 			if (captured != null) {
 				// ForgeHooksClient already posted its self-destructing event. Reposting it would return an
 				// empty list while its handler count still read "one", losing all real reload listeners.
-				// Let graph-registration failures reach NeoForge's normal event error handling.
 				register(event, captured);
 				return;
 			}
 			try {
-				// The capture buffer. Reading getListeners() rather than the private field it returns: javap -c
-				// shows the accessor is `getfield listeners; areturn`, the same bytes without the private name.
-				try (ReloadableResourceManager scratch = new ReloadableResourceManager(PackType.CLIENT_RESOURCES)) {
-					RegisterClientReloadListenersEvent.BUS.post(new RegisterClientReloadListenersEvent(scratch));
-					register(event, scratch.getListeners());
+				// The capture buffer. ReloadableResourceManager keeps its listeners in a private list with no
+				// accessor, so a scratch subclass records what Forge's event registers into it.
+				try (RecordingResourceManager recorder = new RecordingResourceManager()) {
+					MinecraftForge.EVENT_BUS.post(
+							new net.minecraftforge.client.event.RegisterClientReloadListenersEvent(recorder));
+					register(event, recorder.recorded());
 				}
 			} catch (Throwable t) {
 				ForbricLog.warn("[Forbric/EventMux] could not bridge Forge client reload listeners",
@@ -83,26 +81,35 @@ public final class KernelGameClientReload {
 		};
 
 		// Four-argument overload with LOWEST, as everywhere in this package.
-		((IEventBus) modBus).addListener(EventPriority.LOWEST, false, AddClientReloadListenersEvent.class, bridge);
+		((IEventBus) modBus).addListener(EventPriority.LOWEST, false, RegisterClientReloadListenersEvent.class, bridge);
 	}
 
-	private static void register(AddClientReloadListenersEvent event, List<PreparableReloadListener> listeners) {
+	private static void register(RegisterClientReloadListenersEvent event, List<PreparableReloadListener> listeners) {
 		int n = 0;
 		for (PreparableReloadListener listener : listeners) {
-			event.addListener(Identifier.fromNamespaceAndPath("forbric",
-					"forge/" + sanitisePath(listener.getClass().getName()) + "_" + n++), listener);
+			event.registerReloadListener(listener);
+			n++;
 		}
 		if (n > 0) {
 			ForbricLog.info("[Forbric/EventMux] bridged %d Forge client reload listener(s) into NeoForge's sorted graph", n);
 		}
 	}
 
-	/** A class name reduced to the {@code [a-z0-9._/-]} an {@code Identifier} path allows. */
-	private static String sanitisePath(String className) {
-		StringBuilder out = new StringBuilder(className.length());
-		for (char c : className.toLowerCase(Locale.ROOT).toCharArray()) {
-			out.append(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '.' || c == '/' || c == '-' ? c : '_');
+	/** A scratch manager that records what is registered to it; see the class javadoc. */
+	private static final class RecordingResourceManager extends ReloadableResourceManager {
+		private final List<PreparableReloadListener> recorded = new ArrayList<>();
+
+		private RecordingResourceManager() {
+			super(PackType.CLIENT_RESOURCES);
 		}
-		return out.toString();
+
+		@Override
+		public void registerReloadListener(PreparableReloadListener listener) {
+			recorded.add(listener);
+		}
+
+		private List<PreparableReloadListener> recorded() {
+			return recorded;
+		}
 	}
 }

@@ -16,10 +16,6 @@
 
 package net.forbric.kernel.runtime;
 
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
-import java.lang.reflect.Type;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -27,285 +23,165 @@ import com.google.gson.JsonDeserializationContext;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
-import com.google.gson.JsonSyntaxException;
 
+import net.minecraft.client.renderer.block.model.BlockModel;
 import net.minecraft.client.resources.model.UnbakedModel;
-import net.minecraft.client.resources.model.cuboid.CuboidModel;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.GsonHelper;
-import net.neoforged.neoforge.client.model.UnbakedModelParser;
+import net.neoforged.neoforge.client.model.geometry.GeometryLoaderManager;
 
 import net.forbric.kernel.transform.ModelFormatFunnelInjector;
 import net.forbric.kernel.util.ForbricLog;
-import net.forbric.kernel.util.Reflect;
 
 /**
  * Lets a model format NeoForge does not own be parsed by the code that does own it.
  *
- * <h2>Three model-format mechanisms, one deserializer</h2>
+ * <h2>One deserializer, two readers of the {@code "loader"} key</h2>
  *
- * <p>Every block model on the merged base is read by {@code UnbakedModelParser.parse}, which goes through
- * {@code CuboidModel.GSON}, whose adapter for {@code UnbakedModel} is NeoForge's
- * {@code UnbakedModelParser$Deserializer}. Natively each ecosystem has its own way to plug a custom format in, and
- * two of the three sit BEHIND that deserializer:
- * <ul>
- *   <li>NeoForge: {@code "loader": "<id>"} dispatched to a registered {@code UnbakedModelLoader}. This is the
- *       deserializer itself, and it throws {@code Unknown loader} for any id it did not register — before it ever
- *       reaches {@code context.deserialize(json, CuboidModel.class)}.</li>
- *   <li>MinecraftForge: the same {@code "loader"} key, read by the vanilla {@code CuboidModel$Deserializer}
- *       ({@code getElements} asks {@code ForgeHooksClient.deserializeBlockModelGeometry}, which asks
- *       {@code GeometryLoaderManager}). Mods that add a format without a geometry loader hook that same
- *       deserializer: fusion's {@code CuboidModelDeserializerMixin} claims {@code "loader": "fusion:model"} at
- *       its HEAD. On the merged base NeoForge's throw comes first, so every one of them was unreachable —
- *       MinecraftForge's own {@code forge:} loaders included.</li>
- *   <li>Fabric: {@code "fabric:type"}, dispatched through fabric-model-loading's {@code UnbakedModelDeserializer}
- *       registry by a pair of injectors on {@code ModelManager} that cannot fit the merged base
- *       ({@code GuestInjectorPruner} removes them). NeoForge's deserializer never looks at the key, so the model
- *       parsed as a plain empty cuboid.</li>
- * </ul>
+ * <p>Every block model on the 1.21.1 merged base is read by NeoForge's
+ * {@code ExtendedBlockModelDeserializer} (the {@code BlockModel} adapter the game's GSON holds). Its
+ * {@code deserialize} calls the vanilla {@code BlockModel$Deserializer} first and then
+ * {@code deserializeGeometry(context, json)}, which reads {@code "loader"} and dispatches to a NeoForge
+ * {@code IGeometryLoader} — and THROWS {@code Model loader '%s' not found. Registered loaders: %s} for an id it did
+ * not register. That happens before anything else can read the key.
  *
- * <p>What that cost, measured on the sweep90 pack: all 220 of Traveler's Backpack's backpack models failed to
- * bake with {@code Expected BackpackDynamicModel, instead received ...CuboidModel} (its models are
- * {@code "fabric:type": "travelersbackpack:backpack"}), and Rechiseled Anti-Blocks' 24 connected-texture models
- * ({@code "loader": "fusion:model"}) would each have died on {@code Unknown loader} the moment their overlay was
- * mounted.
+ * <p>On MinecraftForge the same key is read by the vanilla deserializer's geometry hook, and mods that add a format
+ * without a geometry loader hook that deserializer too (fusion claims {@code "loader": "fusion:model"} at its
+ * HEAD). On the merged base NeoForge's throw — or its geometry dispatch — comes first, so none of those readers is
+ * ever reached.
  *
  * <h2>The funnel</h2>
  *
- * <p>{@code ModelFormatFunnelInjector} inserts one call to {@link #foreign} at the top of NeoForge's
- * deserializer, after it has checked that the element is an object and before it reads {@code "loader"}. A
+ * <p>{@code ModelFormatFunnelInjector} inserts one call to {@link #foreign} ahead of NeoForge's dispatch. A
  * non-null answer is returned as the model; null means "NeoForge's", and its dispatch runs exactly as before.
- * What stays unchanged, deliberately:
+ * The rules:
  * <ul>
- *   <li>A {@code "loader"} id NeoForge registered is always NeoForge's. Precedence among the readers of that key
- *       is not renegotiated.</li>
- *   <li>A model naming BOTH keys — one JSON shared by a mod's builds, which {@code fabric:type} being namespaced
- *       allows — is decided by the build that is installed, because only that build registered anything.
- *       {@code fabric:type} claims it only when fabric-model-loading has a deserializer under that id; a type
- *       nobody registered, or one that does not even parse, leaves the model to its {@code "loader"}, exactly
- *       as a loader without Fabric's reader would. Without that, installing the NeoForge or MinecraftForge build
- *       of such a mod next to fabric-api failed every one of its models on Fabric's "unknown type" error. When
- *       both ids ARE registered, fabric:type wins: the registration is the mod's Fabric build saying it is the
- *       one running, whereas a NeoForge id is as likely NeoForge's own built-in, and on Fabric — the only
- *       loader that reads this key — {@code "loader"} means nothing.</li>
- *   <li>A string loader nobody claims still fails the model — with MinecraftForge's
- *       {@code Model loader '%s' not found} instead of NeoForge's message, because that is the last deserializer
- *       that looked. There is no "whose namespace is this" heuristic: {@code forge:} is not a mod jar's namespace,
- *       and a loader's namespace need not be its mod's.</li>
+ *   <li>A {@code "loader"} id NeoForge registered is always NeoForge's. Precedence between the two readers of that
+ *       key is not renegotiated.</li>
+ *   <li>An id NeoForge does NOT own is parsed by the vanilla {@code BlockModel$Deserializer} directly, so a
+ *       MinecraftForge geometry loader or a guest hook on that deserializer reads the key as it does on
+ *       MinecraftForge. An id none of them claims still parses as a plain cuboid (the merged deserializer ignores
+ *       the key entirely), which is the model the JSON describes minus the geometry.</li>
+ *   <li>A string loader that will not even parse as a resource location is left to NeoForge, whose
+ *       {@code ResourceLocation.parse} reports it in its own words.</li>
  *   <li>NeoForge's object form, {@code {"id": ..., "optional": ...}}, is NeoForge's own dialect; a non-optional
- *       miss keeps NeoForge's error.</li>
+ *       miss keeps NeoForge's error. An OPTIONAL miss means "parse this as a plain model", and the plain parse
+ *       gets a copy without the key.</li>
  * </ul>
- *
- * <p>One NeoForge behaviour is repaired on the way through, because the funnel would otherwise inherit it: an
- * OPTIONAL object-form loader that is absent means "parse this as a plain model", and NeoForge does that by
- * falling through to the cuboid deserializer with the object still under {@code "loader"} — where the merged
- * {@code getElements} is MinecraftForge's, reads the key as a string and throws. The plain parse gets a copy
- * without the key, which is what native NeoForge's deserializer would have seen.
  *
  * <h2>Linkage errors stay inside one model</h2>
  *
- * <p>The funnel runs guest code — a Fabric mod's deserializer, MinecraftForge's geometry loaders, fusion's hook —
- * inside {@code ModelManager.lambda$loadBlockModels$2}, whose per-model {@code catch} covers {@code Exception}
- * and nothing else. A {@code NoSuchMethodError} or {@code NoClassDefFoundError} from code compiled against
- * another base is not an {@code Exception}: it would leave that catch, fail the whole block-model load, and a
- * failed resource reload makes Minecraft drop every resource pack, reload, and sit on a black screen. So a
- * {@code LinkageError} from anything the funnel dispatches to is rethrown as a {@code JsonParseException} naming
- * the format: that model fails, logged by the game's own "Failed to load model", and the reload goes on.
+ * <p>The funnel runs guest code — MinecraftForge's geometry loaders, fusion's hook — inside
+ * {@code ModelManager}'s per-model {@code catch}, which covers {@code Exception} and nothing else. A
+ * {@code NoSuchMethodError} or {@code NoClassDefFoundError} from code compiled against another base is not an
+ * {@code Exception}: it would leave that catch, fail the whole block-model load, and a failed resource reload makes
+ * Minecraft drop every resource pack, reload, and sit on a black screen. So a {@code LinkageError} from anything
+ * the funnel dispatches to is rethrown as a {@code JsonParseException} naming the format: that model fails, logged
+ * by the game's own "Failed to load model", and the reload goes on.
+ *
+ * <p><b>PORT(1.21.1), two losses, both recorded rather than papered over:</b>
+ * <ul>
+ *   <li>Fabric's {@code "fabric:type"} route is GONE. 26.2 read it through fabric-model-loading's
+ *       {@code UnbakedModelDeserializer} registry. 1.21.1's {@code fabric-model-loading-api-v1} (nested in
+ *       fabric-api 0.116.17+1.21.1, checked with javap) has no such class and no {@code fabric:type} string
+ *       anywhere: its surface is {@code ModelLoadingPlugin} / {@code ModelModifier} / {@code ModelResolver}. A
+ *       model carrying only {@code fabric:type} therefore parses as a plain cuboid here, exactly as it does on any
+ *       loader without that reader. Restoring it needs a replacement written against {@code ModelResolver}.</li>
+ *   <li>MinecraftForge's own GEOMETRY LOADERS are unreachable, and the funnel cannot fix that: the merged
+ *       {@code BlockModel$Deserializer} names no geometry class at all (checked against its constant pool), and
+ *       Forge's {@code IUnbakedGeometry} cannot be attached through NeoForge's {@code BlockGeometryBakingContext}.
+ *       So a {@code "loader"} id only MinecraftForge knows now yields the plain cuboid. Restoring it is a boot-side
+ *       seam (an injector into the merged deserializer that re-adds the Forge geometry hook), not a change here.</li>
+ * </ul>
  *
  * <p>{@code -Dforbric.modelFormatFunnel=off} restores the previous behaviour on both halves: the injector is not
  * registered, and this method answers null.
  */
 public final class KernelModelFormats {
-	private static final String FABRIC_KEY = "fabric:type";
 	private static final String LOADER_KEY = "loader";
-	private static final String FABRIC_API = "net.fabricmc.fabric.api.client.model.loading.v1.UnbakedModelDeserializer";
 
 	/** One line per route and format id, the first time it is taken — the live evidence, bounded by format count. */
 	private static final Set<String> ANNOUNCED = ConcurrentHashMap.newKeySet();
-
-	/** fabric-model-loading's registry lookup and its deserializer call, resolved once, lazily. */
-	private static volatile MethodHandle fabricLookup;
-	private static volatile MethodHandle fabricDeserialize;
-	private static volatile boolean fabricResolved;
-	private static volatile boolean reportedFabricAbsent;
 
 	private KernelModelFormats() {
 	}
 
 	/**
-	 * The model for {@code json} when its format is not NeoForge's to parse, or null to let NeoForge's
-	 * deserializer carry on.
+	 * The model for {@code json} when its format is not NeoForge's to parse, or null to let NeoForge's deserializer
+	 * carry on.
 	 *
-	 * <p>Called from NeoForge's {@code UnbakedModelParser$Deserializer.deserialize}, so its descriptor is the one
-	 * the inserted call site pushes: the {@code JsonObject} NeoForge has just unwrapped and the context it was
-	 * handed.
+	 * <p>Called from the head of NeoForge's {@code ExtendedBlockModelDeserializer.deserialize}, so its descriptor
+	 * is the one the inserted call site pushes: the {@code JsonObject} NeoForge has just unwrapped and the context
+	 * it was handed. {@code ModelFormatFunnelInjector} is re-anchored there on 1.21.1 (26.2 anchored inside
+	 * {@code UnbakedModelParser$Deserializer}, which does not exist here).
 	 */
 	public static UnbakedModel foreign(JsonObject json, JsonDeserializationContext context) {
 		if (!enabled() || json == null) return null;
-		if (json.has(FABRIC_KEY)) {
-			UnbakedModel fabric = fabricType(json, context);
-			if (fabric != null) return fabric;
-		}
 		JsonElement loader = json.get(LOADER_KEY);
 		if (loader == null) return null;
 		if (loader.isJsonPrimitive() && loader.getAsJsonPrimitive().isString()) {
-			Identifier id = Identifier.tryParse(loader.getAsString());
-			// An id that does not parse is left to NeoForge, whose Identifier.parse reports it as it always has.
+			ResourceLocation id = ResourceLocation.tryParse(loader.getAsString());
+			// An id that does not parse is left to NeoForge, whose ResourceLocation.parse reports it as it always has.
 			if (id == null || neoForgeOwns(id)) return null;
 			announce(LOADER_KEY, id, "\"loader\": \"%s\" is not a NeoForge loader — handed to the vanilla cuboid "
-					+ "deserializer, where MinecraftForge's geometry loaders and guest hooks on it (fusion) read the "
-					+ "key as they do on MinecraftForge; an id none of them claims still fails the model");
-			return asCuboid(json, context, "\"loader\": \"" + id + "\"");
+					+ "deserializer, where a MinecraftForge geometry loader or a guest hook on it (fusion) reads the "
+					+ "key as it does on MinecraftForge; an id none of them claims parses as a plain model");
+			return asBlockModel(json, context, "\"loader\": \"" + id + "\"");
 		}
 		if (loader.isJsonObject()) {
 			JsonObject spec = loader.getAsJsonObject();
 			if (!GsonHelper.isStringValue(spec, "id")) return null;
-			Identifier id = Identifier.tryParse(spec.get("id").getAsString());
+			ResourceLocation id = ResourceLocation.tryParse(spec.get("id").getAsString());
 			if (id == null || neoForgeOwns(id)) return null;
 			// NeoForge's own dialect: a required miss is NeoForge's error to report, in NeoForge's words.
 			if (!GsonHelper.getAsBoolean(spec, "optional", false)) return null;
 			JsonObject plain = json.deepCopy();
 			plain.remove(LOADER_KEY);
 			announce("optional " + LOADER_KEY, id, "optional loader %s is absent — parsed as a plain model without "
-					+ "the loader object, which MinecraftForge's half of the merged cuboid deserializer would read as a "
-					+ "string and reject");
-			return asCuboid(plain, context, "a plain model (optional loader " + id + " absent)");
+					+ "the loader object, which the deserializer would otherwise have to reject");
+			return asBlockModel(plain, context, "a plain model (optional loader " + id + " absent)");
 		}
 		return null;
 	}
 
 	/**
-	 * fabric-model-loading's answer for a {@code fabric:type} model, or null when there is none to give.
-	 *
-	 * <p>The key is read exactly as fabric-api's {@code UnbakedModelJsonDeserializer} reads it — a string, or an
-	 * object with {@code id} and {@code optional} — with its two error messages, so a broken model fails the same
-	 * way it does on Fabric. The one difference is an OPTIONAL type that nobody registered: Fabric then parses a
-	 * plain cuboid, and here NeoForge's deserializer carries on, which for a model with no {@code "loader"} is the
-	 * same plain cuboid.
-	 *
-	 * <p>A model that also names a {@code "loader"} is claimed only by a type that resolves to a registered
-	 * deserializer. Any other answer — unregistered, or a key that will not parse — is null, and the loader key
-	 * decides, as it does on every loader that does not read this one (see the class javadoc).
-	 *
-	 * <p>Without fabric-model-loading nothing reads the key, on any loader — so it is not even parsed then.
-	 */
-	private static UnbakedModel fabricType(JsonObject json, JsonDeserializationContext context) {
-		if (!resolveFabric()) return null;
-		boolean loaderDecidesAMiss = json.has(LOADER_KEY);
-		JsonElement spec = json.get(FABRIC_KEY);
-		String type;
-		boolean optional;
-		if (spec.isJsonPrimitive()) {
-			type = spec.getAsString();
-			optional = false;
-		} else if (spec.isJsonObject() && (!loaderDecidesAMiss || GsonHelper.isStringValue(spec.getAsJsonObject(), "id"))) {
-			JsonObject object = spec.getAsJsonObject();
-			type = GsonHelper.getAsString(object, "id");
-			optional = GsonHelper.getAsBoolean(object, "optional", false);
-		} else {
-			if (loaderDecidesAMiss) return null;
-			throw new JsonSyntaxException("Expected " + FABRIC_KEY + " to be a string or object, was "
-					+ GsonHelper.getType(spec));
-		}
-		Identifier id = loaderDecidesAMiss ? Identifier.tryParse(type) : Identifier.parse(type);
-		if (id == null) return null;
-
-		Object deserializer;
-		try {
-			deserializer = fabricLookup.invoke(id);
-		} catch (Throwable t) {
-			throw rethrow(t, FABRIC_KEY + " " + id);
-		}
-		if (deserializer == null) {
-			if (loaderDecidesAMiss) {
-				announce(FABRIC_KEY + " miss", id, FABRIC_KEY + " %s has no deserializer registered, and the model "
-						+ "also names a \"loader\" — left to that key, as on a loader that does not read " + FABRIC_KEY
-						+ " (the build of this mod that is installed is not its Fabric one)");
-				return null;
-			}
-			if (optional) return null;
-			throw new JsonParseException("Cannot deserialize custom unbaked model of unknown type '" + id + "'");
-		}
-		announce(FABRIC_KEY, id, FABRIC_KEY + " %s parsed by the deserializer its mod registered with "
-				+ "fabric-model-loading — the two injectors that did this on Fabric cannot fit the merged base");
-		try {
-			return (UnbakedModel) fabricDeserialize.invoke(deserializer, json, context);
-		} catch (Throwable t) {
-			throw rethrow(t, FABRIC_KEY + " " + id);
-		}
-	}
-
-	/**
 	 * Whether NeoForge registered a loader under {@code id}.
+	 *
+	 * <p>This is the same registry {@code deserializeGeometry} consults, so an id answered "NeoForge's" here is
+	 * dispatched there one instruction later and an id answered otherwise really would have thrown.
 	 *
 	 * <p>Before NeoForge's loader registry is initialised the lookup NPEs; that is answered "NeoForge's", so the
 	 * failure is NeoForge's own, raised one instruction later by the code that always raised it.
 	 */
-	private static boolean neoForgeOwns(Identifier id) {
+	private static boolean neoForgeOwns(ResourceLocation id) {
 		try {
-			return UnbakedModelParser.get(id) != null;
+			return GeometryLoaderManager.get(id) != null;
 		} catch (RuntimeException notYetInitialised) {
 			return true;
 		}
 	}
 
 	/**
-	 * The vanilla deserializer's answer, reached the way NeoForge reaches it for a model without a loader.
+	 * The vanilla deserializer's answer, reached without going back through Gson.
 	 *
-	 * <p>Through {@code (Type)} on purpose: the generic {@code deserialize} would otherwise make javac cast the
-	 * result to {@code CuboidModel}, and a guest hook on that deserializer answers with whatever its format builds.
-	 * NeoForge's own call site casts only to {@code UnbakedModel}, so this does too.
+	 * <p>{@code context.deserialize(json, BlockModel.class)} is NOT usable: on 1.21.1 the registered adapter for
+	 * {@code BlockModel} is NeoForge's {@code ExtendedBlockModelDeserializer}, the very class this is called from, so
+	 * it would re-enter the funnel with the same object. Constructing the vanilla deserializer directly reaches the
+	 * same code NeoForge's own {@code super.deserialize} reaches, with the real context for nested reads.
 	 *
 	 * <p>{@code format} names what was handed on, for the one failure this does not pass through as it came: a
 	 * {@code LinkageError} (see the class javadoc).
 	 */
-	private static UnbakedModel asCuboid(JsonObject json, JsonDeserializationContext context, String format) {
-		Object parsed;
+	private static UnbakedModel asBlockModel(JsonObject json, JsonDeserializationContext context, String format) {
 		try {
-			parsed = context.deserialize(json, (Type) CuboidModel.class);
+			return new BlockModel.Deserializer().deserialize(json, BlockModel.class, context);
 		} catch (LinkageError e) {
 			throw doesNotLink(format, e);
 		}
-		return (UnbakedModel) parsed;
 	}
 
-	private static boolean resolveFabric() {
-		if (!fabricResolved) {
-			synchronized (KernelModelFormats.class) {
-				if (!fabricResolved) {
-					try {
-						Class<?> api = Class.forName(FABRIC_API, false, KernelModelFormats.class.getClassLoader());
-						MethodHandles.Lookup lookup = MethodHandles.publicLookup();
-						fabricLookup = lookup.findStatic(api, "get", MethodType.methodType(api, Identifier.class));
-						fabricDeserialize = lookup.findVirtual(api, "deserialize", MethodType.methodType(
-								UnbakedModel.class, JsonObject.class, JsonDeserializationContext.class));
-					} catch (Throwable absent) {
-						fabricLookup = null;
-						fabricDeserialize = null;
-					}
-					fabricResolved = true;
-				}
-			}
-		}
-		if (fabricLookup != null && fabricDeserialize != null) return true;
-		if (!reportedFabricAbsent) {
-			reportedFabricAbsent = true;
-			ForbricLog.info("[Forbric/ModelFormats] a model declares %s but fabric-model-loading is not installed — "
-					+ "it parses as a plain model, as it would on any loader without fabric-api", FABRIC_KEY);
-		}
-		return false;
-	}
-
-	private static void announce(String route, Identifier id, String what) {
+	private static void announce(String route, ResourceLocation id, String what) {
 		if (ANNOUNCED.add(route + " " + id)) ForbricLog.info("[Forbric/ModelFormats] " + what, id);
-	}
-
-	private static RuntimeException rethrow(Throwable t, String format) {
-		Throwable cause = Reflect.unwrap(t);
-		if (cause instanceof RuntimeException runtime) return runtime;
-		if (cause instanceof LinkageError linkage) return doesNotLink(format, linkage);
-		if (cause instanceof Error error) throw error;
-		return new JsonParseException(cause);
 	}
 
 	/**

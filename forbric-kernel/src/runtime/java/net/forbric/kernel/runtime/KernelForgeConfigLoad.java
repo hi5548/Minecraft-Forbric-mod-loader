@@ -49,7 +49,9 @@ public final class KernelForgeConfigLoad {
         Path directory = FMLPaths.CONFIGDIR.get();
         List<String> opened = new ArrayList<>();
         for (ModConfig.Type type : types) {
-            Set<ModConfig> configs = ConfigTracker.configSets().get(type);
+            // PORT(1.21.1): ConfigTracker is a singleton on 1.21.1 (public static final INSTANCE); the static
+            // accessor 26.2 had does not exist. Verified against forge-runtime.jar 52.1.16.
+            Set<ModConfig> configs = ConfigTracker.INSTANCE.configSets().get(type);
             List<ModConfig> snapshot;
             if (configs == null) snapshot = List.of();
             else synchronized (configs) { snapshot = List.copyOf(configs); }

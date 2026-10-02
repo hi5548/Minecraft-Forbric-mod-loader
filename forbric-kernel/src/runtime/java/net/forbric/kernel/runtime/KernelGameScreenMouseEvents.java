@@ -23,6 +23,7 @@ import net.forbric.kernel.util.ForbricLog;
 import net.forbric.kernel.util.Reflect;
 import net.minecraftforge.client.event.ForgeEventFactoryClient;
 import net.minecraftforge.client.event.ScreenEvent;
+import net.minecraftforge.common.MinecraftForge;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.IEventBus;
 
@@ -71,12 +72,14 @@ import net.neoforged.bus.api.IEventBus;
  *
  * <h2>Coordinates</h2>
  *
- * <p>Nothing is converted across the bridge and nothing may be. Both families' events carry GUI-SCALED mouse
- * coordinates: the merged {@code MouseHandler.onButton} builds its {@code MouseButtonEvent} from
- * {@code getScaledXPos}/{@code getScaledYPos} (bci 197-238) and NeoForge's {@code ScreenEvent.MouseInput} stores
- * exactly those, while MinecraftForge's own dead call site was passed the same two numbers. Handing a mod raw
- * window pixels instead would leave it hit-testing the wrong slot — a bug that looks like the mod misbehaving
- * rather than like a bridge being wrong.
+ * <p>PORT(1.21.1): 26.2's merged {@code MouseHandler.onButton} wrapped the click in a mouse-button event object that
+ * both families' events carried; 1.21.1 has no such type, so the bridge hands each constructor the raw scaled
+ * doubles and button both take. Nothing is converted across the bridge and nothing may be. Both families' events
+ * carry GUI-SCALED mouse coordinates: the merged {@code MouseHandler.onButton} builds its event from
+ * {@code getScaledXPos}/{@code getScaledYPos} and NeoForge's {@code ScreenEvent.MouseInput} stores exactly those,
+ * while MinecraftForge's own dead call site was passed the same two numbers. Handing a mod raw window pixels
+ * instead would leave it hit-testing the wrong slot — a bug that looks like the mod misbehaving rather than like a
+ * bridge being wrong.
  */
 public final class KernelGameScreenMouseEvents {
 	private KernelGameScreenMouseEvents() {
@@ -102,9 +105,9 @@ public final class KernelGameScreenMouseEvents {
 				"ScreenEvent.MouseButtonPressed.Pre",
 				"a MinecraftForge mod cannot see or refuse a click inside a screen — every inventory-tweak mod's "
 						+ "click handling does nothing",
-				neo -> ScreenEvent.MouseButtonPressed.Pre.BUS.post(
+				neo -> MinecraftForge.EVENT_BUS.post(
 						new ScreenEvent.MouseButtonPressed.Pre(neo.getScreen(), neo.getMouseX(), neo.getMouseY(),
-								neo.getMouseButtonEvent())));
+								neo.getButton())));
 	}
 
 	/** NeoForge {@code ScreenEvent.MouseButtonReleased.Pre} → MinecraftForge's, cancel carried back. */
@@ -114,7 +117,7 @@ public final class KernelGameScreenMouseEvents {
 				"ScreenEvent.MouseButtonReleased.Pre",
 				"a MinecraftForge mod never sees a mouse button released over a screen, so a drag it started is "
 						+ "never ended and the stack it was moving is left mid-move",
-				neo -> ScreenEvent.MouseButtonReleased.Pre.BUS.post(
+				neo -> MinecraftForge.EVENT_BUS.post(
 						new ScreenEvent.MouseButtonReleased.Pre(neo.getScreen(), neo.getMouseX(), neo.getMouseY(),
 								neo.getButton())));
 	}

@@ -181,9 +181,10 @@ public final class KernelModConfigScreens {
 	/** Traditional MinecraftForge's answer: a different registry, a different shape, the same question. */
 	private static final class Forge {
 		static Screen resolve(String modId, Screen parent, boolean probe) {
-			// Static, with no get(): the two families' ModList classes share a name and not much else.
+			// PORT(1.21.1): the lookup is on the singleton. 1.21.1's MinecraftForge ModList keeps the container
+			// index on the instance returned by the static get(), exactly as the NeoForge side above does.
 			Optional<? extends net.minecraftforge.fml.ModContainer> container =
-					net.minecraftforge.fml.ModList.getModContainerById(modId);
+					net.minecraftforge.fml.ModList.get().getModContainerById(modId);
 			if (container.isEmpty()) return null;
 			Optional<BiFunction<Minecraft, Screen, Screen>> factory =
 					net.minecraftforge.client.ConfigScreenHandler.getScreenFactoryFor(

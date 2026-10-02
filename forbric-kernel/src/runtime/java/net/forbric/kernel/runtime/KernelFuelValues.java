@@ -22,7 +22,6 @@ import net.forbric.kernel.util.ForbricLog;
 import net.forbric.kernel.util.Reflect;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.RecipeType;
-import net.minecraft.world.level.block.entity.FuelValues;
 import net.minecraftforge.event.ForgeEventFactory;
 import net.neoforged.neoforge.event.EventHooks;
 
@@ -32,9 +31,9 @@ import net.neoforged.neoforge.event.EventHooks;
  * <h2>The shape, which is the other way round from the bridges</h2>
  *
  * <p>Every other seam in this package is NeoForge-won: its hook survives and MinecraftForge's is re-emitted
- * from a listener. This one is the reverse. {@code FuelValues.burnDuration} on the merged base calls
- * MinecraftForge's {@code getItemBurnTime} and nothing else, so NeoForge's {@code FurnaceFuelBurnTimeEvent} is
- * never posted — and {@code balm}, in the test pack, subscribes to it.
+ * from a listener. This one is the reverse. {@code AbstractFurnaceBlockEntity.getBurnDuration} on the merged
+ * base calls MinecraftForge's {@code ForgeHooks.getBurnTime} and nothing else, so NeoForge's
+ * {@code FurnaceFuelBurnTimeEvent} is never posted — and {@code balm}, in the test pack, subscribes to it.
  *
  * <p>A listener cannot fix that direction: NeoForge's hook is a static call, not something to subscribe to. So
  * the call site is redirected here and both are asked, which is also why this lives beside the bridges rather
@@ -47,8 +46,21 @@ import net.neoforged.neoforge.event.EventHooks;
  * chaining means two mods from two ecosystems can each adjust a burn time, which is the whole premise of
  * running them together.
  *
- * <p>NeoForge's hook takes the {@code FuelValues} the call site is inside, which is why the redirect pushes the
- * receiver: its four-argument shape cannot be reached from MinecraftForge's three-argument one.
+ * <h2>PORT(1.21.1): the receiver the hook used to need is gone</h2>
+ *
+ * <p>On 26.2 both hooks carried the {@code FuelValues} the call site was inside —
+ * {@code EventHooks.getItemBurnTime(ItemStack, int, RecipeType, FuelValues)} — which is why the redirect pushed
+ * the receiver as well. 1.21.1 has no {@code FuelValues} class at all: the fuel table is
+ * {@code AbstractFurnaceBlockEntity.getFuel()}, the burn time is the instance method
+ * {@code getBurnDuration(ItemStack)}, and NeoForge 21.1's hook is
+ * {@code EventHooks.getItemBurnTime(ItemStack, int, RecipeType)} — verified with {@code javap} against
+ * {@code neoforge-runtime.jar} (21.1.252). The fourth parameter is dropped rather than replaced: there is no
+ * 1.21.1 object that would mean the same thing.
+ *
+ * <p>Both the redirect's anchor and its descriptor therefore have to be re-derived for 1.21.1
+ * ({@code getBurnDuration(ItemStack)I} instead of {@code FuelValues.burnDuration(ItemStack, RecipeType)}), which
+ * is the transform layer's ({@code FabricFuelValuesInjector}/{@code ForbricMergedBaseCompatTransformer}) and not
+ * this file's. Until it is done the merged base still asks MinecraftForge only.
  */
 public final class KernelFuelValues {
 	private static final AtomicBoolean WARNED = new AtomicBoolean();
@@ -61,9 +73,8 @@ public final class KernelFuelValues {
 	 * Both ecosystems' burn-time hooks, in order.
 	 *
 	 * @param base what the game's own table says, before either ecosystem is consulted
-	 * @param fuel the {@code FuelValues} the call site is inside; NeoForge's hook requires it
 	 */
-	public static int burnDuration(ItemStack stack, int base, RecipeType<?> type, FuelValues fuel) {
+	public static int burnDuration(ItemStack stack, int base, RecipeType<?> type) {
 		int value = base;
 		try {
 			value = ForgeEventFactory.getItemBurnTime(stack, value, type);
@@ -71,10 +82,12 @@ public final class KernelFuelValues {
 			warnOnce("MinecraftForge", t);
 		}
 		try {
-			value = EventHooks.getItemBurnTime(stack, value, type, fuel);
+			// PORT(1.21.1): three arguments, not four — 21.1's hook carries no FuelValues (see the class doc).
+			value = EventHooks.getItemBurnTime(stack, value, type);
 			if (PROVED.compareAndSet(false, true)) {
-				ForbricLog.info("[Forbric/Fuel] both ecosystems now set burn times — the merged FuelValues asked "
-						+ "only MinecraftForge, so NeoForge's FurnaceFuelBurnTimeEvent was never posted");
+				ForbricLog.info("[Forbric/Fuel] both ecosystems now set burn times — the merged "
+						+ "AbstractFurnaceBlockEntity.getBurnDuration asked only MinecraftForge, so NeoForge's "
+						+ "FurnaceFuelBurnTimeEvent was never posted");
 			}
 		} catch (Throwable t) {
 			warnOnce("NeoForge", t);

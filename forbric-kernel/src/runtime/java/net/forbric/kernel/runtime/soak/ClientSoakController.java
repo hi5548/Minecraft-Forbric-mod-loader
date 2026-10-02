@@ -34,7 +34,15 @@ import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.LevelResource;
 
-/** Opt-in, owned-world integrated-server soak. No references to a retired server survive except weak probes. */
+/**
+ * Opt-in, owned-world integrated-server soak. No references to a retired server survive except weak probes.
+ *
+ * <p>PORT(1.21.1): three 1.21.1 API deltas, each marked at its call site: {@code ResourceKey.identifier()} is
+ * {@code location()}; {@code ServerPlayer.teleportTo(ServerLevel, x, y, z, Set&lt;RelativeMovement&gt;, yaw,
+ * pitch, boolean)} lost its trailing boolean and is 1.21.1's 7-argument overload; and {@code
+ * Minecraft.disconnectWithSavingScreen()} is 1.21.1's {@code Minecraft.disconnect()} (which shows vanilla's
+ * "Saving world" {@code ProgressScreen}).
+ */
 public final class ClientSoakController {
 	private static ClientSoakController instance;
 	private final Path run, world, output;
@@ -174,7 +182,8 @@ public final class ClientSoakController {
 		}
 		int point = -1; String dimension = "none"; double x = 0, z = 0;
 		if (player != null) {
-			dimension = player.level().dimension().identifier().toString(); x = player.getX(); z = player.getZ();
+			// PORT(1.21.1): ResourceKey.identifier() is 1.21.1's ResourceKey.location().
+			dimension = player.level().dimension().location().toString(); x = player.getX(); z = player.getZ();
 			for (int i = 0; i < 6; i++) if (player.level() == level(server, i / 2) && Math.abs(x - COORDINATES[i] - .5) < 2 && Math.abs(z - COORDINATES[i] - .5) < 2) point = i;
 		}
 		return new Observation(new Sample(System.nanoTime(), id, server.getTickCount(), server.overworld().getGameTime(),
@@ -199,12 +208,17 @@ public final class ClientSoakController {
 						if (players.size() != 1) throw new IllegalStateException("soak requires exactly one actual connected player");
 						ServerPlayer player = players.get(0);
 						preparePlayer(player);
+						// PORT(1.21.1): 26.2's teleportTo(ServerLevel, x, y, z, Set<RelativeMovement>, yaw, pitch,
+						// boolean) has no trailing boolean on 1.21.1; its 7-arg overload returns the same
+						// accepted/refused boolean this checks.
 						if (!player.teleportTo(level(server, point / 2), COORDINATES[point] + .5, 160, COORDINATES[point] + .5,
-								Set.of(), 0, 0, true)) throw new IllegalStateException("native dimension teleport refused point " + point);
+								Set.of(), 0f, 0f)) throw new IllegalStateException("native dimension teleport refused point " + point);
 					} catch (Throwable failure) { asynchronousFailure.set("movement failed: " + failure); }
 				});
 			}
-			case DISCONNECT -> { write("save-and-disconnect", fields("server", serial)); blocking("native save-and-disconnect", () -> minecraft.disconnectWithSavingScreen()); }
+			// PORT(1.21.1): 26.2's Minecraft.disconnectWithSavingScreen() is 1.21.1's Minecraft.disconnect(),
+			// which shows vanilla's "Saving world" ProgressScreen while the integrated server saves.
+			case DISCONNECT -> { write("save-and-disconnect", fields("server", serial)); blocking("native save-and-disconnect", () -> minecraft.disconnect()); }
 			case OPEN_WORLD -> {
 				owner(world.resolve(".forbric-soak-world")); write("open", fields("world", worldName));
 				blocking("native world open", () -> minecraft.createWorldOpenFlows().openWorld(worldName,
@@ -223,7 +237,7 @@ public final class ClientSoakController {
 	private void finish(Minecraft minecraft) throws Exception {
 		if (finished) return;
 		finished = true;
-		if (current != null && ownershipChecked) { blocking("native save-and-disconnect while finishing", () -> minecraft.disconnectWithSavingScreen()); current = null; }
+		if (current != null && ownershipChecked) { blocking("native save-and-disconnect while finishing", () -> minecraft.disconnect()); current = null; }
 		List<Map<String, Object>> weak = weakEvidence();
 		boolean completed = machine.state() == State.FINISHED && machine.activityComplete();
 		List<Map<String, Object>> released = List.of(), after = weak;

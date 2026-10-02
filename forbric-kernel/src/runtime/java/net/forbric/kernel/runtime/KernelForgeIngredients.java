@@ -29,7 +29,7 @@ import com.mojang.serialization.DynamicOps;
 
 import net.forbric.kernel.util.ForbricLog;
 import net.forbric.kernel.util.Reflect;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraftforge.common.ForgeHooks;
 import net.minecraftforge.common.crafting.ingredients.AbstractIngredient;
@@ -45,7 +45,7 @@ import net.minecraftforge.registries.ForgeRegistries;
  * inserts one instruction before that single {@code PUTSTATIC}, handing the NeoForge codec through here.
  *
  * <p>The returned codec composes nothing itself: on every decode it asks the carrier's own
- * {@code ForgeHooks.ingredientBaseCodec(neo)} — Forge's real {@code either(registry dispatch, base)} with the
+ * {@code ForgeHooks.enhanceIngredientCodec(neo)} — Forge's real {@code either(registry dispatch, base)} with the
  * NeoForge codec as its base — so a {@code neoforge:*} or vanilla ingredient falls through to NeoForge exactly as a
  * vanilla one falls through to vanilla on genuine Forge. Encoding routes only Forge-built ingredients
  * ({@link AbstractIngredient} subclasses) through Forge: everything else encodes through NeoForge, because Forge's
@@ -69,7 +69,9 @@ public final class KernelForgeIngredients {
 	public static Codec<Ingredient> alsoAskMinecraftForge(Codec<Ingredient> neo) {
 		if ("off".equalsIgnoreCase(System.getProperty(PROPERTY, "on"))) return neo;
 		// Codec.lazyInitialized inside: the registry is touched at the first decode, not here.
-		Codec<Ingredient> forge = ForgeHooks.ingredientBaseCodec(neo);
+		// PORT(1.21.1): Forge 52 names the same composition ForgeHooks.enhanceIngredientCodec(base) —
+		// ingredientBaseCodec is the 26.2 name. Verified with javap against forge-runtime.jar (52.1.16).
+		Codec<Ingredient> forge = ForgeHooks.enhanceIngredientCodec(neo);
 		return new Codec<>() {
 			@Override
 			public <T> DataResult<Pair<Ingredient, T>> decode(DynamicOps<T> ops, T input) {
@@ -124,7 +126,7 @@ public final class KernelForgeIngredients {
 			if (type == null) return null;
 			Optional<String> name = ops.getStringValue(type).result();
 			if (name.isEmpty()) return null;
-			Identifier id = Identifier.tryParse(name.get());
+			ResourceLocation id = ResourceLocation.tryParse(name.get());
 			if (id == null) return null;
 			return ForgeRegistries.INGREDIENT_SERIALIZERS.get().containsKey(id) ? name.get() : null;
 		} catch (Throwable t) {

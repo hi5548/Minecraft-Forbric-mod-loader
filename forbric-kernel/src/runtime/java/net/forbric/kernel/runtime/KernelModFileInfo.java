@@ -43,6 +43,9 @@ import net.neoforged.neoforgespi.locating.IModFile;
  * builds its description of every mod it names from {@code getOwningFile().getConfig().getConfigElement(
  * "issueTrackerURL")} and threw on the null, and NeoForge's own mod-loading crash report asks the same object for
  * the same key.
+ *
+ * <p>PORT(1.21.1): 1.21.1's {@code IModFileInfo} declares {@link #moduleName()}, which 26.2's did not; it answers
+ * the first mod's id, as NeoForge's own {@code ModFileInfo} does. The other ten methods are 26.2's, unchanged.
  */
 public final class KernelModFileInfo implements IModFileInfo {
 	private final String modId;
@@ -73,6 +76,16 @@ public final class KernelModFileInfo implements IModFileInfo {
 	@Override
 	public List<IModInfo> getMods() {
 		return owner[0] != null ? List.of(owner[0]) : List.of();
+	}
+
+	/**
+	 * PORT(1.21.1): new on 1.21.1's interface (26.2's {@code IModFileInfo} had no {@code moduleName()}).
+	 * NeoForge's own {@code ModFileInfo} answers the first mod's id, so that is what this answers too — a kernel
+	 * file has no JPMS module descriptor of its own to name.
+	 */
+	@Override
+	public String moduleName() {
+		return getMods().getFirst().getModId();
 	}
 
 	/** The empty string, as before — {@code ModListScreen.updateCache} reads it straight into the info pane. */

@@ -7,6 +7,7 @@ import java.util.function.Consumer;
 import net.forbric.kernel.util.ForbricLog;
 import net.forbric.kernel.util.Reflect;
 import net.minecraftforge.client.event.ForgeEventFactoryClient;
+import net.minecraftforge.common.MinecraftForge;
 import net.neoforged.bus.api.Event;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.IEventBus;
@@ -53,7 +54,7 @@ public final class KernelGameClientNetworkEvents {
 
 	public static void installClientCommands(Object neoBus) {
 		forward((IEventBus) neoBus, RegisterClientCommandsEvent.class, "RegisterClientCommandsEvent",
-				event -> net.minecraftforge.client.event.RegisterClientCommandsEvent.BUS.post(
+				event -> MinecraftForge.EVENT_BUS.post(
 						new net.minecraftforge.client.event.RegisterClientCommandsEvent(event.getDispatcher(),
 								event.getBuildContext())));
 	}

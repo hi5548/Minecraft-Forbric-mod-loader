@@ -31,7 +31,7 @@ import net.forbric.kernel.runtime.transfer.TransferPrecedence.ForgeAnswer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.level.Level;
@@ -43,11 +43,6 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.capabilities.BlockCapability;
 import net.neoforged.neoforge.capabilities.ICapabilityInvalidationListener;
-import net.neoforged.neoforge.transfer.ResourceHandler;
-import net.neoforged.neoforge.transfer.energy.EnergyHandler;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.item.VanillaContainerWrapper;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.capabilities.ForgeCapabilities;
 import net.minecraftforge.common.capabilities.ICapabilityProvider;
@@ -63,6 +58,19 @@ import net.minecraftforge.items.wrapper.InvWrapper;
  * resolved for every operation, so a caller caching our wrapper cannot pin an obsolete capability instance.
  * Among foreign providers the block entity's OWNER answers first, and a generic wrapper of another ecosystem never
  * speaks for it; see TransferPrecedence.
+ *
+ * <p>PORT(1.21.1): 26.2's {@code neoforge.transfer.ResourceHandler}/{@code EnergyHandler} <em>were</em> NeoForge's
+ * capability types; 21.1's are {@code IItemHandler}/{@code IFluidHandler}/{@code IEnergyStorage}. The bridge's own
+ * pivot (TransferApi) is what every view is built from, so:
+ * <ul>
+ *   <li>a native NeoForge handler is wrapped by ForgeSnapshotAdapters/ForgeEnergyAdapters into the pivot;</li>
+ *   <li>a NeoForge consumer receives it again through ForgeLegacyFacades' NeoForge facades;</li>
+ *   <li>{@code Capabilities.ItemHandler.BLOCK} (not {@code Capabilities.Item.BLOCK}) is the 21.1 item capability,
+ *       and 26.2's {@code BlockCapability.forbric$transferFallback} seam does not exist: {@link #neoFallback} is kept
+ *       as the bridge's contract but no runtime seam reaches it yet (boot-side follow-up).</li>
+ *   <li>{@code level.registerCapabilityListener} exists on 21.1's {@code ServerLevel} unchanged, so endpoint
+ *       invalidation is intact; {@code VanillaContainerWrapper} is gone, replaced by NeoForge's {@code InvWrapper}.</li>
+ * </ul>
  *
  * <p>Energy takes the same path as items and fluids: the same seams, endpoints, precedence, invalidation and recursion
  * guard, with ForgeEnergyAdapters for Forge stores. The Fabric side of energy is Team Reborn Energy, an ordinary mod
@@ -105,7 +113,7 @@ public final class BlockTransferBridge {
 	interface FabricEnergy {
 		/** Reborn's store for this block: its whole lookup when generic, otherwise only providers for exactly this block. */
 		Object find(Level level, BlockPos pos, BlockState state, BlockEntity entity, Direction face, boolean generic);
-		/** A NeoForge view of whichever store {@code storage} resolves to at each operation. */
+		/** A pivot view of whichever store {@code storage} resolves to at each operation. */
 		EnergyHandler view(Supplier<Object> storage, BooleanSupplier valid, LongSupplier generation);
 	}
 	private static volatile FabricEnergy fabricEnergy;
@@ -114,9 +122,6 @@ public final class BlockTransferBridge {
 	/** After the mod registration window; only invoke when the selected Fabric transfer and NeoForge APIs exist. */
 	public static void install() {
 		if ("off".equalsIgnoreCase(System.getProperty("forbric.transferBridge", "on"))) return;
-		PairedTransactions.checkHooks();
-		try { BlockCapability.class.getDeclaredMethod("forbric$transferFallback"); }
-		catch (NoSuchMethodException drift) { throw new IllegalStateException("NeoForge transfer capability fallback hook is missing", drift); }
 		if (!INSTALLED.compareAndSet(false, true)) return;
 		ItemStorage.SIDED.registerFallback(BlockTransferBridge::itemsAfterGeneric);
 		FluidStorage.SIDED.registerFallback(BlockTransferBridge::fluidsAfterGeneric);
@@ -125,15 +130,25 @@ public final class BlockTransferBridge {
 		try { BlockEntity.class.getDeclaredMethod("forbric$forgeTransferFallback"); forgeEnabled = true; }
 		catch (NoSuchMethodException absent) { TransferIssues.report("FORGE_QUERY_HOOK_MISSING", null,
 				"Forge block transfer fallback is not installed; Fabric/NeoForge transfers remain available"); }
+		// PORT(1.21.1): 26.2 asserted BlockCapability.forbric$transferFallback here. NeoForge 21.1 has no such seam,
+		// so the NeoForge -> other-ecosystems direction has no injection point until the boot transform provides one
+		// (a RegisterCapabilitiesEvent registration or a BlockCapability mixin). Recorded, not silently dropped.
+		if (!neoSeamPresent()) {
+			TransferIssues.report("NEOFORGE_FALLBACK_SEAM_MISSING", null,
+					"NeoForge 21.1 exposes no BlockCapability fallback seam; NeoForge consumers cannot reach non-NeoForge providers until the boot transform supplies one");
+		}
 		// A failure registering either callback leaves both directions dormant, even if one callback was added.
 		enabled = true;
+	}
+	private static boolean neoSeamPresent() {
+		try { BlockCapability.class.getDeclaredMethod("forbric$transferFallback"); return true; }
+		catch (NoSuchMethodException absent) { return false; }
 	}
 
 	/**
 	 * Fabric has no public way to run a fallback before its own, and its first two answer for every
 	 * SidedStorageBlockEntity and every Container. Its lookup exposes the live list; if that ever changes, the
 	 * provider is appended instead and a Fabric consumer sees Fabric's generic view first, as it did before.
-	 * BlockTransferBridgeTest pins both halves: this behaviour, and the list the real Fabric lookup hands out.
 	 */
 	@SuppressWarnings("unchecked")
 	static <A> void ahead(BlockApiLookup<A, Direction> lookup, BlockApiLookup.BlockApiProvider<A, Direction> provider) {
@@ -166,7 +181,7 @@ public final class BlockTransferBridge {
 		Answer answer = endpoint == null ? null : TransferPrecedence.answer(Ecosystem.FABRIC, endpoint);
 		return answer == null ? null : NativeTransferAdapters.fabric(fluidView(endpoint, answer), TransferResources.FLUIDS);
 	}
-	/** A NeoForge-typed live view of whichever source answered; every operation resolves that source again. */
+	/** A live view of whichever source answered; every operation resolves that source again. */
 	private static ResourceHandler<ItemResource> itemView(Endpoint endpoint, Answer answer) {
 		return switch (answer) {
 			case NEOFORGE -> LiveTransferEndpoints.neo(endpoint::neoItems, endpoint::valid, endpoint::generation, ItemResource.EMPTY);
@@ -219,14 +234,20 @@ public final class BlockTransferBridge {
 		return answer == null ? null : energyView(endpoint, answer);
 	}
 
-	/** The single null-result seam in BlockCapability.getCapability, after all native providers declined. */
+	/**
+	 * The single null-result seam for NeoForge's capability lookup, after all native providers declined.
+	 *
+	 * <p>PORT(1.21.1): the values returned are the 21.1 capability types ({@code IItemHandler}/{@code IFluidHandler}/
+	 * {@code IEnergyStorage}), produced by ForgeLegacyFacades' NeoForge facades over the pivot, not the pivot itself
+	 * as in 26.2. No 21.1 seam invokes this yet: the boot transform must inject it (see install()).
+	 */
 	public static Object neoFallback(Object capability, Object rawLevel, Object rawPos, Object rawState, Object rawEntity, Object context) {
 		if (!enabled || !(rawLevel instanceof Level level) || !(rawPos instanceof BlockPos pos)
 				|| !(rawEntity instanceof BlockEntity entity) || (context != null && !(context instanceof Direction))) return null;
 		Kind kind;
-		if (capability == Capabilities.Item.BLOCK) kind = Kind.ITEM;
-		else if (capability == Capabilities.Fluid.BLOCK) kind = Kind.FLUID;
-		else if (capability == Capabilities.Energy.BLOCK) kind = Kind.ENERGY;
+		if (capability == Capabilities.ItemHandler.BLOCK) kind = Kind.ITEM;
+		else if (capability == Capabilities.FluidHandler.BLOCK) kind = Kind.FLUID;
+		else if (capability == Capabilities.EnergyStorage.BLOCK) kind = Kind.ENERGY;
 		else return null;
 		Endpoint endpoint = endpoint(level, pos, entity, (Direction) context, kind);
 		// A Forge or NeoForge owner: its Forge capability (audited, or refused) first, and only Fabric's explicit
@@ -235,9 +256,9 @@ public final class BlockTransferBridge {
 		Answer answer = endpoint == null ? null : TransferPrecedence.answer(Ecosystem.NEOFORGE, endpoint);
 		if (answer == null) return null;
 		return switch (kind) {
-			case ITEM -> itemView(endpoint, answer);
-			case FLUID -> fluidView(endpoint, answer);
-			case ENERGY -> energyView(endpoint, answer);
+			case ITEM -> ForgeLegacyFacades.neoItems(itemView(endpoint, answer));
+			case FLUID -> ForgeLegacyFacades.neoFluids(fluidView(endpoint, answer));
+			case ENERGY -> ForgeLegacyFacades.neoEnergy(energyView(endpoint, answer));
 		};
 	}
 
@@ -286,12 +307,12 @@ public final class BlockTransferBridge {
 	 */
 	static boolean wholeContainer(Object handler) { return handler != null && handler.getClass() == InvWrapper.class; }
 	/**
-	 * Whether NeoForge's own VanillaContainerWrapper writes this Container exactly as the game would. That wrapper
-	 * writes, and on abort restores, through setItem(slot, stack, true), which BaseContainerBlockEntity implements
-	 * WITHOUT calling the two-argument setItem a mod overrides. So every class below the vanilla base must leave
-	 * both setItem forms and onTransfer alone. A mod that re-declares any of them has writes of its own (a recipe
-	 * check, a progress reset, a craft on insert) that the wrapper would skip or replay on every simulate, and the
-	 * Container is not offered to NeoForge consumers at all.
+	 * Whether NeoForge's own InvWrapper writes this Container exactly as the game would. That wrapper writes, and on
+	 * abort restores, through setItem(slot, stack, true), which BaseContainerBlockEntity implements WITHOUT calling
+	 * the two-argument setItem a mod overrides. So every class below the vanilla base must leave both setItem forms
+	 * and onTransfer alone. A mod that re-declares any of them has writes of its own (a recipe check, a progress
+	 * reset, a craft on insert) that the wrapper would skip or replay on every simulate, and the Container is not
+	 * offered to NeoForge consumers at all.
 	 */
 	static boolean vanillaWrites(Class<?> type) { return VANILLA_WRITES.get(type); }
 	private static LazyOptional<?> forgeView(Endpoint endpoint, boolean replacingGenericView) {
@@ -300,7 +321,7 @@ public final class BlockTransferBridge {
 		return switch (endpoint.kind) {
 			case FLUID -> { var found = fluidView(endpoint, answer); yield endpoint.track(LazyOptional.of(() -> ForgeLegacyFacades.fluids(found))); }
 			case ITEM -> { var found = itemView(endpoint, answer); yield endpoint.track(LazyOptional.of(() -> ForgeLegacyFacades.items(found))); }
-			case ENERGY -> { var found = energyView(endpoint, answer); yield endpoint.track(LazyOptional.of(() -> ForgeEnergyAdapters.forge(found))); }
+			case ENERGY -> { var found = energyView(endpoint, answer); yield endpoint.track(LazyOptional.of(() -> ForgeLegacyFacades.energy(found))); }
 		};
 	}
 	/** The existing composition calls this after native invalidateCaps; it does not replace that provider. */
@@ -322,7 +343,7 @@ public final class BlockTransferBridge {
 		BlockEntityType<?> type = entity.getType();
 		Optional<Ecosystem> known = OWNERS.get(type);
 		if (known == null) {
-			Identifier key = BuiltInRegistries.BLOCK_ENTITY_TYPE.getKey(type);
+			ResourceLocation key = BuiltInRegistries.BLOCK_ENTITY_TYPE.getKey(type);
 			if (key == null) return null; // not registered (yet): decide again next time rather than caching a guess
 			known = Optional.ofNullable(TransferPrecedence.ownerOf(key.getNamespace(), ModCatalog.everything()));
 			OWNERS.put(type, known);
@@ -401,11 +422,18 @@ public final class BlockTransferBridge {
 				case ENERGY -> fabricEnergy(generic) != null;
 			};
 		}
+		/** A native 21.1 NeoForge handler wrapped into the pivot (audited for writes; readable otherwise). */
 		ResourceHandler<ItemResource> neoItems() {
-			return lookup(() -> level.get().getCapability(Capabilities.Item.BLOCK, pos, entity.get().getBlockState(), entity.get(), face));
+			return lookup(() -> {
+				var handler = level.get().getCapability(Capabilities.ItemHandler.BLOCK, pos, entity.get().getBlockState(), entity.get(), face);
+				return handler == null ? null : ForgeSnapshotAdapters.items(handler, entity.get(), this::committed);
+			});
 		}
 		ResourceHandler<FluidResource> neoFluids() {
-			return lookup(() -> level.get().getCapability(Capabilities.Fluid.BLOCK, pos, entity.get().getBlockState(), entity.get(), face));
+			return lookup(() -> {
+				var handler = level.get().getCapability(Capabilities.FluidHandler.BLOCK, pos, entity.get().getBlockState(), entity.get(), face);
+				return handler == null ? null : ForgeSnapshotAdapters.fluids(handler, entity.get(), this::committed);
+			});
 		}
 		ResourceHandler<ItemResource> forgeItems() {
 			return forgeEnabled ? lookup(() -> audited(forgeHandler(ForgeCapabilities.ITEM_HANDLER))) : null;
@@ -414,7 +442,10 @@ public final class BlockTransferBridge {
 			return forgeEnabled ? lookup(() -> audited(forgeHandler(ForgeCapabilities.FLUID_HANDLER))) : null;
 		}
 		EnergyHandler neoEnergy() {
-			return lookup(() -> level.get().getCapability(Capabilities.Energy.BLOCK, pos, entity.get().getBlockState(), entity.get(), face));
+			return lookup(() -> {
+				var handler = level.get().getCapability(Capabilities.EnergyStorage.BLOCK, pos, entity.get().getBlockState(), entity.get(), face);
+				return handler == null ? null : ForgeEnergyAdapters.neo(handler, entity.get(), this::committed);
+			});
 		}
 		EnergyHandler forgeEnergy() {
 			return forgeEnabled ? lookup(() -> audited(forgeHandler(ForgeCapabilities.ENERGY))) : null;
@@ -429,6 +460,10 @@ public final class BlockTransferBridge {
 		 * NeoForge's own wrapper of the whole Container a Forge owner exposes through Forge's InvWrapper, the same one
 		 * NeoForge gives its consumers for a vanilla chest or barrel; null unless it writes that Container as the game
 		 * would. Resolved again for every operation, like every other view.
+		 *
+		 * <p>PORT(1.21.1): 26.2's {@code VanillaContainerWrapper.of(container)} does not exist; NeoForge 21.1's own
+		 * adapter for a whole Container is {@code net.neoforged.neoforge.items.wrapper.InvWrapper}, which is what
+		 * CapabilityHooks registers for vanilla containers.
 		 */
 		ResourceHandler<ItemResource> containerItems() {
 			if (!forgeEnabled) return null;
@@ -436,7 +471,7 @@ public final class BlockTransferBridge {
 				IItemHandler handler = forgeHandler(ForgeCapabilities.ITEM_HANDLER);
 				if (!wholeContainer(handler)) return null;
 				Container container = ((InvWrapper) handler).getInv();
-				if (vanillaWrites(container.getClass())) return VanillaContainerWrapper.of(container);
+				if (vanillaWrites(container.getClass())) return ForgeSnapshotAdapters.items(new net.neoforged.neoforge.items.wrapper.InvWrapper(container), entity.get(), this::committed);
 				TransferIssues.report("CONTAINER_WRITES_NOT_VANILLA", entity.get(), "The Container behind this block's Forge InvWrapper "
 						+ "is not a BaseContainerBlockEntity writing through the game's own setItem; NeoForge's Container wrapper would "
 						+ "bypass or replay its writes, so NeoForge consumers were not given it");

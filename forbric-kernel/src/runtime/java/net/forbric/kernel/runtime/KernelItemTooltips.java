@@ -26,7 +26,6 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
-import net.minecraft.world.item.component.TooltipDisplay;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.player.ItemTooltipEvent;
 
@@ -42,11 +41,14 @@ import net.neoforged.neoforge.event.entity.player.ItemTooltipEvent;
  * extra post the whole fix — NeoForge's listeners append to the list MinecraftForge's listeners just appended to,
  * in that order, and the method returns it. Nothing is copied back and nothing can be lost.
  *
- * <p>NeoForge's event needs two values MinecraftForge's does not carry, the {@code Item.TooltipContext} and the
- * {@code TooltipDisplay}. Both are already in scope at the call site — the context is the method's own first
- * parameter and the display is the local it reads out of the stack's components — so the injected call passes
- * the real ones rather than a placeholder. A mod reading {@code getContext()} for a registry lookup gets the
- * lookup the game is actually using.
+ * <p>NeoForge's event carries an {@code Item.TooltipContext} MinecraftForge's does not; it is already in scope at
+ * the call site as the method's own parameter, so the injected call passes the real one rather than a placeholder.
+ * A mod reading {@code getContext()} for a registry lookup gets the lookup the game is actually using.
+ *
+ * <p>PORT(1.21.1): 26.2's {@code ItemTooltipEvent} also takes a tooltip-display value, a type 1.21.1 does not
+ * have. 1.21.1's constructor is {@code (ItemStack, Player, List<Component>, TooltipFlag, Item.TooltipContext)},
+ * so {@link #postNeoForge} drops that parameter and the injected call passes the five remaining arguments. The
+ * boot-side {@code ForbricMergedBaseCompatTransformer} must match this descriptor.
  *
  * <p>Failures are swallowed with one warning per process. A tooltip is drawn every frame an item is hovered, and
  * a mod that throws here would otherwise replace the tooltip with a crash, once per frame.
@@ -70,10 +72,11 @@ public final class KernelItemTooltips {
 	 * MinecraftForge the mod's lines are appended to whatever the game built, and on NeoForge the same.
 	 */
 	public static void postNeoForge(ItemStack stack, Player player, List<Component> tooltip, TooltipFlag flag,
-			Item.TooltipContext context, TooltipDisplay display) {
+			Item.TooltipContext context) {
 		if (!enabled()) return;
 		try {
-			NeoForge.EVENT_BUS.post(new ItemTooltipEvent(stack, player, tooltip, flag, context, display));
+			// PORT(1.21.1): the tooltip-display argument 26.2 had does not exist on 1.21.1's event.
+			NeoForge.EVENT_BUS.post(new ItemTooltipEvent(stack, player, tooltip, flag, context));
 			if (!announced) {
 				announced = true;
 				EventBridges.installed(GameEventBridge.ITEM_TOOLTIP);

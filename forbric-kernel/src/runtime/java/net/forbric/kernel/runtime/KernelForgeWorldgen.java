@@ -43,12 +43,10 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.util.random.Weighted;
-import net.minecraft.util.random.WeightedList;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.BiomeGenerationSettings;
 import net.minecraft.world.level.biome.BiomeSpecialEffects;
@@ -62,10 +60,12 @@ import net.neoforged.neoforge.server.ServerLifecycleHooks;
  * Brings a MinecraftForge mod's {@code data/<ns>/forge/biome_modifier} and {@code forge/structure_modifier}
  * files into the world — inside NeoForge's own single modifier pass.
  *
- * <p>Three things kept them out: nothing declared the {@code forge:biome_modifier} datapack registry on the
- * merged base (the loader asks only NeoForge's {@code DataPackRegistriesHooks}); Forge's own pass links against
- * Forge-typed accessors ({@code Biome.modifiableBiomeInfo()} returning Forge's type) the merged classes do not
- * declare; and two of Forge's builders link against {@code WeightedList$Builder} defaults the merge lost. The
+ * <p>Three things kept them out on 26.2: nothing declared the {@code forge:biome_modifier} datapack registry on
+ * the merged base (the loader asks only NeoForge's {@code DataPackRegistriesHooks}); Forge's own pass links
+ * against Forge-typed accessors ({@code Biome.modifiableBiomeInfo()} returning Forge's type) the merged classes
+ * do not declare; and two of Forge's builders linked against {@code WeightedList$Builder} defaults the merge
+ * lost. The first two are generation-independent and the design below still answers them; the third is a 26.2
+ * artifact with no 1.21.1 counterpart (see the D2 note below). The
  * design: (1) declare both Forge registries through a second {@code DataPackRegistryEvent.NewRegistry}, exactly
  * as the Fabric mirror does, with Forge's own {@code DIRECT_CODEC} wrapped leniently so a file whose serializer
  * did not register under the kernel becomes a no-op modifier and names its mod DEGRADED instead of failing the
@@ -103,16 +103,15 @@ public final class KernelForgeWorldgen {
 	}
 
 	// ------------------------------------------------------------------------------------------------------
-	// D2: the WeightedList$Builder default the merge lost
-
-	/**
-	 * Stands in for {@code IForgeWeightedList$Builder.removeIf(Predicate<E>)}'s default body — the merged
-	 * {@code WeightedList$Builder} implements no Forge interface, so the default is gone and its only caller,
-	 * {@code ForgeBiomeModifiers$RemoveSpawnsBiomeModifier.modify}, is redirected here. This is that one line.
-	 */
-	public static <E> WeightedList.Builder<E> removeIfValue(WeightedList.Builder<E> builder, Predicate<E> predicate) {
-		return builder.removeIf((Weighted<E> weighted) -> predicate.test(weighted.value()));
-	}
+	// D2: the WeightedList$Builder default the merge lost — PORT(1.21.1): gone, and there is nothing to replace
+	//
+	// 1.21.1 has no net.minecraft.util.random.WeightedList (javap: the package holds SimpleWeightedRandomList,
+	// WeightedRandomList, WeightedEntry, Weight), and Forge 52's
+	// ForgeBiomeModifiers$RemoveSpawnsBiomeModifier does not need one: its REMOVE phase calls
+	// MobSpawnSettingsBuilder.getSpawner(MobCategory), which returns a plain java.util.List<SpawnerData>, and
+	// then java.util.List.removeIf directly (disassembled from the staged forge-runtime.jar). The lost-default
+	// shim removeIfValue and its boot-side splice in ForgeWorldModifierInjector (keyed on
+	// net/minecraft/util/random/WeightedList$Builder) have no 1.21.1 anchor and must be dropped there.
 
 	// ------------------------------------------------------------------------------------------------------
 	// D3 ①: declare forge:biome_modifier and forge:structure_modifier on NeoForge's list
@@ -129,10 +128,10 @@ public final class KernelForgeWorldgen {
 		int structureSerializers = countOrMinusOne(() -> ForgeRegistries.STRUCTURE_MODIFIER_SERIALIZERS.get().getKeys().size());
 		event.dataPackRegistry(ForgeRegistries.Keys.BIOME_MODIFIERS,
 				lenient(net.minecraftforge.common.world.BiomeModifier.DIRECT_CODEC, NOOP_BIOME, "biome",
-						id -> ForgeRegistries.BIOME_MODIFIER_SERIALIZERS.get().containsKey(Identifier.parse(id))));
+						id -> ForgeRegistries.BIOME_MODIFIER_SERIALIZERS.get().containsKey(ResourceLocation.parse(id))));
 		event.dataPackRegistry(ForgeRegistries.Keys.STRUCTURE_MODIFIERS,
 				lenient(net.minecraftforge.common.world.StructureModifier.DIRECT_CODEC, NOOP_STRUCTURE, "structure",
-						id -> ForgeRegistries.STRUCTURE_MODIFIER_SERIALIZERS.get().containsKey(Identifier.parse(id))));
+						id -> ForgeRegistries.STRUCTURE_MODIFIER_SERIALIZERS.get().containsKey(ResourceLocation.parse(id))));
 		ForbricLog.info("[Forbric/Worldgen] declared forge:biome_modifier and forge:structure_modifier on NeoForge's "
 				+ "datapack-registry list (unsynced, as ForgeMod declares them) — MinecraftForge's serializer registries "
 				+ "hold %d biome and %d structure modifier serializer(s)", biomeSerializers, structureSerializers);
@@ -261,7 +260,7 @@ public final class KernelForgeWorldgen {
 			return neo;
 		}
 		Optional<Registry<net.minecraftforge.common.world.BiomeModifier>> registry =
-				server.registryAccess().lookup(ForgeRegistries.Keys.BIOME_MODIFIERS);
+				server.registryAccess().registry(ForgeRegistries.Keys.BIOME_MODIFIERS);
 		if (registry.isEmpty() || registry.get().size() == 0) {
 			ForbricLog.info("[Forbric/Worldgen] 0 MinecraftForge biome modifier(s) — nothing to bridge");
 			return neo;
@@ -270,7 +269,7 @@ public final class KernelForgeWorldgen {
 		List<Map.Entry<ResourceKey<net.minecraftforge.common.world.BiomeModifier>, net.minecraftforge.common.world.BiomeModifier>> ordered = new ArrayList<>();
 		for (Map.Entry<ResourceKey<net.minecraftforge.common.world.BiomeModifier>, net.minecraftforge.common.world.BiomeModifier> entry : registry.get().entrySet()) {
 			ordered.add(entry);
-			keys.add(entry.getKey().identifier().toString());
+			keys.add(entry.getKey().location().toString());
 		}
 		bridgedBiomeModifiers = ordered.size();
 		ForbricLog.info("[Forbric/Worldgen] bridging %d MinecraftForge biome modifier(s) into NeoForge's pass: %s",
@@ -287,7 +286,7 @@ public final class KernelForgeWorldgen {
 		MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
 		if (server == null) return neo;
 		Optional<Registry<net.minecraftforge.common.world.StructureModifier>> registry =
-				server.registryAccess().lookup(ForgeRegistries.Keys.STRUCTURE_MODIFIERS);
+				server.registryAccess().registry(ForgeRegistries.Keys.STRUCTURE_MODIFIERS);
 		if (registry.isEmpty() || registry.get().size() == 0) {
 			ForbricLog.info("[Forbric/Worldgen] 0 MinecraftForge structure modifier(s) — nothing to bridge");
 			return neo;
@@ -296,7 +295,7 @@ public final class KernelForgeWorldgen {
 		List<Map.Entry<ResourceKey<net.minecraftforge.common.world.StructureModifier>, net.minecraftforge.common.world.StructureModifier>> ordered = new ArrayList<>();
 		for (Map.Entry<ResourceKey<net.minecraftforge.common.world.StructureModifier>, net.minecraftforge.common.world.StructureModifier> entry : registry.get().entrySet()) {
 			ordered.add(entry);
-			keys.add(entry.getKey().identifier().toString());
+			keys.add(entry.getKey().location().toString());
 		}
 		bridgedStructureModifiers = ordered.size();
 		ForbricLog.info("[Forbric/Worldgen] bridging %d MinecraftForge structure modifier(s) into NeoForge's pass: %s",
@@ -448,12 +447,12 @@ public final class KernelForgeWorldgen {
 						entry.getValue().modify(holder, forgePhase, forge);
 					} catch (Throwable t) {
 						dropped.add(entry.getKey());
-						String namespace = entry.getKey().identifier().getNamespace();
-						ForbricLog.warn("[Forbric/Worldgen] MinecraftForge biome modifier " + entry.getKey().identifier()
+						String namespace = entry.getKey().location().getNamespace();
+						ForbricLog.warn("[Forbric/Worldgen] MinecraftForge biome modifier " + entry.getKey().location()
 								+ " threw during " + phase + " — dropped for the rest of this pass; " + namespace
 								+ " is marked DEGRADED", Reflect.unwrap(t));
 						ModCatalog.mark(namespace, ModCatalog.Status.DEGRADED, "its biome modifier "
-								+ entry.getKey().identifier() + " threw during " + phase + " and was dropped");
+								+ entry.getKey().location() + " threw during " + phase + " and was dropped");
 					}
 				}
 				net.neoforged.neoforge.common.world.ModifiableBiomeInfo.BiomeInfo rebuilt = neoBiomeInfo(forge.build());
@@ -461,9 +460,9 @@ public final class KernelForgeWorldgen {
 				net.neoforged.neoforge.common.world.ModifiableBiomeInfo.BiomeInfo.Builder fresh =
 						net.neoforged.neoforge.common.world.ModifiableBiomeInfo.BiomeInfo.Builder.copyOf(rebuilt);
 				copyFields(NEO_BIOME_BUILDER_FIELDS, fresh, builder);
-				holder.unwrapKey().ifPresent(key -> CHANGED_BIOMES.add(key.identifier().toString()));
+				holder.unwrapKey().ifPresent(key -> CHANGED_BIOMES.add(key.location().toString()));
 			} catch (Throwable t) {
-				standDown("bridging biome " + holder.unwrapKey().map(k -> k.identifier().toString()).orElse("?")
+				standDown("bridging biome " + holder.unwrapKey().map(k -> k.location().toString()).orElse("?")
 						+ " during " + phase + " failed: " + Reflect.unwrap(t));
 			}
 		}
@@ -502,12 +501,12 @@ public final class KernelForgeWorldgen {
 						entry.getValue().modify(holder, forgePhase, forge);
 					} catch (Throwable t) {
 						dropped.add(entry.getKey());
-						String namespace = entry.getKey().identifier().getNamespace();
-						ForbricLog.warn("[Forbric/Worldgen] MinecraftForge structure modifier " + entry.getKey().identifier()
+						String namespace = entry.getKey().location().getNamespace();
+						ForbricLog.warn("[Forbric/Worldgen] MinecraftForge structure modifier " + entry.getKey().location()
 								+ " threw during " + phase + " — dropped for the rest of this pass; " + namespace
 								+ " is marked DEGRADED", Reflect.unwrap(t));
 						ModCatalog.mark(namespace, ModCatalog.Status.DEGRADED, "its structure modifier "
-								+ entry.getKey().identifier() + " threw during " + phase + " and was dropped");
+								+ entry.getKey().location() + " threw during " + phase + " and was dropped");
 					}
 				}
 				Structure.StructureSettings rebuilt = forge.build().structureSettings();
@@ -516,9 +515,9 @@ public final class KernelForgeWorldgen {
 						net.neoforged.neoforge.common.world.ModifiableStructureInfo.StructureInfo.Builder.copyOf(
 								new net.neoforged.neoforge.common.world.ModifiableStructureInfo.StructureInfo(rebuilt));
 				copyFields(NEO_STRUCTURE_BUILDER_FIELDS, fresh, builder);
-				holder.unwrapKey().ifPresent(key -> CHANGED_STRUCTURES.add(key.identifier().toString()));
+				holder.unwrapKey().ifPresent(key -> CHANGED_STRUCTURES.add(key.location().toString()));
 			} catch (Throwable t) {
-				standDown("bridging structure " + holder.unwrapKey().map(k -> k.identifier().toString()).orElse("?")
+				standDown("bridging structure " + holder.unwrapKey().map(k -> k.location().toString()).orElse("?")
 						+ " during " + phase + " failed: " + Reflect.unwrap(t));
 			}
 		}
@@ -540,15 +539,15 @@ public final class KernelForgeWorldgen {
 	public static void auditRoundTrip(MinecraftServer server) {
 		if (!enabled() || standDown) return;
 		RegistryAccess registries = server.registryAccess();
-		Optional<Registry<net.minecraftforge.common.world.BiomeModifier>> biomeModifiers = registries.lookup(ForgeRegistries.Keys.BIOME_MODIFIERS);
-		Optional<Registry<net.minecraftforge.common.world.StructureModifier>> structureModifiers = registries.lookup(ForgeRegistries.Keys.STRUCTURE_MODIFIERS);
+		Optional<Registry<net.minecraftforge.common.world.BiomeModifier>> biomeModifiers = registries.registry(ForgeRegistries.Keys.BIOME_MODIFIERS);
+		Optional<Registry<net.minecraftforge.common.world.StructureModifier>> structureModifiers = registries.registry(ForgeRegistries.Keys.STRUCTURE_MODIFIERS);
 		boolean anyBiome = biomeModifiers.isPresent() && biomeModifiers.get().size() > 0;
 		boolean anyStructure = structureModifiers.isPresent() && structureModifiers.get().size() > 0;
 		if (!anyBiome && !anyStructure) return;
 		int biomes = 0, structures = 0, differ = 0;
 		String first = null;
 		try {
-			for (Map.Entry<ResourceKey<Biome>, Biome> entry : registries.lookupOrThrow(Registries.BIOME).entrySet()) {
+			for (Map.Entry<ResourceKey<Biome>, Biome> entry : registries.registryOrThrow(Registries.BIOME).entrySet()) {
 				biomes++;
 				net.neoforged.neoforge.common.world.ModifiableBiomeInfo.BiomeInfo original = entry.getValue().modifiableBiomeInfo().getOriginalBiomeInfo();
 				net.neoforged.neoforge.common.world.ModifiableBiomeInfo.BiomeInfo back = neoBiomeInfo(
@@ -556,10 +555,10 @@ public final class KernelForgeWorldgen {
 				List<Optional<JsonElement>> a = encodeBiome(original, registries), b = encodeBiome(back, registries);
 				if (!sameContent(a, b)) {
 					differ++;
-					if (first == null) first = entry.getKey().identifier() + " (part " + firstDifferingPart(a, b) + ")";
+					if (first == null) first = entry.getKey().location() + " (part " + firstDifferingPart(a, b) + ")";
 				}
 			}
-			for (Map.Entry<ResourceKey<Structure>, Structure> entry : registries.lookupOrThrow(Registries.STRUCTURE).entrySet()) {
+			for (Map.Entry<ResourceKey<Structure>, Structure> entry : registries.registryOrThrow(Registries.STRUCTURE).entrySet()) {
 				structures++;
 				Structure.StructureSettings original = entry.getValue().modifiableStructureInfo().getOriginalStructureInfo().structureSettings();
 				Structure.StructureSettings back = net.minecraftforge.common.world.ModifiableStructureInfo.StructureInfo.Builder.copyOf(
@@ -567,7 +566,7 @@ public final class KernelForgeWorldgen {
 				if (!sameContent(List.of(encodeStructure(original, registries)),
 						List.of(encodeStructure(back, registries)))) {
 					differ++;
-					if (first == null) first = entry.getKey().identifier() + " (structure settings)";
+					if (first == null) first = entry.getKey().location() + " (structure settings)";
 				}
 			}
 		} catch (Throwable t) {

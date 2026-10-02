@@ -20,13 +20,13 @@ import java.util.List;
 
 import net.forbric.api.CompatibilityFinding;
 import net.forbric.api.CompatibilityFindings;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.DifficultyInstance;
-import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.SpawnGroupData;
 import net.minecraft.world.level.BaseSpawner;
 import net.minecraft.world.level.ServerLevelAccessor;
-import net.minecraft.world.level.storage.ValueInput;
 import net.minecraftforge.event.ForgeEventFactory;
 import net.minecraftforge.event.entity.living.MobSpawnEvent;
 import net.neoforged.neoforge.common.extensions.IOwnedSpawner;
@@ -34,14 +34,20 @@ import net.neoforged.neoforge.event.EventHooks;
 import net.neoforged.neoforge.event.entity.living.FinalizeSpawnEvent;
 
 /**
- * Both event families run BEFORE the one possible Mob.finalizeSpawn call. The caller supplies the same
- * ValueInput that created this entity. Forge's updated SpawnGroupData enters the one finalization call;
+ * Both event families run BEFORE the one possible Mob.finalizeSpawn call. The caller supplies the same spawn tag
+ * that created this entity. Forge's updated SpawnGroupData enters the one finalization call;
  * its returned data is discarded, as in both native BaseSpawner callers.
  *
  * <p>Native cancellation has two distinct meanings: cancelling the event skips initialization, while
  * setSpawnCancelled prevents the later world insertion. The previous adapter conflated these and posted Forge
  * only after NeoForge had already initialized the mob. Calling Neo's native hook with initialize=false posts
  * its event without initializing, leaving a single finalization point after both families have decided.
+ *
+ * <p>{@code PORT(1.21.1)}: 26.2's call site threads the entity's {@code ValueInput} through. 1.21.1 has no
+ * {@code ValueInput} — its spawner loads entities from the spawn tag, a {@code CompoundTag} — and Forge's own
+ * {@code onFinalizeSpawnSpawner} takes a {@code CompoundTag} here, so the tag is the carrier. The kernel's
+ * {@code SpawnerFinalizeInjector}, which used to prove the ValueInput reaches the hook, has to move its anchor
+ * to the tag the 1.21.1 {@code BaseSpawner.serverTick} hands to {@code EntityType.loadEntityRecursive}.
  */
 public final class KernelSpawnerFinalize {
 
@@ -50,19 +56,19 @@ public final class KernelSpawnerFinalize {
 
 	/** Old or unrecognized call sites retain Neo's native path and explicitly report the missing Forge input. */
 	public static FinalizeSpawnEvent finalizeMobSpawnSpawner(Mob mob, ServerLevelAccessor level,
-			DifficultyInstance difficulty, EntitySpawnReason reason, SpawnGroupData data, IOwnedSpawner spawner,
+			DifficultyInstance difficulty, MobSpawnType reason, SpawnGroupData data, IOwnedSpawner spawner,
 			boolean flag) {
-		finding("spawner-finalize-input", true, "The spawner call site did not supply its ValueInput; Forge finalization was not dispatched.");
+		finding("spawner-finalize-input", true, "The spawner call site did not supply its spawn tag; Forge finalization was not dispatched.");
 		return EventHooks.finalizeMobSpawnSpawner(mob, level, difficulty, reason, data, spawner, flag);
 	}
 
-	/** The added argument is loaded from the caller's verified TagValueInput.create result. */
+	/** The added argument is the spawn tag the caller loaded the entity from. */
 	public static FinalizeSpawnEvent finalizeMobSpawnSpawner(Mob mob, ServerLevelAccessor level,
-			DifficultyInstance difficulty, EntitySpawnReason reason, SpawnGroupData data, IOwnedSpawner spawner,
-			boolean initialize, ValueInput input) {
-		if (input == null || !(spawner instanceof BaseSpawner base) || reason != EntitySpawnReason.SPAWNER) {
+			DifficultyInstance difficulty, MobSpawnType reason, SpawnGroupData data, IOwnedSpawner spawner,
+			boolean initialize, CompoundTag input) {
+		if (input == null || !(spawner instanceof BaseSpawner base) || reason != MobSpawnType.SPAWNER) {
 			finding("spawner-finalize-input", true,
-					"The spawner supplied a null ValueInput, a non-BaseSpawner owner, or a non-SPAWNER reason; Forge finalization was not dispatched.");
+					"The spawner supplied a null spawn tag, a non-BaseSpawner owner, or a non-SPAWNER reason; Forge finalization was not dispatched.");
 			return EventHooks.finalizeMobSpawnSpawner(mob, level, difficulty, reason, data, spawner, initialize);
 		}
 		FinalizeSpawnEvent neo = EventHooks.finalizeMobSpawnSpawner(mob, level, difficulty, reason, data, spawner, false);
@@ -89,7 +95,7 @@ public final class KernelSpawnerFinalize {
 		if (forge.getSpawnTag() != input) {
 			// Neither native BaseSpawner caller consumes a replacement tag after the entity has been loaded.
 			finding("spawner-finalize-tag-replacement", CompatibilityFinding.Confidence.RESOLVED, false,
-					"A Forge listener replaced the spawner ValueInput after entity loading; both native callers leave that replacement unused, and the bridge preserves the same behavior.");
+					"A Forge listener replaced the spawner spawn tag after entity loading; both native callers leave that replacement unused, and the bridge preserves the same behavior.");
 		}
 		neo.setDifficulty(forge.getDifficulty());
 		neo.setSpawnData(forge.getSpawnData());

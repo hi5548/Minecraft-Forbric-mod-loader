@@ -1,266 +1,109 @@
 package net.forbric.kernel.runtime.transfer;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.util.ArrayDeque;
-import java.util.IdentityHashMap;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 import net.fabricmc.fabric.api.transfer.v1.transaction.Transaction;
 import net.fabricmc.fabric.api.transfer.v1.transaction.TransactionContext;
 
 /**
- * Couples REAL Fabric and NeoForge transactions. No transaction context is simulated: NeoForge journals cast
- * their context to their final Transaction class. The narrow lifecycle hooks close the peer at the same nesting
- * boundary, and defer final notifications until BOTH engines have closed. Cross-API transfer from a close
- * callback, while a paired close is in progress, is deliberately rejected; arbitrary external side effects are not
- * made reversible by this bridge. A final notification runs after both engines closed and may open new roots and
- * transfer again, as NeoForge's onRootCommit contract allows; finals those transfers queue join the same flush.
+ * The bridge's transaction layer, over Fabric's engine.
+ *
+ * <p>PORT(1.21.1): 26.2's {@code net.neoforged.neoforge.transfer.transaction.{Transaction, TransactionManager,
+ * SnapshotJournal}} does not exist in NeoForge 21.1, so there is nothing left to <em>pair</em>. Fabric's
+ * {@link TransactionContext} is the only real nested, revertible transaction in the pack; native 21.1 handlers
+ * (Forge and NeoForge {@code IItemHandler}/{@code IFluidHandler}/{@code IEnergyStorage}) have only simulate/execute
+ * and no snapshot concept at all. This class therefore supplies the two pieces the removed engine used to:
+ *
+ * <ul>
+ *   <li>{@link #scope()} — the bridge's own place to run an operation that must be taken back: a nested Fabric
+ *       transaction under an already-open one, an outer Fabric transaction otherwise. The old
+ *       {@code ForgeLegacyFacades.scope()} and {@code PairedTransactions.neo/fabric} both reduce to this.</li>
+ *   <li>{@link Journal} — a per-thread, nesting-aware participant for exactly the audited native handlers that can
+ *       be restored (see ForgeSnapshotAdapters/ForgeEnergyAdapters). It is Fabric's
+ *       {@code SnapshotParticipant} contract re-stated here rather than extended: the bridge needs every live
+ *       snapshot to learn a handler the moment it is first written, which {@code SnapshotParticipant}'s private
+ *       snapshot list cannot express ({@code liveSnapshots()}).</li>
+ * </ul>
+ *
+ * <p>The 26.2 transform hooks ({@code beforeOpen}/{@code beforeClose}/{@code afterClose}/{@code fabricFinal}/
+ * {@code neoFinal}) and their startup {@code checkHooks} are gone with the NeoForge transaction manager. Nothing in
+ * the runtime calls them; the boot-side {@code TransferTransactionHooks} transformer must be retired with them.
  */
 public final class PairedTransactions {
 	private PairedTransactions() { }
-	private static final ThreadLocal<State> LOCAL = ThreadLocal.withInitial(State::new);
-	private static volatile boolean hooksChecked;
-	private static final class State {
-		final IdentityHashMap<Object, Pair> pairs = new IdentityHashMap<>();
-		final IdentityHashMap<Object, IdentityHashMap<Object, Runnable>> validations = new IdentityHashMap<>();
-		final ArrayDeque<Runnable> finals = new ArrayDeque<>();
-		int closing;
-		boolean flushing;
-	}
-	private static final class Pair {
-		final Transaction fabric;
-		final net.neoforged.neoforge.transfer.transaction.Transaction neo;
-		Object origin;
-		boolean committed;
-		boolean closingPeer;
-		Pair(Transaction fabric, net.neoforged.neoforge.transfer.transaction.Transaction neo) {
-			this.fabric = fabric;
-			this.neo = neo;
-		}
+
+	/** The currently-open Fabric transaction, or null. */
+	static TransactionContext current() {
+		return Transaction.isOpen() ? Transaction.getCurrentUnsafe() : null;
 	}
 
-	/** A native NeoForge scope paired with the supplied currently-open native Fabric scope. */
-	public static net.neoforged.neoforge.transfer.transaction.TransactionContext neo(TransactionContext context) {
-		State state = usable();
-		if (context != Transaction.getCurrentUnsafe()) throw new IllegalArgumentException("Fabric context is not the current transaction");
-		Pair existing = state.pairs.get(context);
-		if (existing != null) { checkPeer(existing, context); return existing.neo; }
-		for (int depth = 0; depth <= context.nestingDepth(); depth++) {
-			Transaction fabric = context.getOpenTransaction(depth);
-			if (state.pairs.containsKey(fabric)) continue;
-			Pair parent = depth == 0 ? null : state.pairs.get(context.getOpenTransaction(depth - 1));
-			var current = net.neoforged.neoforge.transfer.transaction.Transaction.getCurrentOpenedTransaction();
-			if (current != (parent == null ? null : parent.neo)) {
-				throw new IllegalStateException("An unrelated NeoForge transaction is already open");
+	/**
+	 * A scope that can be closed without committing: nested under the current Fabric transaction when one is open
+	 * (its owner keeps the final say), otherwise a fresh outer transaction. Callers abort it for simulate, commit it
+	 * for execute.
+	 */
+	static Transaction scope() {
+		return Transaction.isOpen() ? Transaction.getCurrentUnsafe().openNested() : Transaction.openOuter();
+	}
+
+	/**
+	 * A nesting-aware journal participant over Fabric's transaction callbacks.
+	 *
+	 * <p>Semantics match 26.2's {@code SnapshotJournal}: one snapshot per currently-open depth, a rollback publishes
+	 * a deeper snapshot to its parent for a longer-lived abort, and final notifications run only after the outer
+	 * transaction has closed. Subclasses keep their own thread-local instance and reset it when no transaction is
+	 * open, exactly as the removed journals did.
+	 */
+	abstract static class Journal<T> implements TransactionContext.CloseCallback, TransactionContext.OuterCloseCallback {
+		private final List<T> snapshots = new ArrayList<>();
+
+		/** A new snapshot of every store this journal has been told about so far. */
+		protected abstract T createSnapshot();
+		/** Restore every store to the state in {@code snapshot}. */
+		protected abstract void revertToSnapshot(T snapshot);
+		/** The snapshot's scope closed without being restored; drop its resources. */
+		protected void releaseSnapshot(T snapshot) { }
+		/** The outer transaction committed; run the pending final notifications once. */
+		protected void onRootCommit() { }
+
+		/** Every live snapshot, outermost first, so a store first written at depth n is still restored by a shallower abort. */
+		protected final List<T> liveSnapshots() { return snapshots; }
+
+		final void updateSnapshots(TransactionContext context) {
+			int depth = context.nestingDepth();
+			while (snapshots.size() <= depth) snapshots.add(null);
+			if (snapshots.get(depth) != null) return;
+			T snapshot = Objects.requireNonNull(createSnapshot(), "Journal snapshot may not be null");
+			snapshots.set(depth, snapshot);
+			context.addCloseCallback(this);
+		}
+
+		public final void onClose(TransactionContext context, TransactionContext.Result result) {
+			int depth = context.nestingDepth();
+			T snapshot = snapshots.set(depth, null);
+			if (snapshot == null) return;
+			if (result.wasAborted()) {
+				revertToSnapshot(snapshot);
+				releaseSnapshot(snapshot);
+				return;
 			}
-			var neo = net.neoforged.neoforge.transfer.transaction.Transaction.open(current);
-			link(state, new Pair(fabric, neo));
-		}
-		return state.pairs.get(context).neo;
-	}
-
-	/** A native Fabric scope paired with the supplied currently-open native NeoForge scope. */
-	public static TransactionContext fabric(net.neoforged.neoforge.transfer.transaction.TransactionContext context) {
-		State state = usable();
-		if (context != net.neoforged.neoforge.transfer.transaction.Transaction.getCurrentOpenedTransaction()) {
-			throw new IllegalArgumentException("NeoForge context is not the current transaction");
-		}
-		Pair existing = state.pairs.get(context);
-		if (existing != null) { checkPeer(existing, context); return existing.fabric; }
-		List<net.neoforged.neoforge.transfer.transaction.Transaction> ancestors = NeoAccess.ancestors(context);
-		for (int depth = 0; depth <= context.depth(); depth++) {
-			var neo = ancestors.get(depth);
-			if (state.pairs.containsKey(neo)) continue;
-			Pair parent = depth == 0 ? null : state.pairs.get(ancestors.get(depth - 1));
-			TransactionContext current = Transaction.isOpen() ? Transaction.getCurrentUnsafe() : null;
-			if (current != (parent == null ? null : parent.fabric)) {
-				throw new IllegalStateException("An unrelated Fabric transaction is already open");
-			}
-			Transaction fabric = parent == null ? Transaction.openOuter() : parent.fabric.openNested();
-			link(state, new Pair(fabric, neo));
-		}
-		return state.pairs.get(context).fabric;
-	}
-
-	private static void link(State state, Pair pair) {
-		state.pairs.put(pair.fabric, pair);
-		state.pairs.put(pair.neo, pair);
-	}
-
-	private static State usable() {
-		checkHooks();
-		State state = LOCAL.get();
-		// Not while flushing: both engines are fully closed there, and a new pair is as safe as any other.
-		if (state.closing != 0) throw new IllegalStateException("Cross-API transfer during a transaction close callback is unsupported");
-		return state;
-	}
-
-	/** Resource-specific pre-commit invariants, attached to the real NeoForge root (including nested-only use). */
-	public static void addValidation(net.neoforged.neoforge.transfer.transaction.TransactionContext context,
-			Object owner, Runnable validation) {
-		State state = usable();
-		if (context != net.neoforged.neoforge.transfer.transaction.Transaction.getCurrentOpenedTransaction())
-			throw new IllegalArgumentException("NeoForge context is not the current transaction");
-		Object root = NeoAccess.ancestors(context).get(0);
-		state.validations.computeIfAbsent(root, ignored -> new IdentityHashMap<>()).put(owner, validation);
-	}
-	public static void removeValidation(Object owner) {
-		State state = LOCAL.get();
-		state.validations.values().forEach(group -> group.remove(owner));
-		state.validations.values().removeIf(IdentityHashMap::isEmpty);
-	}
-	private static void checkPeer(Pair pair, Object origin) {
-		if (origin == pair.fabric) {
-			if (net.neoforged.neoforge.transfer.transaction.Transaction.getCurrentOpenedTransaction() != pair.neo)
-				throw new IllegalStateException("Paired NeoForge scope is not current; close its child before closing/using the Fabric scope");
-		} else if (!Transaction.isOpen() || Transaction.getCurrentUnsafe() != pair.fabric) {
-			throw new IllegalStateException("Paired Fabric scope is not current; close its child before closing/using the NeoForge scope");
-		}
-	}
-	/** Invoked before either native manager changes its depth; final callbacks after both roots close may open native-only scopes. */
-	public static void beforeOpen() {
-		if (LOCAL.get().closing != 0) throw new IllegalStateException("A transaction close callback cannot open a new native scope during a paired close");
-	}
-
-	/** Called after the native engine validates its current scope, before it changes any snapshots. */
-	public static void beforeClose(Object transaction, boolean committed) {
-		State state = LOCAL.get();
-		Pair pair = state.pairs.get(transaction);
-		if (pair != null && pair.origin != null && pair.origin != transaction && !pair.closingPeer)
-			throw new IllegalStateException("Only the transaction coordinator may close the peer during a paired close");
-		// The peer must be closable BEFORE the native source commits or aborts. Checking only in afterClose
-		// would leave one engine committed when an unpaired peer child makes the other root refuse to close.
-		if (pair != null && pair.origin == null) checkPeer(pair, transaction);
-		// Root invariants are the ORIGIN's check. When its peer closes, the origin has already committed natively:
-		// a second run cannot change the outcome, and a throw here would skip the peer's native close entirely,
-		// leaving that engine's transaction open on this thread for good.
-		if (committed && (pair == null || pair.origin == null)) {
-			Object neo = transaction instanceof net.neoforged.neoforge.transfer.transaction.Transaction ? transaction : pair == null ? null : pair.neo;
-			if (neo != null) {
-				Object root = NeoAccess.ancestors(neo).get(0);
-				var validations = state.validations.get(root);
-				if (validations != null) for (Runnable validation : List.copyOf(validations.values())) validation.run();
-			}
-		}
-		// A validator failure leaves the scope and its checks intact; a later abort can still restore it.
-		state.validations.remove(transaction);
-		if (pair == null) return;
-		if (pair.origin == null) {
-			pair.origin = transaction;
-			pair.committed = committed;
-			state.closing++;
-		} else if (pair.committed != committed) {
-			throw new IllegalStateException("Paired transactions disagree about commit/abort");
-		}
-	}
-
-	/** The native close ran, including its snapshot callbacks. Always release the paired scope, even on failure. */
-	public static void afterClose(Object transaction, Throwable nativeFailure) {
-		State state = LOCAL.get();
-		Pair pair = state.pairs.get(transaction);
-		if (pair == null || pair.origin != transaction) return;
-		Throwable failure = nativeFailure;
-		try {
-			pair.closingPeer = true;
-			if (transaction == pair.fabric) {
-				if (pair.committed) pair.neo.commit(); else pair.neo.close();
-			} else {
-				if (pair.committed) pair.fabric.commit(); else pair.fabric.abort();
-			}
-		} catch (Throwable peerFailure) {
-			failure = combine(failure, peerFailure);
-		} finally {
-			pair.closingPeer = false;
-			state.pairs.remove(pair.fabric);
-			state.pairs.remove(pair.neo);
-			state.closing--;
-		}
-		// A final notification that transferred again closes its own pair inside the flush below. Its finals were
-		// queued behind the current ones; the outermost loop runs them, and only it releases the thread state.
-		if (state.pairs.isEmpty() && state.closing == 0 && !state.flushing) {
-			state.flushing = true;
-			try {
-				while (!state.finals.isEmpty()) {
-					try { state.finals.removeFirst().run(); }
-					catch (Throwable notificationFailure) { failure = combine(failure, notificationFailure); }
+			if (depth > 0) {
+				if (snapshots.get(depth - 1) == null) {
+					snapshots.set(depth - 1, snapshot);
+					context.getOpenTransaction(depth - 1).addCloseCallback(this);
+				} else {
+					releaseSnapshot(snapshot);
 				}
-			} finally {
-				state.flushing = false;
-				LOCAL.remove();
+			} else {
+				releaseSnapshot(snapshot);
+				context.addOuterCloseCallback(this);
 			}
 		}
-		if (nativeFailure == null && failure != null) rethrow(failure);
-	}
 
-	/** Replaces only OuterCloseCallback invocation, preserving its original order within each native engine. */
-	public static void fabricFinal(Object callback, Object result) {
-		enqueueOrRun(() -> ((TransactionContext.OuterCloseCallback) callback)
-				.afterOuterClose((TransactionContext.Result) result));
-	}
-
-	/** Replaces only the NeoForge manager's callOnRootCommit dispatch; the journal itself remains native. */
-	public static void neoFinal(Object journal) {
-		enqueueOrRun(() -> NeoAccess.finish(journal));
-	}
-
-	private static void enqueueOrRun(Runnable callback) {
-		State state = LOCAL.get();
-		if (!state.pairs.isEmpty() || state.closing != 0) state.finals.addLast(callback);
-		else callback.run();
-	}
-
-	private static Throwable combine(Throwable first, Throwable second) {
-		if (first == null) return second;
-		if (first != second) first.addSuppressed(second);
-		return first;
-	}
-	private static void rethrow(Throwable failure) {
-		if (failure instanceof Error error) throw error;
-		if (failure instanceof RuntimeException runtime) throw runtime;
-		throw new IllegalStateException(failure);
-	}
-
-	/** Refuse any transfer before mutation if even one of the required hooks failed to land. */
-	public static void checkHooks() {
-		if (hooksChecked) return;
-		for (String name : List.of("net.neoforged.neoforge.transfer.transaction.Transaction",
-				"net.neoforged.neoforge.transfer.transaction.TransactionManager",
-				"net.fabricmc.fabric.impl.transfer.transaction.TransactionManagerImpl$TransactionImpl",
-				"net.fabricmc.fabric.impl.transfer.transaction.TransactionManagerImpl")) {
-			try {
-				Class.forName(name, false, PairedTransactions.class.getClassLoader()).getDeclaredMethod("forbric$transferHooks");
-			} catch (ReflectiveOperationException missingHook) {
-				throw new IllegalStateException("Transfer transaction hook is missing: " + name, missingHook);
-			}
-		}
-		hooksChecked = true;
-	}
-
-	private static final class NeoAccess {
-		private static final Field MANAGER;
-		private static final Field STACK;
-		private static final Method FINISH;
-		static {
-			try {
-				MANAGER = net.neoforged.neoforge.transfer.transaction.Transaction.class.getDeclaredField("manager");
-				MANAGER.setAccessible(true);
-				STACK = MANAGER.getType().getDeclaredField("stack");
-				STACK.setAccessible(true);
-				FINISH = net.neoforged.neoforge.transfer.transaction.SnapshotJournal.class.getDeclaredMethod("callOnRootCommit");
-				FINISH.setAccessible(true);
-			} catch (ReflectiveOperationException drift) { throw new ExceptionInInitializerError(drift); }
-		}
-		@SuppressWarnings("unchecked")
-		static List<net.neoforged.neoforge.transfer.transaction.Transaction> ancestors(Object transaction) {
-			try { return (List<net.neoforged.neoforge.transfer.transaction.Transaction>) STACK.get(MANAGER.get(transaction)); }
-			catch (IllegalAccessException impossible) { throw new IllegalStateException(impossible); }
-		}
-		static void finish(Object journal) {
-			try { FINISH.invoke(journal); }
-			catch (InvocationTargetException failure) { rethrow(failure.getCause()); }
-			catch (IllegalAccessException impossible) { throw new IllegalStateException(impossible); }
+		public final void afterOuterClose(TransactionContext.Result result) {
+			if (!result.wasAborted()) onRootCommit();
 		}
 	}
 }

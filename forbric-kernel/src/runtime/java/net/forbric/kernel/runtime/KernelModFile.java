@@ -21,9 +21,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 
+import cpw.mods.jarhandling.SecureJar;
 import net.forbric.kernel.discovery.ModFileScanner;
 import net.forbric.kernel.util.ForbricLog;
-import net.neoforged.fml.jarcontents.JarContents;
 import net.neoforged.neoforgespi.language.IModInfo;
 import net.neoforged.neoforgespi.language.IModFileInfo;
 import net.neoforged.neoforgespi.language.ModFileScanData;
@@ -37,21 +37,34 @@ import net.neoforged.neoforgespi.locating.ModFileDiscoveryAttributes;
  * <h2>What this class made visible</h2>
  *
  * <p>It replaces a {@link java.lang.reflect.Proxy} that switched on method NAMES and answered everything it did
- * not name through a {@code defaultReturn} — null for objects, false for booleans, empty for collections. Four
- * of this interface's ten methods were named; the other six were answered by that fallback, and nothing anywhere
- * said so. Written as a class, javac lists all ten and each one is now a line with a reason next to it.
+ * not name through a {@code defaultReturn} — null for objects, false for booleans, empty for collections. It was
+ * first written answering every one of the interface's methods the way the proxy had, deliberately, so that the
+ * rewrite could not move behaviour, and then {@link #getFileName()}, {@link #getType()} and
+ * {@link #getModFileInfo()} were corrected to the values a real mod file has. Each was null, and null is not a
+ * value any consumer expects from them: a mod filtering the file list by type dropped every kernel-loaded mod, and
+ * a mod walking from a file back to its info — the direction NeoForge's own error path takes — dereferenced null.
  *
- * <p>The class was first written answering every one of those the way the proxy had, deliberately, so that the
- * rewrite could not move behaviour — and it recorded that four of them were almost certainly wrong. This is that
- * separate change: {@link #getId()}, {@link #getFileName()}, {@link #getType()} and {@link #getModFileInfo()}
- * now answer with the values a real mod file has. Each was null, and null is not a value any consumer expects
- * from them: a mod filtering the file list by type dropped every kernel-loaded mod, and a mod walking from a
- * file back to its info — the direction NeoForge's own error path takes — dereferenced null.
+ * <h2>PORT(1.21.1): the jar-contents seam</h2>
+ *
+ * <p>PORT(1.21.1): 26.2's {@code net.neoforged.fml.jarcontents.JarContents} does not exist on 1.21.1; the file's
+ * contents are a {@code cpw.mods.jarhandling.SecureJar} and the interface accessor is {@link #getSecureJar()}
+ * (26.2 named it {@code getContents()}). This class builds the jar's real {@code SecureJar} on the same lazy
+ * contract the 26.2 field had.
+ *
+ * <p>PORT(1.21.1): {@code JarContents.empty(path)} has no 1.21.1 counterpart. {@code SecureJar.from(Path...)}
+ * refuses to build from anything that is not an existing path ("Invalid paths argument, contained no existing
+ * paths"), and there is no public empty factory, so a presence alias — a mod id the kernel publishes with no jar
+ * behind it — gets a null {@link #getSecureJar()} where 26.2 got an empty container. Every consumer that walks the
+ * file list must tolerate that null; a mod that reads files out of its OWN jar is unaffected, because it has one.
+ *
+ * <p>PORT(1.21.1): the interface also gained {@link #findResource(String...)} (vanilla 1.21.1's shape, mirroring
+ * {@code net.neoforged.fml.loading.moddiscovery.ModFile}) and {@link #setSecurityStatus(SecureJar.Status)}; it lost
+ * 26.2's {@code getId()}, which is not part of the 1.21.1 interface and had no other reader.
  */
 public final class KernelModFile implements IModFile {
 	private final String modId;
 	private final Path path;
-	private final JarContents contents;
+	private final SecureJar secureJar;
 	private final Path jar;
 
 	/**
@@ -63,9 +76,12 @@ public final class KernelModFile implements IModFile {
 	/** Memoised: most instances are never asked, and walking a hundred jars for nobody is pure boot cost. */
 	private ModFileScanData scanResult;
 
+	/** Written by {@link #setSecurityStatus(SecureJar.Status)}; the kernel verifies no signatures of its own. */
+	private SecureJar.Status securityStatus = SecureJar.Status.NONE;
+
 	/**
 	 * @param jar the mod's real jar, or null for a presence alias which has none. A mod that reads files out of
-	 *            its own jar through {@code getModInfo().getOwningFile().getFile().getContents()} gets nothing
+	 *            its own jar through {@code getModInfo().getOwningFile().getFile().getSecureJar()} gets nothing
 	 *            without it: Tectonic builds its bundled datapack that way, and against a null it produced a null
 	 *            Pack, after which {@code PackRepository.discoverAvailable} died on "Cannot invoke
 	 *            Pack.streamSelfAndChildren() because pack is null" and the world would not load.
@@ -74,16 +90,17 @@ public final class KernelModFile implements IModFile {
 		this.modId = modId;
 		this.jar = jar;
 		this.path = jar != null ? jar : Path.of("forbric-kernel", modId + ".jar");
-		// Native visitors enumerate every published identity, including cross-ecosystem aliases. An alias
-		// contributes no resources, but is still a valid file-shaped entry; null aborts the entire traversal.
-		this.contents = jar == null ? JarContents.empty(this.path) : contentsOf(jar);
+		// Native visitors enumerate every published identity, including cross-ecosystem aliases. A real jar is
+		// opened lazily by SecureJar; an alias contributes no resources and cannot build a SecureJar from a path
+		// that is not a file at all, so it reports null (PORT(1.21.1), see the class note).
+		this.secureJar = jar == null ? null : secureJarOf(jar);
 	}
 
-	private static JarContents contentsOf(Path jar) {
+	private static SecureJar secureJarOf(Path jar) {
 		try {
-			return JarContents.ofPath(jar);
+			return SecureJar.from(jar);
 		} catch (Throwable t) {
-			ForbricLog.debug("[Forbric/Container] no JarContents for %s: %s", jar.getFileName(),
+			ForbricLog.debug("[Forbric/Container] no SecureJar for %s: %s", jar.getFileName(),
 					String.valueOf(t));
 			return null;
 		}
@@ -94,9 +111,38 @@ public final class KernelModFile implements IModFile {
 		return path;
 	}
 
+	/** The mod's real jar contents, or null for a jar-less presence alias. PORT(1.21.1): replaces 26.2's contents. */
 	@Override
-	public JarContents getContents() {
-		return contents;
+	public SecureJar getSecureJar() {
+		return secureJar;
+	}
+
+	/**
+	 * {@code findResource("META-INF", "mods.toml")} — the 1.21.1 SPI entry point a mod uses to read a file from
+	 * its own jar, answering a path inside the jar's own file system.
+	 *
+	 * <p>Mirrors {@code net.neoforged.fml.loading.moddiscovery.ModFile}: at least one segment is required, and the
+	 * segments are joined with {@code /} into {@code SecureJar.getPath}. Null for a jar-less alias, which has no
+	 * resources, rather than the NPE a null jar would otherwise raise.
+	 */
+	@Override
+	public Path findResource(String... path) {
+		if (path == null || path.length < 1) throw new IllegalArgumentException("Missing path");
+		return secureJar == null ? null : secureJar.getPath(String.join("/", path));
+	}
+
+	/**
+	 * PORT(1.21.1): new on 1.21.1's interface. The kernel publishes its own mod files and verifies no signatures,
+	 * so this only records what a caller set — the field FML's own {@code ModFile} keeps.
+	 */
+	@Override
+	public void setSecurityStatus(SecureJar.Status status) {
+		this.securityStatus = status;
+	}
+
+	/** The status {@link #setSecurityStatus} recorded; {@code NONE} until something sets one. */
+	public SecureJar.Status getSecurityStatus() {
+		return securityStatus;
 	}
 
 	/**
@@ -125,12 +171,6 @@ public final class KernelModFile implements IModFile {
 			scanResult = real instanceof ModFileScanData data ? data : new ModFileScanData();
 		}
 		return scanResult;
-	}
-
-	/** The mod's id, which is what a real mod file's id is. */
-	@Override
-	public String getId() {
-		return modId;
 	}
 
 	/** The jar's file name, or the placeholder path's for a mod that has no jar. Never null. */

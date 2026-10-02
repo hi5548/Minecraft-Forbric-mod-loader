@@ -572,7 +572,8 @@ public final class KernelLifecycle {
 	}
 
 	/**
-	 * Starts NeoForge's global game bus + Forge's DEFAULT BusGroup so game-event listeners dispatch.
+	 * Starts NeoForge's global game bus + traditional Forge's {@code MinecraftForge.EVENT_BUS} so game-event
+	 * listeners dispatch.
 	 *
 	 * <p>Absent and failed are split here for the same reason as in {@link #invokeGameDataOn}: a single-family
 	 * instance legitimately has only one of these two buses, and that is a debug line. A bus that is PRESENT and
@@ -587,8 +588,12 @@ public final class KernelLifecycle {
 		GameEventMultiplexer.installDataMapWatch(cl);
 		startBus(cl, "net.neoforged.neoforge.common.NeoForge", "EVENT_BUS",
 				"net.neoforged.bus.api.IEventBus", "start", "NeoForge.EVENT_BUS");
-		startBus(cl, "net.minecraftforge.eventbus.api.bus.BusGroup", "DEFAULT",
-				"net.minecraftforge.eventbus.api.bus.BusGroup", "startup", "Forge BusGroup.DEFAULT");
+		// 1.21.1's MinecraftForge is EventBus 6: the game bus is the static MinecraftForge.EVENT_BUS and its gate
+		// is IEventBus.start(). 26.2's EventBus 7 spelled this BusGroup.DEFAULT + startup(), and resolving that
+		// against this carrier found no class, took the "absent" branch, and left every Forge game listener on a
+		// bus nothing dispatched — silently, which is exactly the failure this method exists to make visible.
+		startBus(cl, "net.minecraftforge.common.MinecraftForge", "EVENT_BUS",
+				"net.minecraftforge.eventbus.api.IEventBus", "start", "MinecraftForge.EVENT_BUS");
 	}
 
 	/**

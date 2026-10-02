@@ -16,12 +16,20 @@
 
 package net.forbric.kernel.runtime;
 
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import net.minecraft.core.Holder;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.Registry;
 import net.minecraft.core.WritableRegistry;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.ResourceManager;
+import net.minecraft.tags.TagKey;
 import net.minecraft.tags.TagLoader;
 import net.minecraft.world.level.storage.loot.LootTable;
 
@@ -43,6 +51,14 @@ import net.neoforged.neoforge.event.EventHooks;
  * <p>It is registered as {@link net.forbric.api.GameEventBridge#LOOT_TABLE_LOAD} rather than simply called, so
  * {@code -Dforbric.unifiedEvents=off} leaves the old behaviour and the dead-event audit keeps naming a waiting
  * mod when the link is not there.
+ *
+ * <p><b>PORT(1.21.1):</b> 1.21.1's {@code ReloadableServerRegistries} has no {@code scheduleRegistryLoad} lambdas
+ * and no {@code TagLoader.loadTagsForRegistry} to hang the two anchors on — loot tables are parsed by
+ * {@code scheduleElementParse} and tags are bound by {@code ReloadableServerResources.updateRegistryTags} over a
+ * {@code TagManager}. Both methods are kept, with the descriptors the injector names, so the seam still compiles
+ * and a re-derived anchor can be pointed at it; {@link #loadTagsForRegistry} now performs 1.21.1's tag bind
+ * itself. Re-anchoring (and the loot-table half, whose {@code EventHooks.loadLootTable} call 1.21.1's
+ * {@code ReloadableServerRegistries} never makes) is a W5 item.
  */
 public final class KernelLootBridge {
 	/**
@@ -63,8 +79,8 @@ public final class KernelLootBridge {
 		forgeLinked = true;
 	}
 
-	/** {@code ReloadableServerRegistries.lambda$scheduleRegistryLoad$1}'s call, for every loaded table. */
-	public static LootTable loadLootTable(HolderLookup.Provider provider, Identifier id, LootTable table) {
+	/** {@code ReloadableServerRegistries}'s per-table call, for every loaded table. */
+	public static LootTable loadLootTable(HolderLookup.Provider provider, ResourceLocation id, LootTable table) {
 		LootTable neo = EventHooks.loadLootTable(provider, id, table);
 		if (neo == null) return null;
 		LootTable forge = forgeLinked ? net.minecraftforge.event.ForgeEventFactory.onLoadLootTable(id, neo) : neo;
@@ -75,11 +91,27 @@ public final class KernelLootBridge {
 		return fabric instanceof LootTable result ? result : forge;
 	}
 
-	/** {@code ReloadableServerRegistries.lambda$scheduleRegistryLoad$0}'s call, once per reloadable registry. */
+	/** {@code ReloadableServerRegistries}'s per-registry call, once per reloadable registry. */
 	public static void loadTagsForRegistry(ResourceManager resources, WritableRegistry<?> registry) {
-		TagLoader.loadTagsForRegistry(resources, registry);
+		loadTags(resources, registry);
 		if (Registries.LOOT_TABLE.equals(registry.key())) {
 			LootTableEventDispatch.allLoaded(resources, registry);
 		}
+	}
+
+	/**
+	 * 1.21.1's own tag bind, which is what {@code TagLoader.loadTagsForRegistry} did on 26.2.
+	 *
+	 * <p>{@code ReloadableServerResources.updateRegistryTags} does exactly this per {@code TagManager.LoadResult}:
+	 * one {@link TagLoader} over {@code Registries.tagsDirPath(registry)}, then {@code bindTags} with the
+	 * identifiers re-keyed as {@link TagKey}s.
+	 */
+	private static <T> void loadTags(ResourceManager resources, WritableRegistry<T> registry) {
+		ResourceKey<? extends Registry<T>> key = registry.key();
+		TagLoader<Holder<T>> loader = new TagLoader<>(registry::getHolder, Registries.tagsDirPath(key));
+		Map<ResourceLocation, Collection<Holder<T>>> loaded = loader.loadAndBuild(resources);
+		Map<TagKey<T>, List<Holder<T>>> tags = new HashMap<>();
+		loaded.forEach((id, holders) -> tags.put(TagKey.create(key, id), List.copyOf(holders)));
+		registry.bindTags(tags);
 	}
 }

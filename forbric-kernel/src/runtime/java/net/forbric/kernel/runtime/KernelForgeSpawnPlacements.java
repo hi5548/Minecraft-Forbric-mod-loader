@@ -64,7 +64,12 @@ public final class KernelForgeSpawnPlacements {
 						original.predicate(), original.placement(), original.heightmap()));
 			}
 
-			SpawnPlacementRegisterEvent.BUS.post(new SpawnPlacementRegisterEvent(forge));
+			// PORT(1.21.1): 26.2's Forge events carried their own bus and were posted with
+			// SpawnPlacementRegisterEvent.BUS.post(...); on 1.21.1 a mod-bus event is delivered through Forge's
+			// own ModLoader, which posts one instance to every mod container's bus (verified: the static
+			// EventHooks-side twin is net.neoforged.fml.ModLoader.postEvent below, and
+			// net.minecraftforge.fml.ModLoader.get().postEvent is the instance method).
+			net.minecraftforge.fml.ModLoader.get().postEvent(new SpawnPlacementRegisterEvent(forge));
 			// Prepare all replacements before touching the Neo event. A Forge listener/build failure leaves the
 			// original Neo map intact, and the outer method still posts Neo exactly once.
 			Map<EntityType<?>, RegisterSpawnPlacementsEvent.MergedSpawnPredicate<?>> replacements = new LinkedHashMap<>();

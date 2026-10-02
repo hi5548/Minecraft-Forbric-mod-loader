@@ -1,8 +1,8 @@
 /* Copyright 2026 The Forbric Project. Licensed under the Apache License, Version 2.0. */
 package net.forbric.kernel.runtime;
 
-import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.level.BaseSpawner;
 import net.minecraft.world.level.ServerLevelAccessor;
 import net.neoforged.neoforge.common.NeoForge;
@@ -23,7 +23,7 @@ public final class KernelSpawnPosition {
 	}
 
 	/** -1 when the listeners left it to the vanilla checks, 1 when they allowed the spawn, 0 when they denied it. */
-	public static int decide(Mob mob, ServerLevelAccessor level, EntitySpawnReason reason, BaseSpawner spawner) {
+	public static int decide(Mob mob, ServerLevelAccessor level, MobSpawnType reason, BaseSpawner spawner) {
 		MobSpawnEvent.PositionCheck event = new MobSpawnEvent.PositionCheck(mob, level, reason, spawner);
 		NeoForge.EVENT_BUS.post(event);
 		MobSpawnEvent.PositionCheck.Result result = event.getResult();

@@ -10,14 +10,15 @@ import net.fabricmc.fabric.api.transfer.v1.storage.SlottedStorage;
 import net.fabricmc.fabric.api.transfer.v1.storage.StorageView;
 import net.fabricmc.fabric.api.transfer.v1.storage.base.SingleSlotStorage;
 import net.fabricmc.fabric.api.transfer.v1.transaction.TransactionContext;
-import net.neoforged.neoforge.transfer.ResourceHandler;
-import net.neoforged.neoforge.transfer.energy.EnergyHandler;
-import net.neoforged.neoforge.transfer.resource.Resource;
 
 /**
  * Location-bound views never retain a resolved foreign handler. Every operation resolves it anew, and a removed
  * endpoint becomes empty. If removal happens inside a provider callback, throwing before the adapter's nested
  * transaction commits lets the real engine roll the provider back instead of silently writing into a dead object.
+ *
+ * <p>PORT(1.21.1): {@link ResourceHandler}/{@link EnergyHandler} are the bridge's own replacements for 26.2's
+ * {@code neoforge.transfer} shapes, and the transaction token is Fabric's {@link TransactionContext} (the only
+ * revertible engine in the pack). The live-resolution, invalidation and unchanged-generation rules are unchanged.
  */
 public final class LiveTransferEndpoints {
 	private LiveTransferEndpoints() { }
@@ -39,12 +40,12 @@ public final class LiveTransferEndpoints {
 			public long getAmountAsLong(int slot) { var h = current(slot); return h == null ? 0 : h.getAmountAsLong(slot); }
 			public long getCapacityAsLong(int slot, N resource) { var h = current(slot); return h == null ? 0 : h.getCapacityAsLong(slot, resource); }
 			public boolean isValid(int slot, N resource) { var h = current(slot); return h != null && h.isValid(slot, resource); }
-			public int insert(int slot, N resource, int max, net.neoforged.neoforge.transfer.transaction.TransactionContext tx) {
+			public int insert(int slot, N resource, int max, TransactionContext tx) {
 				var h = current(slot); if (h == null) return 0;
 				long before = generation.getAsLong();
 				int amount = h.insert(slot, resource, max, tx); stillValid(valid); unchanged(before, generation); return amount;
 			}
-			public int extract(int slot, N resource, int max, net.neoforged.neoforge.transfer.transaction.TransactionContext tx) {
+			public int extract(int slot, N resource, int max, TransactionContext tx) {
 				var h = current(slot); if (h == null) return 0;
 				long before = generation.getAsLong();
 				int amount = h.extract(slot, resource, max, tx); stillValid(valid); unchanged(before, generation); return amount;
@@ -59,12 +60,12 @@ public final class LiveTransferEndpoints {
 		private EnergyHandler current() { return valid.getAsBoolean() ? lookup.get() : null; }
 		public long getAmountAsLong() { var h = current(); return h == null ? 0 : h.getAmountAsLong(); }
 		public long getCapacityAsLong() { var h = current(); return h == null ? 0 : h.getCapacityAsLong(); }
-		public int insert(int max, net.neoforged.neoforge.transfer.transaction.TransactionContext tx) {
+		public int insert(int max, TransactionContext tx) {
 			var h = current(); if (h == null) return 0;
 			long before = generation.getAsLong();
 			int amount = h.insert(max, tx); stillValid(valid); unchanged(before, generation); return amount;
 		}
-		public int extract(int max, net.neoforged.neoforge.transfer.transaction.TransactionContext tx) {
+		public int extract(int max, TransactionContext tx) {
 			var h = current(); if (h == null) return 0;
 			long before = generation.getAsLong();
 			int amount = h.extract(max, tx); stillValid(valid); unchanged(before, generation); return amount;

@@ -9,14 +9,19 @@ import net.fabricmc.fabric.api.transfer.v1.storage.StorageView;
 import net.fabricmc.fabric.api.transfer.v1.storage.base.SingleSlotStorage;
 import net.fabricmc.fabric.api.transfer.v1.transaction.Transaction;
 import net.fabricmc.fabric.api.transfer.v1.transaction.TransactionContext;
-import net.neoforged.neoforge.transfer.ResourceHandler;
-import net.neoforged.neoforge.transfer.resource.Resource;
 
 /**
  * Slot-preserving item/fluid adapters. Amounts are never rounded after mutation: a sub-quantum Fabric result is
  * rolled back, then retried once with an exactly representable maximum. Native providers keep their validation,
- * limits and transaction journals. An arbitrary unslotted Fabric Storage cannot implement indexed insertion and
- * is intentionally not accepted. Introspection is conservative: Fabric has no per-resource isValid method.
+ * limits and journals. An arbitrary unslotted Fabric Storage cannot implement indexed insertion and is
+ * intentionally not accepted. Introspection is conservative: Fabric has no per-resource isValid method.
+ *
+ * <p>PORT(1.21.1): the pivot handler is the bridge's own {@link ResourceHandler} (see TransferApi), and the
+ * transaction token is Fabric's {@link TransactionContext}. 26.2's {@code PairedTransactions.neo/fabric} pairing is
+ * gone with the NeoForge transaction manager, so both directions simply carry the Fabric context through:
+ * {@code FromNeo} hands it to the pivot (whose native-backed implementations journal their own writes), and
+ * {@code FromFabric} opens its nested scope with {@link Transaction#openNested(TransactionContext)}, which also
+ * turns the null "no transaction" context into a fresh outer one exactly as Fabric's own StorageUtil does.
  */
 public final class NativeTransferAdapters {
 	private NativeTransferAdapters() { }
@@ -76,13 +81,13 @@ public final class NativeTransferAdapters {
 			if (nativeResource == null) return 0;
 			int request = (int) Math.min(Integer.MAX_VALUE, maximum / codec.fabricUnits());
 			if (request == 0) return 0;
-			var parent = PairedTransactions.neo(context);
-			try (var transaction = net.neoforged.neoforge.transfer.transaction.Transaction.open(parent)) {
-				int moved;
-				if (slot < 0) moved = insert ? handler.insert(nativeResource, request, transaction) : handler.extract(nativeResource, request, transaction);
-				else moved = insert ? handler.insert(slot, nativeResource, request, transaction) : handler.extract(slot, nativeResource, request, transaction);
+			try {
+				// The pivot carries the Fabric context itself: a native-backed view journals into it, a Fabric-backed
+				// view opens its own nested scope, and a null context means the write is final.
+				int moved = slot < 0
+						? (insert ? handler.insert(nativeResource, request, context) : handler.extract(nativeResource, request, context))
+						: (insert ? handler.insert(slot, nativeResource, request, context) : handler.extract(slot, nativeResource, request, context));
 				validResult(moved, request);
-				transaction.commit();
 				return moved * codec.fabricUnits();
 			} catch (LiveTransferEndpoints.Unavailable invalidated) {
 				requireSuccessfulRollback(invalidated, handler);
@@ -120,24 +125,23 @@ public final class NativeTransferAdapters {
 		// Fabric cannot answer resource-specific validity without attempting a transaction. Avoid a false negative
 		// when the storage is merely full; insert still delegates to its real filter and may return zero.
 		public boolean isValid(int index, N resource) { return codec.toFabric(resource) != null && storage.getSlot(index).supportsInsertion(); }
-		public int insert(int index, N resource, int maximum, net.neoforged.neoforge.transfer.transaction.TransactionContext context) {
+		public int insert(int index, N resource, int maximum, TransactionContext context) {
 			return move(index, resource, maximum, context, true);
 		}
-		public int extract(int index, N resource, int maximum, net.neoforged.neoforge.transfer.transaction.TransactionContext context) {
+		public int extract(int index, N resource, int maximum, TransactionContext context) {
 			return move(index, resource, maximum, context, false);
 		}
-		int move(int index, N resource, int maximum, net.neoforged.neoforge.transfer.transaction.TransactionContext context, boolean insert) {
+		int move(int index, N resource, int maximum, TransactionContext context, boolean insert) {
 			amount(maximum);
 			if (maximum == 0) return 0;
 			F converted = codec.toFabric(resource);
 			if (converted == null || codec.isFabricBlank(converted)) return 0;
 			SingleSlotStorage<F> slot = storage.getSlot(index);
 			long request = Math.multiplyExact((long) maximum, codec.fabricUnits());
-			TransactionContext parent = PairedTransactions.fabric(context);
 			// A provider may accept less than requested, including a fraction of one mB. Every unsuccessful trial
 			// is aborted in its OWN nested scope; no rounded amount is ever returned for an unrounded mutation.
 			for (int attempt = 0; attempt < 2 && request > 0; attempt++) {
-				try (Transaction transaction = parent.openNested()) {
+				try (Transaction transaction = Transaction.openNested(context)) {
 					long moved = validResult(insert ? slot.insert(converted, request, transaction) : slot.extract(converted, request, transaction), request);
 					if (moved % codec.fabricUnits() == 0) {
 						transaction.commit();

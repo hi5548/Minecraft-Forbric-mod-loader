@@ -22,7 +22,9 @@ public final class KernelGameClientResourceEvents {
 	public static void install(Object modBus) {
 		KernelGameClientNetworkEvents.forward((IEventBus) modBus, TextureAtlasStitchedEvent.class, "TextureAtlasStitchedEvent",
 				event -> ForgeHooksClient.onTextureStitchedPost(event.getAtlas()));
+		// PORT(1.21.1): 21.1's BakingCompleted exposes the baked map directly (getModels()), and Forge's hook takes it
+		// between the model manager and the bakery.
 		KernelGameClientNetworkEvents.forward((IEventBus) modBus, ModelEvent.BakingCompleted.class, "ModelEvent.BakingCompleted",
-				event -> ForgeHooksClient.onModelBake(event.getModelManager(), event.getModelBakery()));
+				event -> ForgeHooksClient.onModelBake(event.getModelManager(), event.getModels(), event.getModelBakery()));
 	}
 }

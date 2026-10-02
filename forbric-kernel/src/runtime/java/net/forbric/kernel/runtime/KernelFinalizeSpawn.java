@@ -2,10 +2,11 @@
 package net.forbric.kernel.runtime;
 
 import net.minecraft.world.DifficultyInstance;
-import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.SpawnGroupData;
 import net.minecraft.world.level.ServerLevelAccessor;
+import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.entity.living.MobSpawnEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.common.extensions.IOwnedSpawner;
@@ -31,14 +32,14 @@ public final class KernelFinalizeSpawn {
 
 	/** The redirect target of every {@code Mob.finalizeSpawn} call in NeoForge's listed classes. */
 	public static SpawnGroupData finalizeMobSpawn(Mob mob, ServerLevelAccessor level, DifficultyInstance difficulty,
-			EntitySpawnReason reason, SpawnGroupData data) {
+			MobSpawnType reason, SpawnGroupData data) {
 		FinalizeSpawnEvent neo = new FinalizeSpawnEvent(mob, level, mob.getX(), mob.getY(), mob.getZ(), difficulty, reason,
 				data, null);
 		NeoForge.EVENT_BUS.post(neo);
 		if (neo.isCanceled()) return null;
 		MobSpawnEvent.FinalizeSpawn forge = forge(mob, level, neo);
 		if (forge == null) return null;
-		return mob.finalizeSpawn(level, forge.getDifficulty(), forge.getSpawnReason(), forge.getSpawnData());
+		return mob.finalizeSpawn(level, forge.getDifficulty(), forge.getSpawnType(), forge.getSpawnData());
 	}
 
 	/**
@@ -46,7 +47,7 @@ public final class KernelFinalizeSpawn {
 	 * posts its plain event there only where vanilla initializes the mob, with no spawner and no spawn tag.
 	 */
 	public static FinalizeSpawnEvent finalizeTrialSpawner(Mob mob, ServerLevelAccessor level, DifficultyInstance difficulty,
-			EntitySpawnReason reason, SpawnGroupData data, IOwnedSpawner spawner, boolean initialize) {
+			MobSpawnType reason, SpawnGroupData data, IOwnedSpawner spawner, boolean initialize) {
 		FinalizeSpawnEvent neo = EventHooks.finalizeMobSpawnSpawner(mob, level, difficulty, reason, data, spawner, false);
 		if (neo == null || neo.isCanceled() || !initialize) return neo;
 		MobSpawnEvent.FinalizeSpawn forge = forge(mob, level, neo);
@@ -67,7 +68,7 @@ public final class KernelFinalizeSpawn {
 				neo.getDifficulty(), neo.getSpawnType(), neo.getSpawnData(), null, null);
 		boolean cancelled;
 		try {
-			cancelled = MobSpawnEvent.FinalizeSpawn.BUS.post(forge);
+			cancelled = MinecraftForge.EVENT_BUS.post(forge);
 		} finally {
 			if (neoSpawnVeto) mob.setSpawnCancelled(true);
 		}

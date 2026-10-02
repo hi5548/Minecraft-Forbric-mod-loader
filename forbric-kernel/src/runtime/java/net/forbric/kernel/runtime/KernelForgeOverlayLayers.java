@@ -28,9 +28,8 @@ import net.forbric.api.GameEventBridge;
 import net.forbric.kernel.util.ForbricLog;
 import net.forbric.kernel.util.Reflect;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.Hud;
-import net.minecraft.resources.Identifier;
-import net.minecraftforge.client.gui.overlay.ForgeLayer;
+import net.minecraft.client.gui.LayeredDraw;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.client.gui.overlay.ForgeLayeredDraw;
 import net.neoforged.neoforge.client.gui.GuiLayerManager;
 
@@ -42,21 +41,23 @@ import net.neoforged.neoforge.client.gui.GuiLayerManager;
  * tree, nothing posts {@code AddGuiOverlayLayersEvent}, and a mod that adds a HUD overlay registers it into an
  * object the game never renders. Waila's overlay is the one that showed it; every mod using that API had it.
  *
- * <p>The tree used to be built EMPTY rather than through {@code ForgeLayeredDraw.init}, seeding a no-op under
- * each of MinecraftForge's vanilla layer NAMES so that nothing vanilla was drawn twice. That reasoning was
- * right about the cost and wrong about the shape, and Xaero's minimap is what showed it:
- * {@code locateStack} matches {@code this.name} and then recurses only through {@code subLayerStacks}
- * (disassembled: bci 0-8, then 11-20) — it NEVER reads {@code namedLayers}. A flat tree has no STACKS in it,
- * so the four-argument {@code addBelow(HOTBAR_AND_DECOS, xaerohud:hud, SPECTATOR_HOTBAR, layer)} that a real
- * mod uses took the {@code ifPresentOrElse} else-branch and the layer was dropped. The javadoc's own promise —
- * "a mod asking to sit above the crosshair finds a crosshair to sit above" — held only for the root-relative
- * overload and was false for every stack-targeted one.
+ * <p>On 26.2 the real shape came from MinecraftForge's own tree builder, {@code ForgeLayeredDraw.init}. The
+ * vanilla LEAVES were then neutered instead of never existing: {@link #neuterVanillaLeaves} does that from the
+ * head of {@code resolveLayers}, before the registration event is posted and before the bake; see
+ * {@code ForgeOverlayNeuterInjector} for why that instant is the only one that works. The root is then re-seeded
+ * with the names the builder placed in sub-stacks, so root-relative anchors keep resolving exactly as they did.
  *
- * <p>So {@code init} builds the real shape now, and the vanilla LEAVES are neutered instead of never existing.
- * {@link #neuterVanillaLeaves} does that from the head of {@code resolveLayers}, before the registration event
- * is posted and before the bake; see {@code ForgeOverlayNeuterInjector} for why that instant is the only one
- * that works. The root is then re-seeded with the names {@code init} placed in sub-stacks, so root-relative
- * anchors keep resolving exactly as they did.
+ * <p><b>PORT(1.21.1): there is no {@code ForgeLayeredDraw.init} to call.</b> On 1.21.1 MinecraftForge builds that
+ * tree INSIDE {@code Gui.<init>} (disassembled: {@code new ForgeLayeredDraw(VANILLA_ROOT, COMBINE_LIST)} plus the
+ * PRE_SLEEP/POST_SLEEP sub-stacks, then {@code resolveLayers()}), and the merged {@code Gui} is NeoForge's — it
+ * names {@code ForgeLayeredDraw} nowhere, so that construction never happens here. The kernel therefore builds
+ * the tree it can build: the vanilla root with MinecraftForge's OWN vanilla layer NAMES seeded as no-op leaves
+ * (the pre-26.2 shape). Root-relative registrations resolve and nothing vanilla draws twice, but there are no
+ * vanilla SUB-stacks, so the four-argument stack-targeted overloads
+ * ({@code addBelow(HOTBAR_AND_DECOS, id, SPECTATOR_HOTBAR, layer)}, Xaero's) still cannot resolve and their layer
+ * is dropped with MinecraftForge's own "Target stack ... was not present anywhere" warning. That is the accepted
+ * gap on 1.21.1: narrowed from "every overlay draws nothing" to "stack-targeted overlays draw nothing"; closing it
+ * needs a boot-side seam that rebuilds Forge's real tree, not a change here.
  *
  * <p><b>The accepted gap, stated rather than hidden:</b> the whole MinecraftForge stack is added as ONE NeoForge
  * layer, appended last, so it draws ABOVE the entire vanilla HUD. A mod that asked to sit BELOW a vanilla element
@@ -69,9 +70,10 @@ public final class KernelForgeOverlayLayers {
 	static final String PROPERTY = "forbric.forgeOverlayLayers";
 
 	/** The name the whole MinecraftForge stack is registered under in NeoForge's manager. */
-	static final Identifier LAYER = Identifier.fromNamespaceAndPath("forbric", "minecraftforge_overlays");
+	static final ResourceLocation LAYER =
+			ResourceLocation.fromNamespaceAndPath("forbric", "minecraftforge_overlays");
 
-	private static final ForgeLayer NOTHING = (extractor, delta) -> { };
+	private static final LayeredDraw.Layer NOTHING = (graphics, delta) -> { };
 
 	private KernelForgeOverlayLayers() {
 	}
@@ -104,23 +106,29 @@ public final class KernelForgeOverlayLayers {
 		}
 
 		String refusal = null;
+		ForgeLayeredDraw tree = null;
 		try {
 			Minecraft mc = Minecraft.getInstance();
-			Hud hud = mc == null || mc.gui == null ? null : mc.gui.hud;
-			if (hud == null) {
-				refusal = "the client has no Hud yet";
+			if (mc == null || mc.gui == null) {
+				refusal = "the client has no HUD yet";
 			} else {
-				// Builds MinecraftForge's real tree. Inside it, resolveLayers calls back into
-				// neuterVanillaLeaves BEFORE posting the registration event, so mods register into a tree whose
-				// vanilla leaves are already no-ops.
-				ForgeLayeredDraw.init(hud, mc);
+				// PORT(1.21.1): 26.2 called MinecraftForge's own builder, {@code ForgeLayeredDraw.init(hud, mc)}.
+				// 1.21.1 has no such method — Forge builds the tree inside {@code Gui.<init>} (VANILLA_ROOT +
+				// COMBINE_LIST plus the pre/post-sleep sub-stacks, then resolveLayers), and the merged Gui is
+				// NeoForge's, which never names ForgeLayeredDraw. So the tree is built here from the pieces that
+				// ARE on 1.21.1: the vanilla root with this class's own vanilla layer NAMES seeded as no-op
+				// leaves. resolveLayers is head-hooked by ForgeOverlayNeuterInjector, so neuterVanillaLeaves runs
+				// BEFORE the registration event and BEFORE the bake, exactly as it did inside init on 26.2.
+				tree = new ForgeLayeredDraw(ForgeLayeredDraw.VANILLA_ROOT, ForgeLayeredDraw.COMBINE_LIST);
+				for (ResourceLocation name : vanillaLayerNames()) tree.add(name, NOTHING);
+				tree.resolveLayers();
 				refusal = NEUTERED.refusal();
 			}
 		} catch (Throwable t) {
-			refusal = "MinecraftForge's own tree builder threw (" + Reflect.unwrap(t) + ")";
+			refusal = "building MinecraftForge's overlay tree threw (" + Reflect.unwrap(t) + ")";
 		}
 
-		// The EVENT half is reported separately from the DRAWING half, because they can differ. Once init has
+		// The EVENT half is reported separately from the DRAWING half, because they can differ. Once the build has
 		// run through resolveLayers the event really was posted and the listeners really did run; saying
 		// otherwise makes DeadEventAudit mark xaerominimap/xaeroworldmap DEGRADED with "which this merged game
 		// never posts", which would be false.
@@ -137,9 +145,11 @@ public final class KernelForgeOverlayLayers {
 		}
 
 		try {
-			// The singleton is private static final, so its `extract` cannot be referenced; this public static
-			// wrapper is `getstatic instance; aload_0; aload_1; invokevirtual extract` and has no other caller.
-			((GuiLayerManager) layerManager).add(LAYER, ForgeLayeredDraw::extractRenderState);
+			// PORT(1.21.1): 26.2 handed the manager a static method reference into ForgeLayeredDraw's singleton.
+			// On 1.21.1 the tree built above is itself a LayeredDraw, and LayeredDraw.render(GuiGraphics,
+			// DeltaTracker) is exactly the Layer NeoForge's manager takes. The manager keeps this reference, so
+			// the tree stays alive as long as the HUD does.
+			((GuiLayerManager) layerManager).add(LAYER, tree::render);
 			ForbricLog.info("[Forbric/HudBridge] MinecraftForge's overlay stack is on NeoForge's layer manager — %s",
 					NEUTERED.describe());
 		} catch (Throwable t) {
@@ -158,11 +168,11 @@ public final class KernelForgeOverlayLayers {
 	 * else has touched these maps yet, and the bake reads {@code namedLayers.get(name)} after us.
 	 *
 	 * <p>Map VALUES are replaced and keys are never removed, and {@code order} is never touched.
-	 * {@code resolveNested} does {@code bakedLayers.add((ForgeLayer) namedLayers.get(name))} UNCHECKED, so an
+	 * {@code resolveNested} does {@code bakedLayers.add((LayeredDraw.Layer) namedLayers.get(name))} UNCHECKED, so an
 	 * {@code order} entry whose key no longer exists bakes a null and NPEs on the first HUD frame.
 	 *
 	 * <p>The root is then re-seeded with every vanilla name {@code init} left in a sub-stack, because
-	 * {@code addBelow(Identifier, Identifier, ForgeLayer)} resolves its anchor against the ROOT
+	 * {@code addBelow(ResourceLocation, ResourceLocation, LayeredDraw.Layer)} resolves its anchor against the ROOT
 	 * ({@code locateStack(VANILLA_ROOT)}) and drops the layer when the name is absent. Without this, giving the
 	 * tree its real shape would silently break every root-relative registration that works today. Seeding a name
 	 * that is also a sub-stack is harmless: {@code locateStack} does not read {@code namedLayers}, so a stack
@@ -176,10 +186,10 @@ public final class KernelForgeOverlayLayers {
 			if (!ForgeLayeredDraw.VANILLA_ROOT.equals(tree.getName())) return;
 			NEUTERED.saw(tree);
 
-			List<Identifier> vanilla = vanillaLayerNames();
-			Set<Identifier> vanillaSet = new LinkedHashSet<>(vanilla);
-			Set<Identifier> seen = new LinkedHashSet<>();
-			List<Identifier> unknown = new ArrayList<>();
+			List<ResourceLocation> vanilla = vanillaLayerNames();
+			Set<ResourceLocation> vanillaSet = new LinkedHashSet<>(vanilla);
+			Set<ResourceLocation> seen = new LinkedHashSet<>();
+			List<ResourceLocation> unknown = new ArrayList<>();
 			int replaced = 0;
 			int stacks = 0;
 
@@ -188,9 +198,9 @@ public final class KernelForgeOverlayLayers {
 			while (!queue.isEmpty()) {
 				ForgeLayeredDraw node = queue.poll();
 				stacks++;
-				Map<Identifier, Object> named = mapField(node, "namedLayers");
+				Map<ResourceLocation, Object> named = mapField(node, "namedLayers");
 				if (named != null) {
-					for (Map.Entry<Identifier, Object> entry : named.entrySet()) {
+					for (Map.Entry<ResourceLocation, Object> entry : named.entrySet()) {
 						seen.add(entry.getKey());
 						if (vanillaSet.contains(entry.getKey())) {
 							entry.setValue(NOTHING);
@@ -200,9 +210,9 @@ public final class KernelForgeOverlayLayers {
 						}
 					}
 				}
-				Map<Identifier, Object> subs = mapField(node, "subLayerStacks");
+				Map<ResourceLocation, Object> subs = mapField(node, "subLayerStacks");
 				if (subs != null) {
-					for (Map.Entry<Identifier, Object> entry : subs.entrySet()) {
+					for (Map.Entry<ResourceLocation, Object> entry : subs.entrySet()) {
 						seen.add(entry.getKey());
 						if (entry.getValue() instanceof Map.Entry<?, ?> pair
 								&& pair.getKey() instanceof ForgeLayeredDraw child) {
@@ -221,25 +231,25 @@ public final class KernelForgeOverlayLayers {
 			}
 
 			// Against the ROOT's own two maps, NOT the whole-tree walk. The names that need re-seeding are
-			// exactly the ones init() placed in a SUB-stack: addBelow(Identifier, Identifier, ForgeLayer)
+			// exactly the ones 26.2's init() placed in a SUB-stack: addBelow(ResourceLocation, ResourceLocation, LayeredDraw.Layer)
 			// resolves its anchor against the root, so a nested name is invisible to it and the layer is
 			// dropped with "Expected layer ... was not found in stack". Skipping everything `seen` holds
 			// re-seeded 1 name instead of 22 and left that regression latent — measured.
-			Set<Identifier> atRoot = new LinkedHashSet<>();
-			Map<Identifier, Object> rootNamed = mapField(tree, "namedLayers");
+			Set<ResourceLocation> atRoot = new LinkedHashSet<>();
+			Map<ResourceLocation, Object> rootNamed = mapField(tree, "namedLayers");
 			if (rootNamed != null) atRoot.addAll(rootNamed.keySet());
-			Map<Identifier, Object> rootSubs = mapField(tree, "subLayerStacks");
+			Map<ResourceLocation, Object> rootSubs = mapField(tree, "subLayerStacks");
 			if (rootSubs != null) atRoot.addAll(rootSubs.keySet());
 
-			List<Identifier> reseeded = new ArrayList<>();
-			for (Identifier id : vanilla) {
+			List<ResourceLocation> reseeded = new ArrayList<>();
+			for (ResourceLocation id : vanilla) {
 				if (atRoot.contains(id)) continue;
 				tree.add(id, NOTHING);
 				reseeded.add(id);
 			}
 
 			// Names MinecraftForge's own builder never placed anywhere (today: minecraft:debug).
-			List<Identifier> notPlaced = new ArrayList<>(vanillaSet);
+			List<ResourceLocation> notPlaced = new ArrayList<>(vanillaSet);
 			notPlaced.removeAll(seen);
 
 			NEUTERED.succeeded(tree, replaced, stacks, reseeded, notPlaced);
@@ -250,11 +260,11 @@ public final class KernelForgeOverlayLayers {
 
 	/** One tree's private {@code Map} field, or null when it cannot be read. */
 	@SuppressWarnings("unchecked")
-	private static Map<Identifier, Object> mapField(ForgeLayeredDraw node, String name) throws Exception {
+	private static Map<ResourceLocation, Object> mapField(ForgeLayeredDraw node, String name) throws Exception {
 		Field field = ForgeLayeredDraw.class.getDeclaredField(name);
 		field.setAccessible(true);
 		Object value = field.get(node);
-		return value instanceof Map<?, ?> ? (Map<Identifier, Object>) value : null;
+		return value instanceof Map<?, ?> ? (Map<ResourceLocation, Object>) value : null;
 	}
 
 	/**
@@ -272,15 +282,15 @@ public final class KernelForgeOverlayLayers {
 		private volatile String refusal;
 		private volatile int replaced;
 		private volatile int stacks;
-		private volatile List<Identifier> reseeded = List.of();
-		private volatile List<Identifier> notPlaced = List.of();
+		private volatile List<ResourceLocation> reseeded = List.of();
+		private volatile List<ResourceLocation> notPlaced = List.of();
 
 		void saw(ForgeLayeredDraw tree) {
 			this.tree = tree;
 		}
 
-		void succeeded(ForgeLayeredDraw tree, int replaced, int stacks, List<Identifier> reseeded,
-				List<Identifier> notPlaced) {
+		void succeeded(ForgeLayeredDraw tree, int replaced, int stacks, List<ResourceLocation> reseeded,
+				List<ResourceLocation> notPlaced) {
 			this.tree = tree;
 			this.root = tree;
 			this.replaced = replaced;
@@ -318,17 +328,17 @@ public final class KernelForgeOverlayLayers {
 		String strandedSuffix() {
 			try {
 				if (tree == null) return "";
-				List<Identifier> stranded = new ArrayList<>();
+				List<ResourceLocation> stranded = new ArrayList<>();
 				java.util.Deque<ForgeLayeredDraw> queue = new java.util.ArrayDeque<>();
 				queue.add(tree);
-				Set<Identifier> vanilla = new LinkedHashSet<>(vanillaLayerNames());
+				Set<ResourceLocation> vanilla = new LinkedHashSet<>(vanillaLayerNames());
 				while (!queue.isEmpty()) {
 					ForgeLayeredDraw node = queue.poll();
-					Map<Identifier, Object> named = mapField(node, "namedLayers");
+					Map<ResourceLocation, Object> named = mapField(node, "namedLayers");
 					if (named != null) {
-						for (Identifier id : named.keySet()) if (!vanilla.contains(id)) stranded.add(id);
+						for (ResourceLocation id : named.keySet()) if (!vanilla.contains(id)) stranded.add(id);
 					}
-					Map<Identifier, Object> subs = mapField(node, "subLayerStacks");
+					Map<ResourceLocation, Object> subs = mapField(node, "subLayerStacks");
 					if (subs != null) {
 						for (Object value : subs.values()) {
 							if (value instanceof Map.Entry<?, ?> pair
@@ -368,19 +378,19 @@ public final class KernelForgeOverlayLayers {
 		private String modLayers() {
 			try {
 				if (tree == null) return "";
-				Set<Identifier> vanilla = new LinkedHashSet<>(vanillaLayerNames());
+				Set<ResourceLocation> vanilla = new LinkedHashSet<>(vanillaLayerNames());
 				List<String> landed = new ArrayList<>();
 				java.util.Deque<ForgeLayeredDraw> queue = new java.util.ArrayDeque<>();
 				queue.add(tree);
 				while (!queue.isEmpty()) {
 					ForgeLayeredDraw node = queue.poll();
-					Map<Identifier, Object> named = mapField(node, "namedLayers");
+					Map<ResourceLocation, Object> named = mapField(node, "namedLayers");
 					if (named != null) {
-						for (Identifier id : named.keySet()) {
+						for (ResourceLocation id : named.keySet()) {
 							if (!vanilla.contains(id)) landed.add(id + " in " + node.getName());
 						}
 					}
-					Map<Identifier, Object> subs = mapField(node, "subLayerStacks");
+					Map<ResourceLocation, Object> subs = mapField(node, "subLayerStacks");
 					if (subs != null) {
 						for (Object value : subs.values()) {
 							if (value instanceof Map.Entry<?, ?> pair
@@ -407,13 +417,13 @@ public final class KernelForgeOverlayLayers {
 	 * positioning against the name this list forgot gets MinecraftForge's "layer not present" warning and lands
 	 * wherever it was added.
 	 */
-	static List<Identifier> vanillaLayerNames() {
-		List<Identifier> names = new ArrayList<>();
+	static List<ResourceLocation> vanillaLayerNames() {
+		List<ResourceLocation> names = new ArrayList<>();
 		for (Field field : ForgeLayeredDraw.class.getFields()) {
-			if (field.getType() != Identifier.class) continue;
+			if (field.getType() != ResourceLocation.class) continue;
 			try {
 				// The root's own name is the tree, not a position inside it.
-				if (field.get(null) instanceof Identifier id && !id.equals(ForgeLayeredDraw.VANILLA_ROOT)) {
+				if (field.get(null) instanceof ResourceLocation id && !id.equals(ForgeLayeredDraw.VANILLA_ROOT)) {
 					names.add(id);
 				}
 			} catch (IllegalAccessException unreadable) {

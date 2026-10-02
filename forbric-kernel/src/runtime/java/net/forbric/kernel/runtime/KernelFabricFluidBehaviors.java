@@ -20,7 +20,7 @@ import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.item.ItemEntity;
-import net.minecraft.world.entity.vehicle.boat.AbstractBoat;
+import net.minecraft.world.entity.vehicle.Boat;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.level.material.FluidState;
 
@@ -239,7 +239,7 @@ public final class KernelFabricFluidBehaviors {
 			return ask(Handles::canDrown, tag, entity);
 		}
 
-		@Override public boolean supportsBoating(AbstractBoat boat) {
+		@Override public boolean supportsBoating(Boat boat) {
 			return ask(Handles::canBoat, tag, boat);
 		}
 
@@ -271,7 +271,7 @@ public final class KernelFabricFluidBehaviors {
 			return ask(Handles::canDrown, tag, entity);
 		}
 
-		@Override public boolean supportsBoating(AbstractBoat boat) {
+		@Override public boolean supportsBoating(Boat boat) {
 			return ask(Handles::canBoat, tag, boat);
 		}
 

@@ -6,6 +6,7 @@ import it.unimi.dsi.fastutil.booleans.BooleanConsumer;
 import net.forbric.api.CompatibilityFinding;
 import net.forbric.api.ModCatalog;
 import net.forbric.kernel.ui.DialogLang;
+import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.network.chat.Component;
 
@@ -24,7 +25,15 @@ final class KernelCompatibilityScreen extends ConfirmScreen {
 	@Override public void onClose() { answer.accept(false); }
 	@Override protected void init() {
 		super.init();
-		setInitialFocus(noButton);
+		// PORT(1.21.1): ConfirmScreen.noButton is the "No" label (a Component), not a Button — 1.21.1 keeps the
+		// buttons in a private list — so match the label against this screen's own buttons and focus the first.
+		// If none matches, focus is left as super.init() set it.
+		for (var child : this.children()) {
+			if (child instanceof Button button && button.getMessage().equals(this.noButton)) {
+				setInitialFocus(button);
+				break;
+			}
+		}
 	}
 
 	/** Every finding the answer covers is named; the caller pages anything beyond what fits. */

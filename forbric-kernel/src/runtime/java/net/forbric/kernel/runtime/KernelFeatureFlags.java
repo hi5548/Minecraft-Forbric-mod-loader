@@ -35,7 +35,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.flag.FeatureFlagRegistry;
 
 import net.forbric.api.Ecosystem;
@@ -47,12 +47,17 @@ import net.forbric.kernel.util.ForbricLog;
  * Registers the feature flags NeoForge mods declare, in place of NeoForge's own {@code FeatureFlagLoader}.
  *
  * <p>A NeoForge mod names a flag file in {@code neoforge.mods.toml} ({@code featureFlags = "META-INF/feature_flags.json"});
- * NeoForge reads it through {@code IModFile.getContents()} while {@code FeatureFlags.<clinit>} builds the registry,
+ * NeoForge reads it through the file's contents ({@code IModFile.getSecureJar()} on 1.21.1; 26.2 named the accessor
+ * {@code getContents()}) while {@code FeatureFlags.<clinit>} builds the registry,
  * and the mod later asks {@code FeatureFlags.REGISTRY.getFlag(...)} for its own flag. The kernel's mod files carry
- * no jar contents, so that walk answered nothing and every such mod died in its static initialiser ("Flag
+ * no jar contents for a presence alias, so that walk answered nothing and every such mod died in its static initialiser ("Flag
  * tofucraft:experimental_extra was not registered"), taking its datapack-referenced content and the whole
  * registry load with it. This reads the same file from the jar directly and registers each flag with NeoForge's
  * rule — a flag may only live in a namespace of a mod in that jar. {@code -Dforbric.moddedFeatureFlags=off}.
+ *
+ * <p>PORT(1.21.1): 26.2's {@code net.minecraft.resources.Identifier} is 1.21.1's
+ * {@code net.minecraft.resources.ResourceLocation}; {@code FeatureFlagRegistry.Builder.create(ResourceLocation,
+ * boolean)} and {@code ResourceLocation.parse} are unchanged between the two.
  */
 public final class KernelFeatureFlags {
 	public static final String PROPERTY = "forbric.moddedFeatureFlags";
@@ -122,7 +127,7 @@ public final class KernelFeatureFlags {
 				if (array == null) return List.of();
 				for (JsonElement element : array) {
 					String name = element.isJsonObject() ? element.getAsJsonObject().get("flag").getAsString() : element.getAsString();
-					Identifier flag = Identifier.parse(name);
+					ResourceLocation flag = ResourceLocation.parse(name);
 					if (!modIds.contains(flag.getNamespace())) {
 						ForbricLog.warn("[Forbric/FeatureFlags] %s declares flag %s in a namespace no mod in that jar owns (%s) — skipped, "
 								+ "as NeoForge would refuse it", jar.getFileName(), name, modIds);

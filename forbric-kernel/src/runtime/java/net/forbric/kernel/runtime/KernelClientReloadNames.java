@@ -21,35 +21,30 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.PreparableReloadListener;
-import net.neoforged.neoforge.client.resources.VanillaClientListeners;
 
 import net.forbric.kernel.util.ForbricLog;
 
 /**
- * Gives a name to a client reload listener NeoForge refuses to name, instead of letting it kill the client.
+ * Names a client reload listener that nothing else can name, instead of letting the unnamed listener die.
  *
- * <h2>Why a listener with no name is fatal here and nowhere else</h2>
- *
- * <p>NeoForge sorts client reload listeners in a graph keyed by {@code Identifier}, and
- * {@code AddClientReloadListenersEvent.lookupName} is where a listener already present in the manager gets its
- * key. It asks {@code VanillaClientListeners.getNameForClass}, and when that returns null it THROWS: "A
- * non-vanilla reload listener … was added via mixin before the AddClientReloadListenerEvent! Mod-added listeners
- * must go through that event." That assertion is written for an instance where the only mods are NeoForge mods.
- *
- * <p>Adding a reload listener by mixin is ordinary Fabric practice — it is how a Fabric mod has always done it,
- * and there is no event for it to go through. So on a tri-ecosystem instance the assertion fires on correct mod
- * code, from inside {@code ClientHooks.initClientHooks}, which runs inside {@code Minecraft.<init>}: vistas took
- * the whole client down before it drew a frame.
+ * <p>PORT(1.21.1): this class is inert here. It existed for 26.2's sorted client-listener graph, whose event
+ * asked a vanilla name table for a listener's key and THREW — "A non-vanilla reload listener … was added via
+ * mixin before the AddClientReloadListenerEvent! Mod-added listeners must go through that event." — when the
+ * table returned nothing. 1.21.1 has neither that table nor that assertion: its client registration event
+ * carries no name lookup at all, and {@code registerReloadListener(listener)} takes no id, so no listener needs
+ * a name and nothing on this side calls this class. It is kept because {@code KernelRuntimeClasses} requires the
+ * class to load and the boot-side transformer names it at its old anchor; that transformer's anchor and
+ * descriptor must be re-derived for 1.21.1 before any boot-side repair calls this.
  *
  * <h2>What the name is for, and why synthesising one is not a workaround</h2>
  *
- * <p>The name is a sort key and a registry key, nothing more: {@code SortedReloadListenerEvent} holds
- * {@code Map<Identifier, listener>}, {@code Map<listener, Identifier>} and a dependency graph over them. A
- * listener with a synthesised unique name is therefore a listener that is registered, sorted and RUN — which is
- * the whole difference between this and catching the exception. Derived from the class, so it is stable across
- * runs and unique by construction; a second listener of the same class would collide, and that is reported.
+ * <p>A name is a sort key and a registry key, nothing more: the sorted-listener graph holds id-to-listener and
+ * listener-to-id maps and a dependency graph over them. A listener with a synthesised unique name is therefore a
+ * listener that is registered, sorted and RUN — which is the whole difference between this and catching the
+ * exception. Derived from the class, so it is stable across runs and unique by construction; a second listener
+ * of the same class would collide, and that is reported.
  */
 public final class KernelClientReloadNames {
 
@@ -60,20 +55,17 @@ public final class KernelClientReloadNames {
 	}
 
 	/**
-	 * What {@code AddClientReloadListenersEvent.lookupName} asks instead of {@code VanillaClientListeners}.
+	 * A name for a listener nothing else can name.
 	 *
-	 * <p>Vanilla's own table is asked first and wins, so a vanilla listener keeps the exact name NeoForge's own
-	 * dependency edges are written against. Only a class the table does not know gets a synthesised one.
+	 * <p>PORT(1.21.1): the vanilla table lookup that used to come first is gone — 1.21.1 has no such table, so
+	 * every class takes the synthesised path and this method is the whole lookup. See the class note.
 	 */
-	public static Identifier nameFor(Class<? extends PreparableReloadListener> type) {
-		Identifier known = VanillaClientListeners.getNameForClass(type);
-		if (known != null) return known;
-
+	public static ResourceLocation nameFor(Class<? extends PreparableReloadListener> type) {
 		String path = sanitise(type.getName());
-		Identifier synthesised = Identifier.fromNamespaceAndPath(NAMESPACE, path);
+		ResourceLocation synthesised = ResourceLocation.fromNamespaceAndPath(NAMESPACE, path);
 		if (REPORTED.add(type.getName())) {
 			ForbricLog.info("[Forbric/ClientReload] %s was added to the resource manager by a mixin, which is how a "
-					+ "Fabric mod has always done it and which NeoForge's sorted-listener event refuses to name — "
+					+ "Fabric mod has always done it and which the sorted-listener event used to refuse to name — "
 					+ "it used to take the client down inside Minecraft.<init>. It is registered and sorted as %s, "
 					+ "so it still runs", type.getName(), synthesised);
 		}
@@ -81,11 +73,11 @@ public final class KernelClientReloadNames {
 	}
 
 	/**
-	 * A class name as an {@code Identifier} path.
+	 * A class name as a {@code ResourceLocation} path.
 	 *
-	 * <p>{@code Identifier} accepts only {@code [a-z0-9_.-/]} in a path, and a class name has neither case nor
-	 * {@code $} in that set. The mapping is lossy in principle and unique in practice for the thing it names —
-	 * two classes that differ only in case or in {@code $} placement would collide, which is why the caller
+	 * <p>{@code ResourceLocation} accepts only {@code [a-z0-9_.-/]} in a path, and a class name has neither case
+	 * nor {@code $} in that set. The mapping is lossy in principle and unique in practice for the thing it names
+	 * — two classes that differ only in case or in {@code $} placement would collide, which is why the caller
 	 * reports each distinct class it synthesises for.
 	 */
 	private static String sanitise(String className) {

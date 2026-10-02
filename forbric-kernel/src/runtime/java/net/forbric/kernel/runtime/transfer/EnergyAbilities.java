@@ -1,12 +1,14 @@
 package net.forbric.kernel.runtime.transfer;
 
-import net.neoforged.neoforge.transfer.energy.EnergyHandler;
-
 /**
- * What a bridged energy view knows about its store's direction. NeoForge's EnergyHandler has no such query; Forge's
- * IEnergyStorage (canReceive/canExtract) and Reborn's EnergyStorage (supportsInsertion/Extraction) do. A view that
- * carries a Forge or Reborn store implements this, so the other two APIs can answer with the store's own flags
- * instead of a guess. The flags are hints for consumers; every insert and extract is still the store's to refuse.
+ * What a bridged energy view knows about its store's direction. The bridge's {@link EnergyHandler} has no such
+ * query; Forge's IEnergyStorage (canReceive/canExtract) and Reborn's EnergyStorage
+ * (supportsInsertion/Extraction) do. A view that carries a Forge or Reborn store implements this, so the other two
+ * APIs can answer with the store's own flags instead of a guess. The flags are hints for consumers; every insert and
+ * extract is still the store's to refuse.
+ *
+ * <p>PORT(1.21.1): {@link EnergyHandler} is the bridge's own replacement for 26.2's
+ * {@code neoforge.transfer.energy.EnergyHandler}; its shape and these rules are unchanged.
  */
 interface EnergyAbilities {
 	boolean canInsert();

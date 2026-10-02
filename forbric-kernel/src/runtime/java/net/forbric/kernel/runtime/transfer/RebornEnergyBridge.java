@@ -12,12 +12,15 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.fabricmc.fabric.api.lookup.v1.block.BlockApiLookup;
 import net.fabricmc.fabric.api.transfer.v1.transaction.TransactionContext;
-import net.neoforged.neoforge.transfer.energy.EnergyHandler;
 import team.reborn.energy.api.EnergyStorage;
 
 /**
  * The Fabric side of block energy: Team Reborn Energy's {@code EnergyStorage.SIDED}, the lookup Fabric energy mods
  * use (Fabric API ships no energy API of its own).
+ *
+ * <p>PORT(1.21.1): Reborn's API is unchanged here (it already takes Fabric's {@link TransactionContext}); the
+ * pivot type it adapts is the bridge's own {@link EnergyHandler}. Its jar is not present in the staged inputs, so
+ * {@link #requireApi()} is the only member-level check this port can offer.
  *
  * <p>Invoked by the boot seam only when Team Reborn Energy is installed, after BlockTransferBridge.install and only if
  * that connected the bridge. It registers two fallbacks on the public lookup, exactly as the item and fluid lookups

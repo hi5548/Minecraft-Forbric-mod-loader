@@ -24,15 +24,18 @@ import net.forbric.kernel.util.Reflect;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.util.TriState;
 import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.Level;
-import net.minecraftforge.common.util.Result;
+// PORT(1.21.1): TriState moved from net.minecraft.util (26.2) to NeoForge's own package, and Forge's decision
+// enum is Event.Result — net.minecraftforge.common.util.Result does not exist. Both verified with javap against
+// the staged 1.21.1 jars.
+import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.level.BlockEvent;
+import net.minecraftforge.eventbus.api.Event.Result;
+import net.neoforged.neoforge.common.util.TriState;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
-import net.neoforged.neoforge.event.level.block.BreakBlockEvent;
 
 /**
  * Re-emits the CANCELLABLE block events the byte merge left NeoForge-only.
@@ -98,7 +101,7 @@ public final class KernelGameBlockEvents {
 	static boolean firePlace(net.neoforged.neoforge.event.level.BlockEvent.EntityPlaceEvent neo) {
 		net.minecraftforge.common.util.BlockSnapshot snapshot = translate(neo.getBlockSnapshot());
 		if (snapshot == null) return false;
-		return net.minecraftforge.event.level.BlockEvent.EntityPlaceEvent.BUS.post(
+		return MinecraftForge.EVENT_BUS.post(
 				new net.minecraftforge.event.level.BlockEvent.EntityPlaceEvent(
 						snapshot, neo.getPlacedAgainst(), neo.getEntity()));
 	}
@@ -178,7 +181,7 @@ public final class KernelGameBlockEvents {
 		net.minecraftforge.event.entity.player.PlayerInteractEvent.RightClickItem forge =
 				new net.minecraftforge.event.entity.player.PlayerInteractEvent.RightClickItem(
 						neo.getEntity(), neo.getHand());
-		boolean canceled = net.minecraftforge.event.entity.player.PlayerInteractEvent.RightClickItem.BUS.post(forge);
+		boolean canceled = MinecraftForge.EVENT_BUS.post(forge);
 		if (canceled) neo.setCancellationResult(forge.getCancellationResult());
 		return canceled;
 	}
@@ -190,7 +193,7 @@ public final class KernelGameBlockEvents {
 						neo.getEntity(), neo.getHand(), neo.getPos(), neo.getHitVec());
 		forge.setUseBlock(seed(neo.getUseBlock()));
 		forge.setUseItem(seed(neo.getUseItem()));
-		boolean canceled = net.minecraftforge.event.entity.player.PlayerInteractEvent.RightClickBlock.BUS.post(forge);
+		boolean canceled = MinecraftForge.EVENT_BUS.post(forge);
 		carryDecision(neo.getUseBlock(), forge.getUseBlock(), neo::setUseBlock);
 		carryDecision(neo.getUseItem(), forge.getUseItem(), neo::setUseItem);
 		if (canceled) neo.setCancellationResult(forge.getCancellationResult());
@@ -208,7 +211,7 @@ public final class KernelGameBlockEvents {
 						neo.getEntity(), neo.getPos(), neo.getFace(), action);
 		forge.setUseBlock(seed(neo.getUseBlock()));
 		forge.setUseItem(seed(neo.getUseItem()));
-		boolean canceled = net.minecraftforge.event.entity.player.PlayerInteractEvent.LeftClickBlock.BUS.post(forge);
+		boolean canceled = MinecraftForge.EVENT_BUS.post(forge);
 		carryDecision(neo.getUseBlock(), forge.getUseBlock(), neo::setUseBlock);
 		carryDecision(neo.getUseItem(), forge.getUseItem(), neo::setUseItem);
 		return canceled;
@@ -252,9 +255,9 @@ public final class KernelGameBlockEvents {
 		write.accept(forgeValue.isDenied() ? TriState.FALSE : TriState.TRUE);
 	}
 
-	/** NeoForge {@code BreakBlockEvent} → MinecraftForge {@code BlockEvent.BreakEvent}, cancel carried back. */
+	/** NeoForge {@code BlockEvent.BreakEvent} → MinecraftForge {@code BlockEvent.BreakEvent}, cancel carried back. */
 	public static void installBlockBreak(Object neoBus) {
-		KernelGameEntityEvents.subscribe((net.neoforged.bus.api.IEventBus) neoBus, BreakBlockEvent.class,
+		KernelGameEntityEvents.subscribe((net.neoforged.bus.api.IEventBus) neoBus, net.neoforged.neoforge.event.level.BlockEvent.BreakEvent.class,
 				"BlockEvent.BreakEvent",
 				"a MinecraftForge claim or protection mod does not protect, and a block-logging mod records nothing",
 				KernelGameBlockEvents::fireBreak);
@@ -265,7 +268,7 @@ public final class KernelGameBlockEvents {
 	 *
 	 * @return whether MinecraftForge vetoed the break, by cancelling or by denying it
 	 */
-	static boolean fireBreak(BreakBlockEvent neoEvent) {
+	static boolean fireBreak(net.neoforged.neoforge.event.level.BlockEvent.BreakEvent neoEvent) {
 		// A LevelAccessor that is not a Level cannot build the MinecraftForge event, whose constructor takes one.
 		// That is not a failure worth a warning: the merged base only ever posts this from the two game modes,
 		// both of which hold a real Level.
@@ -276,8 +279,12 @@ public final class KernelGameBlockEvents {
 		// event itself does not have to, and that throw would be charged to this bridge.
 		if (neoEvent.getPlayer() == null) return false;
 
-		return vetoed(new BlockEvent.BreakEvent(level, neoEvent.getPos(), neoEvent.getState(), neoEvent.getPlayer(),
-				seed(neoEvent.isCanceled())));
+		// PORT(1.21.1): Forge 52's BreakEvent constructor takes four arguments; 26.2's fifth (the result) is set
+		// afterwards, which is how Forge's own onBlockBreakEvent seeds it.
+		BlockEvent.BreakEvent forge = new BlockEvent.BreakEvent(level, neoEvent.getPos(), neoEvent.getState(),
+				neoEvent.getPlayer());
+		forge.setResult(seed(neoEvent.isCanceled()));
+		return vetoed(forge);
 	}
 
 	/**
@@ -300,7 +307,7 @@ public final class KernelGameBlockEvents {
 	 * half the mods that say no, and which half depends on which idiom each mod happened to use.
 	 */
 	static boolean vetoed(BlockEvent.BreakEvent forge) {
-		boolean canceled = BlockEvent.BreakEvent.BUS.post(forge);
+		boolean canceled = MinecraftForge.EVENT_BUS.post(forge);
 		return canceled || forge.getResult().isDenied();
 	}
 }

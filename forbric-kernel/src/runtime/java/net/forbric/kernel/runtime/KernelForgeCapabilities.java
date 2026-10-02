@@ -24,13 +24,11 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.storage.ValueInput;
-import net.minecraft.world.level.storage.ValueOutput;
 import net.minecraftforge.common.capabilities.CapabilityDispatcher;
 import net.minecraftforge.common.capabilities.CapabilityManager;
 import net.minecraftforge.common.capabilities.CapabilityProvider;
 import net.minecraftforge.common.capabilities.ICapabilityProviderImpl;
-import net.minecraftforge.event.AttachCapabilitiesEvent;
+import net.minecraftforge.fml.ModList;
 
 /**
  * The composed MinecraftForge capability provider for the three root types the merge put under NeoForge's
@@ -38,17 +36,45 @@ import net.minecraftforge.event.AttachCapabilitiesEvent;
  *
  * <p>Java has no multiple inheritance, so no merge can give {@code Entity} both superclasses; composition is the
  * only correct shape, and it is Forge's own — {@code LevelChunk} carries a {@code CapabilityProvider$AsField}
- * exactly like this. The transformer adds a lazily-created field of that type to each root plus straight-line
- * delegates; this class supplies the three {@code AsField} subclasses (whose two abstract methods are what the
- * carrier's own {@code CapabilityProvider$Entities/$BlockEntities/$Levels} do: fire the per-type
- * {@code AttachCapabilitiesEvent} bus, ask it for listeners) and the null-checking helpers, so that every
- * synthesised method is branch-free — the frame recomputer never touches these classes.
+ * exactly like this (verified on the 1.21.1 merged base, where that field survived the merge; on {@code Entity},
+ * {@code BlockEntity} and {@code Level} it did not, which is why they are composed here). The transformer adds a
+ * lazily-created field of that type to each root plus straight-line delegates; this class supplies the three
+ * {@code AsField} subclasses and the null-checking helpers, so that every synthesised method is branch-free — the
+ * frame recomputer never touches these classes.
  *
  * <p>Everything else — gathering, dispatching, LazyOptional invalidation, NBT (de)serialisation, lazy replay —
  * is Forge's {@code CapabilityProvider}/{@code CapabilityDispatcher} code, in Forge's own lazy mode: the
  * {@code AttachCapabilitiesEvent} fires on the first query or deserialise, not in the constructor.
  * {@code -Dforbric.forgeCapabilities=off} means nothing references this class.
+ *
+ * <h2>PORT(1.21.1): who fires {@code AttachCapabilitiesEvent}, and with what</h2>
+ *
+ * <p>26.2's {@code CapabilityProvider.AsField} had two overridable hooks —
+ * {@code fireAttachCapabilitiesEvent(owner)} and {@code shouldFireAttachCapabilitiesEvent()} — and the per-type
+ * events were posted on per-type buses ({@code AttachCapabilitiesEvent.Entities.BUS}). Neither exists on 1.21.1.
+ * There, {@code AsField(Class&lt;B&gt; baseClass, B owner)} stores the base class and
+ * {@code ForgeEventFactory.gatherCapabilities(baseClass, provider, parent)} posts ONE generic
+ * {@code new AttachCapabilitiesEvent&lt;T&gt;(baseClass, provider)} through {@code MinecraftForge.EVENT_BUS}
+ * (verified with {@code javap -c} on {@code forge-runtime.jar} 52.1.16: the private
+ * {@code gatherCapabilities(AttachCapabilitiesEvent, ICapabilityProvider)} starts with
+ * {@code post(Event)}). So the subclasses here only supply the base class — {@code Entity.class},
+ * {@code BlockEntity.class}, {@code Level.class}, exactly what Forge's own patched classes pass — and there is no
+ * listener-presence short-circuit to write: Forge 52's {@code IEventBus} has no {@code hasListeners}.
+ *
+ * <p>{@code AsField.initInternal()} still means "gather now if not lazy, else on first use", which is what
+ * Forge's own field-holding classes do after constructing the field, so {@link #create} is unchanged.
+ *
+ * <h2>PORT(1.21.1): ForgeCaps is a CompoundTag again</h2>
+ *
+ * <p>26.2 serialised through {@code ValueInput}/{@code ValueOutput} and read the lookup off the input. 1.21.1 has
+ * neither class: Forge's own patched {@code BlockEntity} writes
+ * {@code tag.put("ForgeCaps", serializeCaps(registries))} in {@code saveAdditional(CompoundTag, HolderLookup.Provider)}
+ * and reads {@code if (tag.contains("ForgeCaps")) deserializeCaps(registries, tag.getCompound("ForgeCaps"))} in
+ * {@code loadAdditional(CompoundTag, HolderLookup.Provider)} — verified by decompiling
+ * {@code patched-mc-forge-1.21.1.jar}. The save helpers here write that same key with the same tag type, and the
+ * lookup comes from the owner, since a {@code CompoundTag} carries none.
  */
+@SuppressWarnings({ "rawtypes", "unchecked" })
 public final class KernelForgeCapabilities {
 	public static final String PROPERTY = "forbric.forgeCapabilities";
 
@@ -58,8 +84,11 @@ public final class KernelForgeCapabilities {
 	/** Exposes the one protected-final member a delegate on the owner needs. */
 	@SuppressWarnings({ "rawtypes", "unchecked" })
 	abstract static class Composed extends CapabilityProvider.AsField {
-		Composed(Object owner) {
-			super((ICapabilityProviderImpl) owner, true);
+		Composed(Class<?> base, Object owner) {
+			// AsField(Class<B>, B, boolean isLazy): Forge's own Entity/BlockEntity/LevelChunk fields are created
+			// with the type's own class, and the third argument is Forge's lazy mode, which 26.2's
+			// `super((ICapabilityProviderImpl) owner, true)` also asked for.
+			super(base, (ICapabilityProviderImpl) owner, true);
 		}
 
 		public CapabilityDispatcher dispatcher() {
@@ -67,57 +96,21 @@ public final class KernelForgeCapabilities {
 		}
 	}
 
-	@SuppressWarnings({ "rawtypes", "unchecked" })
 	static final class Entities extends Composed {
 		Entities(Object owner) {
-			super(owner);
-		}
-
-		@Override
-		protected AttachCapabilitiesEvent fireAttachCapabilitiesEvent(ICapabilityProviderImpl owner) {
-			return (AttachCapabilitiesEvent.Entities) AttachCapabilitiesEvent.Entities.BUS.fire(
-					new AttachCapabilitiesEvent.Entities((Entity) (Object) owner));
-		}
-
-		@Override
-		protected boolean shouldFireAttachCapabilitiesEvent() {
-			return AttachCapabilitiesEvent.Entities.BUS.hasListeners();
+			super(Entity.class, owner);
 		}
 	}
 
-	@SuppressWarnings({ "rawtypes", "unchecked" })
 	static final class BlockEntities extends Composed {
 		BlockEntities(Object owner) {
-			super(owner);
-		}
-
-		@Override
-		protected AttachCapabilitiesEvent fireAttachCapabilitiesEvent(ICapabilityProviderImpl owner) {
-			return (AttachCapabilitiesEvent.BlockEntities) AttachCapabilitiesEvent.BlockEntities.BUS.fire(
-					new AttachCapabilitiesEvent.BlockEntities((BlockEntity) (Object) owner));
-		}
-
-		@Override
-		protected boolean shouldFireAttachCapabilitiesEvent() {
-			return AttachCapabilitiesEvent.BlockEntities.BUS.hasListeners();
+			super(BlockEntity.class, owner);
 		}
 	}
 
-	@SuppressWarnings({ "rawtypes", "unchecked" })
 	static final class Levels extends Composed {
 		Levels(Object owner) {
-			super(owner);
-		}
-
-		@Override
-		protected AttachCapabilitiesEvent fireAttachCapabilitiesEvent(ICapabilityProviderImpl owner) {
-			return (AttachCapabilitiesEvent.Levels) AttachCapabilitiesEvent.Levels.BUS.fire(
-					new AttachCapabilitiesEvent.Levels((Level) (Object) owner));
-		}
-
-		@Override
-		protected boolean shouldFireAttachCapabilitiesEvent() {
-			return AttachCapabilitiesEvent.Levels.BUS.hasListeners();
+			super(Level.class, owner);
 		}
 	}
 
@@ -140,7 +133,7 @@ public final class KernelForgeCapabilities {
 
 	@SuppressWarnings("rawtypes")
 	private static CapabilityProvider.AsField create(CapabilityProvider.AsField field) {
-		// Forge's LevelChunk constructor does exactly this after newing its AsField; in lazy mode it defers the
+		// Forge's own LevelChunk constructor does exactly this after newing its AsField; in lazy mode it defers the
 		// gather until the first query, so the AttachCapabilitiesEvent fires then.
 		field.initInternal();
 		return field;
@@ -168,47 +161,46 @@ public final class KernelForgeCapabilities {
 		return field == null ? null : field.serializeInternal(lookup);
 	}
 
+	/** Forge's own save shape: {@code tag.put("ForgeCaps", serializeCaps(registries))}. */
 	@SuppressWarnings("rawtypes")
-	public static CompoundTag serializeBlockEntity(CapabilityProvider.AsField field, ValueOutput output, Object owner) {
-		return field == null ? null : field.serializeInternal(lookupOf(owner));
-	}
-
-	/** Forge's own save shape: {@code output.storeNullable("ForgeCaps", CompoundTag.CODEC, serializeCaps(...))}. */
-	@SuppressWarnings("rawtypes")
-	public static void saveBlockEntity(CapabilityProvider.AsField field, ValueOutput output, Object owner) {
+	public static void saveBlockEntity(CapabilityProvider.AsField field, CompoundTag output, Object owner) {
 		if (field == null) return;
 		try {
 			CompoundTag tag = field.serializeInternal(lookupOf(owner));
-			if (tag != null) output.storeNullable("ForgeCaps", CompoundTag.CODEC, tag);
+			if (tag != null) output.put("ForgeCaps", tag);
 		} catch (Throwable t) {
 			reportOnce("saving a block entity's MinecraftForge capabilities", t);
 		}
 	}
 
 	@SuppressWarnings("rawtypes")
-	public static void saveEntity(CapabilityProvider.AsField field, ValueOutput output, Object owner) {
+	public static void saveEntity(CapabilityProvider.AsField field, CompoundTag output, Object owner) {
 		if (field == null) return;
 		try {
 			CompoundTag tag = field.serializeInternal(((Entity) owner).registryAccess());
-			if (tag != null) output.storeNullable("ForgeCaps", CompoundTag.CODEC, tag);
+			if (tag != null) output.put("ForgeCaps", tag);
 		} catch (Throwable t) {
 			reportOnce("saving an entity's MinecraftForge capabilities", t);
 		}
 	}
 
-	/** Forge's own load shape; in lazy mode the tag is parked and replayed on the first getCapabilities. */
+	/**
+	 * Forge's own load shape ({@code if (tag.contains("ForgeCaps")) deserializeCaps(registries, …)}); in lazy mode
+	 * the tag is parked and replayed on the first getCapabilities.
+	 */
 	@SuppressWarnings("rawtypes")
-	public static void load(CapabilityProvider.AsField field, ValueInput input) {
+	public static void load(CapabilityProvider.AsField field, CompoundTag input, Object owner) {
+		if (field == null) return;
 		try {
-			input.read("ForgeCaps", CompoundTag.CODEC).ifPresent(tag -> field.deserializeInternal(input.lookup(), tag));
+			if (input.contains("ForgeCaps")) field.deserializeInternal(lookupOf(owner), input.getCompound("ForgeCaps"));
 		} catch (Throwable t) {
 			reportOnce("loading MinecraftForge capabilities from ForgeCaps", t);
 		}
 	}
 
 	/** The merged NeoForge saveAdditional's own choice for a level-less block entity: an empty registry access. */
-	private static HolderLookup.Provider lookupOf(Object blockEntity) {
-		Level level = blockEntity instanceof BlockEntity be ? be.getLevel() : null;
+	private static HolderLookup.Provider lookupOf(Object owner) {
+		Level level = owner instanceof BlockEntity be ? be.getLevel() : null;
 		return level != null ? level.registryAccess() : RegistryAccess.EMPTY;
 	}
 
@@ -224,19 +216,24 @@ public final class KernelForgeCapabilities {
 	// ---- registration stage
 
 	/**
-	 * Forge's own {@code INJECT_CAPABILITIES} stage: {@code CapabilityManager.injectCapabilities()} scans mod
-	 * scan data for {@code @AutoRegisterCapability} and marks each as registered. Advisory on this base
+	 * Forge's own {@code INJECT_CAPABILITIES} stage: {@code CapabilityManager.injectCapabilities(ModList)} scans
+	 * mod scan data for {@code @AutoRegisterCapability} and marks each as registered. Advisory on this base
 	 * ({@code isRegistered()} is read only by Forge's own manager), so the count is returned rather than acted on.
 	 *
 	 * <p>The count was structurally zero while the seeded {@code ModFile}s carried an EMPTY scan data — this read
 	 * the same nothing SuperMartijn642's Core Lib did. It is a real number now; see {@code ModFileScanner.scanForge}
 	 * and {@code -Dforbric.forgeScanData=off}.
+	 *
+	 * <p>PORT(1.21.1): Forge 52's entry point takes the {@code ModList} and the scan data is reached through
+	 * {@code ModList.get()} — both are instance-shaped now, where 26.2's were
+	 * {@code CapabilityManager.injectCapabilities()} and {@code ModList.getAllScanData()}. Verified with javap
+	 * against forge-runtime.jar 52.1.16.
 	 */
 	public static int injectCapabilities() {
-		CapabilityManager.injectCapabilities();
+		CapabilityManager.injectCapabilities(ModList.get());
 		int annotated = 0;
 		try {
-			for (net.minecraftforge.forgespi.language.ModFileScanData scan : net.minecraftforge.fml.ModList.getAllScanData()) {
+			for (net.minecraftforge.forgespi.language.ModFileScanData scan : ModList.get().getAllScanData()) {
 				for (net.minecraftforge.forgespi.language.ModFileScanData.AnnotationData annotation : scan.getAnnotations()) {
 					if ("Lnet/minecraftforge/common/capabilities/AutoRegisterCapability;".equals(annotation.annotationType().getDescriptor())) annotated++;
 				}

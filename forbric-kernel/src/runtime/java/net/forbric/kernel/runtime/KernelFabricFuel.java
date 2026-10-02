@@ -1,179 +1,99 @@
 /* Copyright 2026 The Forbric Project. Licensed under the Apache License, Version 2.0. */
 package net.forbric.kernel.runtime;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import net.forbric.kernel.util.ForbricLog;
 import net.forbric.kernel.util.Reflect;
-import net.minecraft.core.HolderLookup;
-import net.minecraft.tags.ItemTags;
-import net.minecraft.world.flag.FeatureFlagSet;
 import net.minecraft.world.item.Item;
-import net.minecraft.world.level.block.entity.FuelValues;
 
 /**
- * fabric-content-registries' fuel events, on the fuel values the merged game actually builds.
+ * fabric-content-registries' {@code FuelRegistry}, on the fuel table the merged game actually builds.
  *
- * <p>Fabric registers fuels through {@code FuelValueEvents.BUILD} and {@code EXCLUSIONS}, fired by a wrap in vanilla's
- * {@code FuelValues.vanillaBurnTimes}. The merged server never calls that: it builds its fuels from NeoForge's
- * {@code furnace_fuels} data map in {@code DataMapHooks.populateFuelValues}, as a client on a NeoForge connection does,
- * so a Fabric mod's fuel never went in a furnace. FabricFuelValuesInjector calls {@link #apply} on that builder just
- * before it is built, in Fabric's order: BUILD, vanilla's non-flammable-wood removal, EXCLUSIONS. The removal applies
- * only to what BUILD added — the data map's entries are NeoForge's decision and stay as they are.
+ * <p>Fabric mods declare fuels through {@code FuelRegistry.INSTANCE} ({@code add(ItemLike|TagKey, Integer)},
+ * {@code remove(...)}), and fabric-api applies them itself: its {@code AbstractFurnaceBlockEntityMixin} injects at
+ * the RETURN of vanilla's {@code AbstractFurnaceBlockEntity.getFuel()} and hands the returned map to
+ * {@code FuelRegistryImpl.apply(Map)}. The merged server's table comes out of that same {@code getFuel()} — both
+ * patch sets build on it, and NeoForge's {@code buildFuels} is what fills it — so a Fabric mod's fuel can land in
+ * the table; {@link #apply} is the kernel's own copy of that one call, for the case where fabric's mixin did not
+ * attach (the kernel runs Fabric mixins through its own adapter, and a mixin that does not apply is silent).
  *
- * <h2>And the mixins on vanillaBurnTimes' return</h2>
+ * <p>Which is the whole content of the 26.2 class reduced to 1.21.1's carrier: there, Fabric fired
+ * {@code FuelValueEvents.BUILD}/{@code EXCLUSIONS} from a wrap in vanilla's {@code FuelValues.vanillaBurnTimes},
+ * which the merged server never called, and the kernel had to drive that event pair around the builder NeoForge's
+ * {@code DataMapHooks.populateFuelValues} produced. None of those types exists on 1.21.1 (fabric-api 0.116.17+1.21.1
+ * has {@code FuelRegistry}, not {@code FuelValueEvents}; vanilla has no {@code FuelValues}); 21.1's Fabric registry
+ * is a data holder with one mutating entry point, so the kernel's seam is that call and nothing more.
  *
- * <p>Fuel events are one way a Fabric mod adds fuel; a mixin on the RETURN of {@code vanillaBurnTimes} is the other.
- * torrential puts its Angling Table in the table that way ({@code @ModifyReturnValue}, 1.5 × the base unit) and
- * Lithium runs its whole block-info pass from there. On native Fabric — and on native MinecraftForge — the server's
- * fuel table comes out of {@code vanillaBurnTimes(Provider, FeatureFlagSet)}, which calls the three-argument overload
- * with 200, so both run on it. The merged server never calls it — its table comes from {@code populateFuelValues} —
- * so the Angling Table would not burn on a Forbric server while the client, which does call it, thought it would.
+ * <p>Its second half on 26.2 — {@code throughVanillaReturnHooks}/{@code takePending}, which ran the table through
+ * the RETURN hooks on {@code vanillaBurnTimes} that the merge had bypassed — has no 1.21.1 counterpart and is
+ * deliberately not ported: the method those hooks attach to is {@code getFuel()} itself, the merged base calls it
+ * natively (vanilla's own {@code isFuel} and Forge's {@code ForgeHooks.updateBurns} both do), and a mixin on it
+ * therefore runs with no help from the kernel.
  *
- * <p>{@link #throughVanillaReturnHooks} hands the table {@code populateFuelValues} built through that same
- * two-argument call as its result: the merge-added body {@code vanillaBurnTimes(Builder, int)} starts by returning
- * the {@link #takePending pending} table when there is one, so nothing of vanilla's is rebuilt and the body's own
- * anchors (fabric-content-registries' fuel events among them, already run by {@link #apply}) are skipped, while every
- * RETURN hook on each of the three overloads runs on it once, in the order the native server runs them. It is
- * Fabric's hooks applying on top of the data map's table, the way they apply on top of vanilla's natively — a hook
- * may replace entries or return another table, as it may there. A client that calls {@code vanillaBurnTimes} itself
- * has nothing pending and gets the method as shipped.
+ * <h2>PORT(1.21.1): what the injector has to do with this, and one measured gap</h2>
+ *
+ * <p>The 26.2 injector ({@code FabricFuelValuesInjector}) inserted the call into
+ * {@code DataMapHooks.populateFuelValues}; on 1.21.1 the anchor is {@code AbstractFurnaceBlockEntity.getFuel()}
+ * (or its {@code buildFuels(ObjIntConsumer)} body), and it must pass the {@code Map<Item, Integer>} that is about
+ * to be cached — before the {@code putstatic fuelCache} and before {@code ForgeHooks.updateBurns()} copies the
+ * table. That re-derivation is the transform layer's, not this file's.
+ *
+ * <p>Measured while porting, and it decides the injector's shape: on the 1.21.1 merged base the table this method
+ * fills is <em>not</em> on the burn-time path by itself. {@code getBurnDuration} calls
+ * {@code ForgeHooks.getBurnTime}, which takes {@code ItemStack.getBurnTime} first — NeoForge's
+ * {@code IItemExtension.getBurnTime}, the {@code neoforge:furnace_fuels} data map, returning {@code 0} (not
+ * {@code -1}) when the item has no entry (javap: {@code iconst_0} at offset 23 of that default method) — and only
+ * consults {@code VANILLA_BURNS}, the snapshot Forge fills from {@code getFuel()}, when that value is {@code -1}.
+ * So with this base's patches a Fabric fuel is visible to {@code isFuel} but burns for zero ticks unless the
+ * injector also makes the table reach the burn-time lookup. Stated here because the symptom is silent.
  */
 public final class KernelFabricFuel {
-	/** {@code off} leaves the fuel table populateFuelValues builds out of vanillaBurnTimes' return hooks. */
-	public static final String RETURN_HOOKS = "forbric.fabricFuel.returnHooks";
 	private static final AtomicBoolean WARNED = new AtomicBoolean();
-	private static final AtomicBoolean HOOKS_WARNED = new AtomicBoolean();
-	private static final AtomicBoolean HOOKS_PROVED = new AtomicBoolean();
-	/** The table on its way through vanillaBurnTimes, for the one body call that takes it. */
-	private static final ThreadLocal<Pending> PENDING = new ThreadLocal<>();
-
-	private static final class Pending {
-		final FuelValues values;
-		boolean taken;
-
-		Pending(FuelValues values) {
-			this.values = values;
-		}
-	}
 	private static volatile boolean resolved;
-	private static Object build, exclusions;
-	private static Method invoker, buildMethod, exclusionsMethod;
-	private static Constructor<?> context;
-	private static Field values;
+	private static Object registry;
+	private static Method apply;
 
 	private KernelFabricFuel() {
 	}
 
-	/** Called by {@code DataMapHooks.populateFuelValues} with its builder, before {@code build()}. Returns the builder. */
-	public static FuelValues.Builder apply(FuelValues.Builder builder, HolderLookup.Provider registries, FeatureFlagSet features) {
+	/**
+	 * Called with the fuel table the game is building, before it is cached; returns the table. Fabric's registered
+	 * times are merged in through Fabric's own {@code FuelRegistryImpl.apply}, so tag entries expand and a
+	 * non-positive value removes, exactly as on native Fabric.
+	 */
+	public static Map<Item, Integer> apply(Map<Item, Integer> table) {
 		try {
-			if (!resolve(builder.getClass().getClassLoader())) return builder;
-			Object ctx = context.newInstance(registries, features, 200);
-			@SuppressWarnings("unchecked")
-			Map<Item, Integer> map = (Map<Item, Integer>) values.get(builder);
-			Set<Item> before = new HashSet<>(map.keySet());
-			buildMethod.invoke(invoker.invoke(build), builder, ctx);
-			map.keySet().removeIf(item -> !before.contains(item) && item.builtInRegistryHolder().is(ItemTags.NON_FLAMMABLE_WOOD));
-			exclusionsMethod.invoke(invoker.invoke(exclusions), builder, ctx);
+			if (table == null || !resolve()) return table;
+			apply.invoke(registry, table);
 		} catch (Throwable t) {
 			if (WARNED.compareAndSet(false, true)) {
-				ForbricLog.warn("[Forbric/Fuel] fabric-content-registries' fuel events failed — Fabric mods' fuels are missing "
-						+ "from this game's fuel values", Reflect.unwrap(t));
+				ForbricLog.warn("[Forbric/Fuel] fabric-content-registries' fuel registry could not be applied — "
+						+ "Fabric mods' fuels are missing from this game's fuel table", Reflect.unwrap(t));
 			}
 		}
-		return builder;
-	}
-
-	/**
-	 * Called by {@code DataMapHooks.populateFuelValues} with the table it built; returns what vanillaBurnTimes' return
-	 * hooks make of it.
-	 *
-	 * <p>The table goes back unchanged when the body's short-circuit was never reached: a carrier whose stub stopped
-	 * forwarding to it would otherwise have the full vanilla table rebuilt in place of the data map's, and a mixin
-	 * that cancels vanillaBurnTimes at HEAD would throw away every NeoForge and MinecraftForge fuel with it. Natively
-	 * such a cancel replaces only vanilla's table; here there is more in it than vanilla's, so the data map's result
-	 * stands. A hook that throws costs its own change, not the server's fuel table.
-	 */
-	public static FuelValues throughVanillaReturnHooks(FuelValues built, HolderLookup.Provider registries,
-			FeatureFlagSet features) {
-		if (built == null || "off".equalsIgnoreCase(System.getProperty(RETURN_HOOKS, "on"))) return built;
-		Pending pending = new Pending(built);
-		Pending outer = PENDING.get();
-		PENDING.set(pending);
-		try {
-			// The call the native Fabric and MinecraftForge servers make, so a hook on either outer overload runs too.
-			FuelValues hooked = FuelValues.vanillaBurnTimes(registries, features);
-			if (!pending.taken) {
-				warnHooksOnce("vanillaBurnTimes returned without reaching the merge-added body the kernel short-circuits "
-						+ "(a HEAD cancel, or a carrier whose overload no longer forwards)", null);
-				return built;
-			}
-			if (HOOKS_PROVED.compareAndSet(false, true)) {
-				ForbricLog.info("[Forbric/Fuel] the fuel table NeoForge's populateFuelValues built went through "
-						+ "FuelValues.vanillaBurnTimes' return hooks — the merged server never calls that method, so a "
-						+ "mod's mixin there (torrential's Angling Table) never reached the fuels a furnace uses");
-			}
-			return hooked == null ? built : hooked;
-		} catch (Throwable t) {
-			warnHooksOnce("vanillaBurnTimes threw on the way through its return hooks", Reflect.unwrap(t));
-			return built;
-		} finally {
-			if (outer == null) PENDING.remove();
-			else PENDING.set(outer);
-		}
-	}
-
-	/**
-	 * The table {@link #throughVanillaReturnHooks} is carrying, once; null when there is none. Called at the head of
-	 * the merge-added {@code FuelValues.vanillaBurnTimes(Builder, int)}, which returns it as its result instead of
-	 * building vanilla's. Once only, so a hook that calls vanillaBurnTimes again gets the method as shipped.
-	 */
-	public static FuelValues takePending() {
-		Pending pending = PENDING.get();
-		if (pending == null || pending.taken) return null;
-		pending.taken = true;
-		return pending.values;
-	}
-
-	private static void warnHooksOnce(String what, Throwable cause) {
-		if (!HOOKS_WARNED.compareAndSet(false, true)) return;
-		String message = "[Forbric/Fuel] " + what + " — the data map's fuel table is kept as built, and a mod's mixin "
-				+ "on vanillaBurnTimes' return does not change it";
-		if (cause == null) ForbricLog.warn(message);
-		else ForbricLog.warn(message, cause);
+		return table;
 	}
 
 	/** fabric-content-registries, once; false (for good) when it is not installed. */
-	private static synchronized boolean resolve(ClassLoader loader) throws ReflectiveOperationException {
-		if (resolved) return build != null;
+	private static synchronized boolean resolve() throws ReflectiveOperationException {
+		if (resolved) return registry != null;
 		resolved = true;
-		Class<?> events;
+		Class<?> api;
 		try {
-			events = Class.forName("net.fabricmc.fabric.api.registry.FuelValueEvents", true, loader);
+			api = Class.forName("net.fabricmc.fabric.api.registry.FuelRegistry", true,
+					KernelFabricFuel.class.getClassLoader());
 		} catch (ClassNotFoundException absent) {
 			return false;
 		}
-		ClassLoader fabric = events.getClassLoader();
-		Class<?> event = Class.forName("net.fabricmc.fabric.api.event.Event", false, fabric);
-		Class<?> ctx = Class.forName("net.fabricmc.fabric.api.registry.FuelValueEvents$Context", false, fabric);
-		invoker = event.getMethod("invoker");
-		buildMethod = Class.forName("net.fabricmc.fabric.api.registry.FuelValueEvents$BuildCallback", false, fabric)
-				.getMethod("build", FuelValues.Builder.class, ctx);
-		exclusionsMethod = Class.forName("net.fabricmc.fabric.api.registry.FuelValueEvents$ExclusionsCallback", false, fabric)
-				.getMethod("buildExclusions", FuelValues.Builder.class, ctx);
-		context = Class.forName("net.fabricmc.fabric.impl.content.registry.FuelRegistryEventsContextImpl", false, fabric)
-				.getConstructor(HolderLookup.Provider.class, FeatureFlagSet.class, int.class);
-		values = FuelValues.Builder.class.getDeclaredField("values");
-		values.setAccessible(true);
-		build = events.getField("BUILD").get(null);
-		exclusions = events.getField("EXCLUSIONS").get(null);
+		ClassLoader fabric = api.getClassLoader();
+		registry = api.getField("INSTANCE").get(null);
+		// The implementation rather than the interface: INSTANCE is a FuelRegistryImpl and apply(Map) is the
+		// method fabric-api's own furnace mixin calls. Verified against fabric-api 0.116.17+1.21.1.
+		apply = Class.forName("net.fabricmc.fabric.impl.content.registry.FuelRegistryImpl", false, fabric)
+				.getMethod("apply", Map.class);
 		return true;
 	}
 }

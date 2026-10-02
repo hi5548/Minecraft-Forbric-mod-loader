@@ -24,6 +24,7 @@ import java.util.function.Consumer;
 import net.forbric.kernel.util.ForbricLog;
 import net.forbric.kernel.util.Reflect;
 import net.minecraft.server.MinecraftServer;
+import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.config.ConfigTracker;
 import net.minecraftforge.fml.config.ModConfig;
 import net.minecraftforge.server.ServerLifecycleHooks;
@@ -53,9 +54,12 @@ import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
  *
  * <h2>What javac checks here, and what it cannot</h2>
  *
- * <p>Types, including {@code ConfigTracker.loadConfigs(ModConfig.Type, Path)} and the typed
- * {@code ServerAboutToStartEvent.BUS.post(...)} — the shape-based {@code post} lookup the boot side needed is
- * gone, because the bus field carries its own generic argument. One member stays reflective and cannot be
+ * <p>Types, including {@code ConfigTracker.INSTANCE.loadConfigs(ModConfig.Type, Path)} and the typed
+ * {@code MinecraftForge.EVENT_BUS.post(new ServerAboutToStartEvent(...))} — the shape-based {@code post} lookup
+ * the boot side needed is gone, because the bus carries its own generic argument. ({@code PORT(1.21.1)}: 26.2's
+ * Forge carries a per-event {@code BUS} field; 1.21.1's EventBus 6 has only {@code MinecraftForge.EVENT_BUS},
+ * and {@code ConfigTracker.loadConfigs} is an instance method reached through the public {@code INSTANCE}.)
+ * One member stays reflective and cannot be
  * anything else: {@code javap -p} shows {@code getServerConfigPath} is {@code private static} on
  * {@code ServerLifecycleHooks}. Reimplementing it would mean reproducing MinecraftForge's own logic, which is
  * the one thing this project does not do. Forge's {@code runModifiers} is not called at all — see
@@ -99,7 +103,7 @@ public final class KernelGameServerAboutToStart {
 			recordCurrentServer(server);
 
 			try {
-				ConfigTracker.loadConfigs(ModConfig.Type.SERVER, (Path) configPath.invoke(null, server));
+				ConfigTracker.INSTANCE.loadConfigs(ModConfig.Type.SERVER, (Path) configPath.invoke(null, server));
 			} catch (Throwable t) {
 				if (warnedConfigs.compareAndSet(false, true)) {
 					ForbricLog.warn("[Forbric/EventMux] could not load MinecraftForge's per-world SERVER configs — "
@@ -109,7 +113,7 @@ public final class KernelGameServerAboutToStart {
 			}
 
 			try {
-				net.minecraftforge.event.server.ServerAboutToStartEvent.BUS.post(
+				MinecraftForge.EVENT_BUS.post(
 						new net.minecraftforge.event.server.ServerAboutToStartEvent(server));
 			} catch (Throwable t) {
 				if (warnedEvent.compareAndSet(false, true)) {

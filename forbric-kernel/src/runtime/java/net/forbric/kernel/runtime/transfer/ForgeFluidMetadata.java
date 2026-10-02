@@ -7,12 +7,16 @@ import net.minecraft.core.component.DataComponentPatch;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraftforge.fluids.FluidStack;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
 
 /**
- * Forge 26.2 still uses CompoundTag for fluid metadata; Fabric/NeoForge use DataComponentPatch. Empty metadata
- * converts directly. A non-empty value requires an explicit fluid-specific codec AND an exact round trip on
+ * Forge still carries fluid metadata in a CompoundTag; Fabric and NeoForge 21.1 use DataComponentPatch. Empty
+ * metadata converts directly. A non-empty value requires an explicit fluid-specific codec AND an exact round trip on
  * every conversion. A missing/throwing/lossy codec declines transfer instead of stripping data.
+ *
+ * <p>PORT(1.21.1): {@link FluidResource} is the bridge's own fluid identity (see TransferApi), replacing 26.2's
+ * {@code neoforge.transfer.fluid.FluidResource}; Forge 52's FluidStack stayed CompoundTag-based exactly as 26.2's
+ * was, so the conversions themselves are unchanged. NeoForge 21.1's own FluidStack is component-based and does not
+ * pass through here at all.
  */
 public final class ForgeFluidMetadata {
 	private ForgeFluidMetadata() { }
@@ -48,11 +52,11 @@ public final class ForgeFluidMetadata {
 	public static FluidStack toForge(FluidResource resource, int amount) {
 		if (resource.isEmpty() || amount == 0) return FluidStack.EMPTY;
 		if (amount < 0) throw new IllegalArgumentException("Negative fluid amount");
-		if (resource.isComponentsPatchEmpty()) return new FluidStack(resource.getFluid(), amount);
+		if (resource.componentsPatchEmpty()) return new FluidStack(resource.getFluid(), amount);
 		Codec codec = codec(resource.getFluid());
 		try {
 			if (codec != null) {
-				DataComponentPatch original = resource.getComponentsPatch();
+				DataComponentPatch original = resource.componentsPatch();
 				CompoundTag tag = codec.toTag(original);
 				if (!empty(tag) && original.equals(codec.toComponents(tag.copy()))) {
 					return new FluidStack(resource.getFluid(), amount, tag.copy());

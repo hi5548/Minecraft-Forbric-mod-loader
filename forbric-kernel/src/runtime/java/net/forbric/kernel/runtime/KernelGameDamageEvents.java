@@ -6,7 +6,6 @@ import java.util.function.Consumer;
 
 import net.forbric.kernel.util.ForbricLog;
 import net.forbric.kernel.util.Reflect;
-import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.common.ForgeHooks;
 import net.minecraftforge.event.ForgeEventFactory;
 import net.neoforged.bus.api.Event;
@@ -61,10 +60,11 @@ public final class KernelGameDamageEvents {
 				"a MinecraftForge mod that changes what a shield blocks or whether it wears does nothing",
 				event -> {
 					if (!event.getBlocked()) return;
-					ItemStack with = event.getEntity().getItemBlockingWith();
-					if (with == null) return;
+					// PORT(1.21.1): 26.2's onShieldBlock also takes the ItemStack the defender is blocking with
+					// (from LivingEntity.getItemBlockingWith, which 1.21.1 does not have). 1.21.1's Forge hook
+					// takes the three arguments below and reads the stack itself.
 					var forge = ForgeEventFactory.onShieldBlock(event.getEntity(), event.getDamageSource(),
-							event.getBlockedDamage(), with);
+							event.getBlockedDamage());
 					if (forge == null) {
 						event.setBlocked(false);
 						return;

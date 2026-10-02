@@ -93,7 +93,7 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 	}
 
 	/** The repairs {@link #transform} runs, in its order; a test pins the two lists against each other. */
-	static final List<String> REPAIRS = List.of("repairLambdaBootstrapHandles", "addBlockStateModelConflictResolvers", "addBlockStateAppearanceResolver", "addMissingForgeFluidTypeBridge", "addMissingForgeKeyMappingLookupInitializer", "routeKeyMappingClickToPopulatedLookup", "giveKeyMappingItsMinecraftForgeFace", "routeFabricParticleFactoriesThroughTheLiveMap", "giveFeaturesPerStepItsVanillaDescriptorBack", "letDungeonsGenerateWithoutTheDataMap", "restoreDoublePrecisionToTheRandomSources", "convertRadiansWithVanillasFoldedConstant", "saveTheHeightmapsVanillaSaves", "guardNeoForgesWorldModifierPass", "letForeignResourceConditionsThrough", "letForeignResourceConditionsThroughMinecraftForge", "letFabricResourceConditionsDecide", "translateAGuestsPrivateSkipMarker", "serveDefaultAttributesBothEcosystems", "restoreForgeClientInit", "restoreForgeGeometryReload", "nameTheReloadListenersNeoForgeRefusesToName", "dropInterfaceDefaultShadowingOverrides", "tolerateEmptyCreativeTabStacks", "routePlaceItemHookToNeoForge", "bridgeOrphanedPipRenderers", "keepForgeOutboundProtocolCurrent", "surviveTheMissingForgeModelDataManager", "dropTheWindowTitlesLoaderBrand", "keepTheSaveOffTheTeardownsFailurePath", "postNeoForgesItemTooltipEvent", "askNeoForgeWhatAnItemsAttributesAre", "readTheSpawnReasonThatIsActuallyWritten", "giveTheUnwrittenLoggerAValue", "addTheMissingCapabilityLifecycleStubs", "addTheMissingNbtBuilderFactory", "postMinecraftForgesReloadListenerEvent", "giveMinecraftForgesReloadEventItsConditionContext", "letMinecraftForgeIngredientTypesDecode", "letMinecraftForgeFluidsChooseTheirModel", "giveMinecraftForgesParticleLookupItsFirstVariant", "dropStubsThatBypassARealSuperclassMethod", "inlineTheSwitchMapTheMergeLost", "vetoUnjudgeableOverlayConditions", "hideTheLegacyLootModifierIndexFromTheDirectoryScan", "letModdedFeatureFlagsRegister", "dropTheKeyModifierSuffixBeforeParsingAKeyName", "letTheAtlasLowerItsMipLevelLikeVanilla", "wrapTheStreamsVanillaWraps", "returnFromANestedBootstrapBeforeItsTail", "letBothEcosystemsSetBurnTime", "letMinecraftForgeSeeSpawnerMobs", "letMinecraftForgeAddPackFinders");
+	static final List<String> REPAIRS = List.of("repairLambdaBootstrapHandles", "addBlockStateModelConflictResolvers", "addBlockStateAppearanceResolver", "addMissingForgeFluidTypeBridge", "addMissingForgeKeyMappingLookupInitializer", "addMissingForgeKnownRegistriesInitializer", "routeKeyMappingClickToPopulatedLookup", "giveKeyMappingItsMinecraftForgeFace", "routeFabricParticleFactoriesThroughTheLiveMap", "giveFeaturesPerStepItsVanillaDescriptorBack", "letDungeonsGenerateWithoutTheDataMap", "restoreDoublePrecisionToTheRandomSources", "convertRadiansWithVanillasFoldedConstant", "saveTheHeightmapsVanillaSaves", "guardNeoForgesWorldModifierPass", "letForeignResourceConditionsThrough", "letForeignResourceConditionsThroughMinecraftForge", "letFabricResourceConditionsDecide", "translateAGuestsPrivateSkipMarker", "serveDefaultAttributesBothEcosystems", "restoreForgeClientInit", "restoreForgeGeometryReload", "nameTheReloadListenersNeoForgeRefusesToName", "dropInterfaceDefaultShadowingOverrides", "tolerateEmptyCreativeTabStacks", "routePlaceItemHookToNeoForge", "bridgeOrphanedPipRenderers", "keepForgeOutboundProtocolCurrent", "surviveTheMissingForgeModelDataManager", "dropTheWindowTitlesLoaderBrand", "keepTheSaveOffTheTeardownsFailurePath", "postNeoForgesItemTooltipEvent", "askNeoForgeWhatAnItemsAttributesAre", "readTheSpawnReasonThatIsActuallyWritten", "giveTheUnwrittenLoggerAValue", "addTheMissingCapabilityLifecycleStubs", "addTheMissingNbtBuilderFactory", "postMinecraftForgesReloadListenerEvent", "giveMinecraftForgesReloadEventItsConditionContext", "letMinecraftForgeIngredientTypesDecode", "letMinecraftForgeFluidsChooseTheirModel", "giveMinecraftForgesParticleLookupItsFirstVariant", "dropStubsThatBypassARealSuperclassMethod", "inlineTheSwitchMapTheMergeLost", "vetoUnjudgeableOverlayConditions", "hideTheLegacyLootModifierIndexFromTheDirectoryScan", "letModdedFeatureFlagsRegister", "dropTheKeyModifierSuffixBeforeParsingAKeyName", "letTheAtlasLowerItsMipLevelLikeVanilla", "wrapTheStreamsVanillaWraps", "returnFromANestedBootstrapBeforeItsTail", "letBothEcosystemsSetBurnTime", "letMinecraftForgeSeeSpawnerMobs", "letMinecraftForgeAddPackFinders");
 
 	private static final String NEO_EVENT_HOOKS_BINARY = "net.neoforged.neoforge.event.EventHooks";
 
@@ -118,6 +118,9 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 		out.add(scanned("addMissingForgeFluidTypeBridge", "every concrete fluid under net.minecraft.world.level.material implementing NeoForge's IFluidExtension"));
 		out.add(fixed("addMissingForgeKeyMappingLookupInitializer", KEY_MAPPING,
 				"MinecraftForge's KeyMapping.MAP is never initialised — every traditional-Forge key registration NPEs"));
+		out.add(fixed("addMissingForgeKnownRegistriesInitializer", MAPPED_REGISTRY,
+				"MinecraftForge's MappedRegistry.KNOWN is never initialised — the first registry registration NPEs "
+						+ "(SoundEvents during Bootstrap.bootStrap) and the server never reaches the main menu"));
 		out.add(fixed("routeKeyMappingClickToPopulatedLookup", KEY_MAPPING,
 				"key presses are looked up in the lookup registration never populated — MinecraftForge mods' keys never fire"));
 		out.add(fixed("giveKeyMappingItsMinecraftForgeFace", KEY_MAPPING,
@@ -295,6 +298,7 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 			changed |= claim(reporter, "addBlockStateAppearanceResolver", addBlockStateAppearanceResolver(node));
 			changed |= claim(reporter, "addMissingForgeFluidTypeBridge", addMissingForgeFluidTypeBridge(node));
 			changed |= claim(reporter, "addMissingForgeKeyMappingLookupInitializer", addMissingForgeKeyMappingLookupInitializer(node));
+			changed |= claim(reporter, "addMissingForgeKnownRegistriesInitializer", addMissingForgeKnownRegistriesInitializer(node));
 			changed |= claim(reporter, "routeKeyMappingClickToPopulatedLookup", routeKeyMappingClickToPopulatedLookup(node));
 			changed |= claim(reporter, "giveKeyMappingItsMinecraftForgeFace", giveKeyMappingItsMinecraftForgeFace(node));
 			changed |= claim(reporter, "routeFabricParticleFactoriesThroughTheLiveMap", routeFabricParticleFactoriesThroughTheLiveMap(node));
@@ -420,6 +424,8 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 	private static final String LEGACY_INTEROP_PACKAGE = "net/forbric/loader/impl/";
 
 	private static final String KEY_MAPPING = "net/minecraft/client/KeyMapping";
+	/** 1.21.1's registry base. MinecraftForge adds {@code KNOWN}/{@code markKnown}/{@code getKnownRegistries}. */
+	private static final String MAPPED_REGISTRY = "net/minecraft/core/MappedRegistry";
 	private static final String MF_CONTEXT = "Lnet/minecraftforge/client/settings/IKeyConflictContext;";
 	private static final String NEO_CONTEXT = "Lnet/neoforged/neoforge/client/settings/IKeyConflictContext;";
 	private static final String MF_MODIFIER = "Lnet/minecraftforge/client/settings/KeyModifier;";
@@ -774,9 +780,19 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 		return insn;
 	}
 
+	/**
+	 * PORT(1.21.1): the neighbour-lookup type in the emitted descriptors is {@code BlockAndTintGetter}, not 26.2's
+	 * {@code BlockAndLightGetter}. Both {@code IForgeBlock} and NeoForge's {@code IBlockExtension} declare their
+	 * {@code getAppearance} default against {@code BlockAndTintGetter} on 1.21.1 (verified on the staged carriers),
+	 * and the merged base's own overrides (e.g. {@code AbstractCauldronBlock}) use it too, so the signature must
+	 * match it exactly to override the two identical interface defaults. Emitting the 26.2 name gave the added
+	 * methods a descriptor naming a class the 1.21.1 base does not have; reflecting them (NeoForge's
+	 * {@code CommonHooks} scans component classes during {@code Bootstrap.bootStrap}) then died on
+	 * {@code ClassNotFoundException: net.minecraft.world.level.BlockAndLightGetter} before the game could boot.
+	 */
 	private static boolean addBlockAppearanceResolver(ClassNode node) {
 		String desc = "(Lnet/minecraft/world/level/block/state/BlockState;"
-				+ "Lnet/minecraft/world/level/BlockAndLightGetter;Lnet/minecraft/core/BlockPos;"
+				+ "Lnet/minecraft/world/level/BlockAndTintGetter;Lnet/minecraft/core/BlockPos;"
 				+ "Lnet/minecraft/core/Direction;Lnet/minecraft/world/level/block/state/BlockState;"
 				+ "Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;";
 		if (hasMethod(node, "getAppearance", desc)) return false;
@@ -799,7 +815,7 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 		if ("net/minecraft/world/level/block/Block".equals(node.name)) return addBlockAppearanceResolver(node);
 		if (!"net/minecraft/world/level/block/state/BlockState".equals(node.name)) return false;
 
-		String desc = "(Lnet/minecraft/world/level/BlockAndLightGetter;Lnet/minecraft/core/BlockPos;"
+		String desc = "(Lnet/minecraft/world/level/BlockAndTintGetter;Lnet/minecraft/core/BlockPos;"
 				+ "Lnet/minecraft/core/Direction;Lnet/minecraft/world/level/block/state/BlockState;"
 				+ "Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;";
 		if (hasMethod(node, "getAppearance", desc)) return false;
@@ -812,7 +828,7 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 		for (int slot = 0; slot <= 5; slot++) method.instructions.add(new VarInsnNode(Opcodes.ALOAD, slot));
 		method.instructions.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL,
 				"net/minecraft/world/level/block/Block", "getAppearance",
-				"(Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/BlockAndLightGetter;"
+				"(Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/BlockAndTintGetter;"
 						+ "Lnet/minecraft/core/BlockPos;Lnet/minecraft/core/Direction;"
 						+ "Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/core/BlockPos;)"
 						+ "Lnet/minecraft/world/level/block/state/BlockState;", false));
@@ -1248,6 +1264,49 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 
 		clinit.maxStack = Math.max(clinit.maxStack, 2);
 		ForbricLog.warn("[Forbric/MergedBaseCompat] initialized Forge KeyMapping lookup on merged client base");
+		return true;
+	}
+
+	/**
+	 * Gives MinecraftForge's {@code MappedRegistry.KNOWN} the empty set its own {@code <clinit>} would have built.
+	 *
+	 * <p>PORT(1.21.1): the byte-merge kept NeoForge's {@code MappedRegistry.<clinit>} — which assigns only
+	 * {@code LOGGER} — and dropped MinecraftForge's, whose body additionally assigned
+	 * {@code KNOWN = new LinkedHashSet<>()}. The merger declines class-initializer splices (its own report lists
+	 * "constructor or class initializer" as a decline reason), but the FIELD survives because both families read it
+	 * through {@code markKnown}/{@code getKnownRegistries}. The merged base therefore boots with {@code KNOWN ==
+	 * null} and the FIRST registry registration NPEs at {@code NamespacedWrapper.register → MappedRegistry.markKnown
+	 * → KNOWN.add}. Measured on the 1.21.1 merged base: {@code Bootstrap.bootStrap → SoundEvents.<clinit> →
+	 * Registry.register}. The repair re-adds the assignment the merge dropped, before every {@code RETURN} of
+	 * {@code <clinit>}, building the same {@code LinkedHashSet} MinecraftForge's own body did.
+	 *
+	 * <p>{@code KNOWN} is {@code private static final}, and PUTSTATIC to a final field is legal only inside the
+	 * declaring class's own {@code <clinit>} — exactly where this writes. A base that already assigns it (a future
+	 * merge, or one where MinecraftForge won the initializer) is left untouched, so this is a no-op on 26.2.
+	 */
+	private static boolean addMissingForgeKnownRegistriesInitializer(ClassNode node) {
+		if (!MAPPED_REGISTRY.equals(node.name)) return false;
+		String setDesc = "Ljava/util/Set;";
+		if (!hasField(node, "KNOWN", setDesc) || initializesStaticField(node, "KNOWN", setDesc)) return false;
+
+		MethodNode clinit = findMethod(node, "<clinit>", "()V");
+		if (clinit == null) return false;
+
+		boolean inserted = false;
+		for (AbstractInsnNode insn = clinit.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+			if (insn.getOpcode() != Opcodes.RETURN) continue;
+			clinit.instructions.insertBefore(insn, new TypeInsnNode(Opcodes.NEW, "java/util/LinkedHashSet"));
+			clinit.instructions.insertBefore(insn, new InsnNode(Opcodes.DUP));
+			clinit.instructions.insertBefore(insn, new MethodInsnNode(Opcodes.INVOKESPECIAL,
+					"java/util/LinkedHashSet", "<init>", "()V", false));
+			clinit.instructions.insertBefore(insn, new FieldInsnNode(Opcodes.PUTSTATIC, MAPPED_REGISTRY, "KNOWN", setDesc));
+			inserted = true;
+		}
+		if (!inserted) return false;
+
+		clinit.maxStack = Math.max(clinit.maxStack, 2);
+		ForbricLog.warn("[Forbric/MergedBaseCompat] initialized MinecraftForge's MappedRegistry.KNOWN on the merged "
+				+ "base — the byte merge dropped its initializer, and the first registry registration NPEs without it");
 		return true;
 	}
 

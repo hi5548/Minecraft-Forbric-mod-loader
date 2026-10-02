@@ -44,15 +44,27 @@ import org.objectweb.asm.tree.VarInsnNode;
  *       {@code getParts()} so the debug hitboxes still show them.</li>
  * </ul>
  * {@code -Dforbric.dragonParts=off} leaves the three classes as merged.
+ *
+ * <p>PORT(1.21.1): the byte merge's winner differs by generation. On 26.2 it put {@code EnderDragonPart} under
+ * MinecraftForge's {@code PartEntity} and kept MinecraftForge's {@code EnderDragon.getParts()} (so {@link
+ * #rebasePart} moves the part to NeoForge). On 1.21.1 the part already extends NeoForge's {@code PartEntity}, so
+ * {@code rebasePart} is a no-op and the repair's work is {@link #neoForgeParts} alone: {@code EnderDragon}'s only
+ * {@code getParts()} is MinecraftForge-typed while its {@code subEntities} are NeoForge parts, which is exactly
+ * the "return this.subEntities from a Forge-typed method" shape that would not verify.
  */
 public final class DragonPartsInjector implements ClassTransformer {
 	public static final String PROPERTY = "forbric.dragonParts";
-	static final String PART = "net.minecraft.world.entity.boss.enderdragon.EnderDragonPart";
+	// PORT(1.21.1): 26.2 moved the part to boss.enderdragon.EnderDragonPart; on 1.21.1 it is boss.EnderDragonPart
+	// (EnderDragon itself stays under boss.enderdragon). With the 26.2 name the class gate never matched and
+	// neoForgeParts() declined on the failed subEntities descriptor check, leaving EnderDragon.getParts()
+	// MinecraftForge-typed while the merged EnderDragonPart extends NeoForge's PartEntity — a VerifyError
+	// ("Bad return type") at EntityType.<clinit>, so the server never finishes Bootstrap.bootStrap.
+	static final String PART = "net.minecraft.world.entity.boss.EnderDragonPart";
 	static final String DRAGON = "net.minecraft.world.entity.boss.enderdragon.EnderDragon";
 	static final String HITBOXES = "net.minecraft.client.renderer.debug.EntityHitboxDebugRenderer";
 	static final String FORGE_PART = ForeignType.PART_ENTITY.internal(Ecosystem.FORGE);
 	static final String NEO_PART = ForeignType.PART_ENTITY.internal(Ecosystem.NEOFORGE);
-	static final String PART_INTERNAL = "net/minecraft/world/entity/boss/enderdragon/EnderDragonPart";
+	static final String PART_INTERNAL = "net/minecraft/world/entity/boss/EnderDragonPart";
 	static final String DRAGON_INTERNAL = "net/minecraft/world/entity/boss/enderdragon/EnderDragon";
 	static final String ENTITY = "net/minecraft/world/entity/Entity";
 	static final String FORGE_GET_PARTS = "()[L" + FORGE_PART + ";";

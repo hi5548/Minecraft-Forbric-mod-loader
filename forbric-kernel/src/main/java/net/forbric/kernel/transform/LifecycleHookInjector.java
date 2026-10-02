@@ -39,7 +39,9 @@ import net.forbric.kernel.util.ForbricLog;
  * <ul>
  *   <li><b>Server</b> — {@code net.minecraft.server.Main.main} calls
  *       {@code net.neoforged.neoforge.server.loading.ServerModLoader.load(Z)V} between {@code Bootstrap.bootStrap()}
- *       and {@code new DedicatedServerSettings(...)}.</li>
+ *       and {@code new DedicatedServerSettings(...)}. PORT(1.21.1): the call in that generation is the no-arg
+ *       {@code load()V} (NeoForge 21.1 — the same shape MinecraftForge 52 uses); {@link #SERVER_TRIGGERS} carries
+ *       both descriptor arms, so either base redirects to the same kernel hook.</li>
  *   <li><b>Client</b> — {@code net.minecraft.client.main.Main.main} calls
  *       {@code net.neoforged.neoforge.client.loading.ClientModLoader.begin()V} at bc 814, after
  *       {@code Bootstrap.validate()} (and after {@code BackgroundWaiter.runAndTick} ran the bootstrap lambda that
@@ -111,10 +113,18 @@ public final class LifecycleHookInjector implements ClassTransformer {
 	 */
 	private record Trigger(String owner, String name, String desc, String hookName, int popSlots) {}
 
-	// Server triggers: NeoForge won the entry (load(Z)V); the Forge no-arg form is kept in case a base flips it.
-	// Same descriptor as the hook — keep the boolean on the stack, plain owner+name swap.
+	// Server triggers, both families. One descriptor arm matches a given merged base, so a base that carries both
+	// families' calls still triggers exactly once (the caller also marks the method after the first redirect).
+	//
+	// PORT(1.21.1): NeoForge 26.2 widened this entry to load(Z)V, but NeoForge 21.1 — the one the 1.21.1 merged
+	// base carries — still has the original no-arg load()V, the same shape MinecraftForge 52 uses. Measured on the
+	// 1.21.1 merged base: Main.main's only loader call is `invokestatic
+	// net/neoforged/neoforge/server/loading/ServerModLoader.load:()V` at bc 453, between Bootstrap.bootStrap() and
+	// new DedicatedServerSettings(...). Without this arm the anchor reads as "gone" on 1.21.1 and the kernel
+	// (correctly) refuses to boot rather than let the genuine lifecycle run. popSlots 0: no-arg trigger, no-arg hook.
 	private static final Trigger[] SERVER_TRIGGERS = {
 			new Trigger(ForeignType.SERVER_MOD_LOADER.internal(Ecosystem.NEOFORGE), "load", "(Z)V", "onServerModLoading", 0),
+			new Trigger(ForeignType.SERVER_MOD_LOADER.internal(Ecosystem.NEOFORGE), "load", "()V", "onServerModLoadingNoArg", 0),
 			new Trigger(ForeignType.SERVER_MOD_LOADER.internal(Ecosystem.FORGE), "load", "()V", "onServerModLoadingNoArg", 0),
 	};
 

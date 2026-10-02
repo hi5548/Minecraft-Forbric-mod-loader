@@ -1732,6 +1732,8 @@ public final class PassiveSeeder {
 			// one-shot here means a failure further down costs those things, not the dist.
 			verifyForgeFmlEnvironment(gameLoader, side);
 			seedForgeLaunchHandler(gameLoader, fmlLoader, side);
+			seedForge52ModuleLayerManager(gameLoader, fmlLoader);
+			seedForge52LoadingModList(gameLoader, fmlLoader);
 
 			// Traditional-Forge FMLPaths + FMLConfig (ForgeMod's config registration reads FMLConfig; ConfigFileType
 			// Handler.<clinit> NPEs if FMLConfig.load() hasn't populated its backing file config).
@@ -1745,6 +1747,92 @@ public final class PassiveSeeder {
 			ForbricLog.debug("[Forbric/Seed] traditional-Forge FMLLoader not present — skipping");
 		} catch (Throwable t) {
 			ForbricLog.warn("[Forbric/Seed] could not seed traditional-Forge FMLLoader identity", unwrap(t));
+		}
+	}
+
+	/**
+	 * PORT(1.21.1): gives Forge 52's {@code FMLLoader.moduleLayerManager} a stand-in, so {@code FMLLoader.getGameLayer()}
+	 * answers instead of NPEing.
+	 *
+	 * <p>{@code moduleLayerManager} is filled by ModLauncher's {@code completeScan}, which the kernel does not run, so
+	 * it is null and {@code getGameLayer()} → {@code moduleLayerManager.getLayer(GAME).orElseThrow()} NPEs. Measured on
+	 * the 1.21.1 base: {@code Bootstrap.bootStrap → … → ForgeEventFactory.<clinit> → ModLoader.get() → new ModLoader()
+	 * → new ModStateManager() → FMLLoader.getGameLayer()} died here, one link past {@link #seedForge52LoadingModList}.
+	 *
+	 * <p>The stand-in answers {@code getLayer(GAME)} with {@code ModuleLayer.boot()} — the honest empty for a process
+	 * where the game classes are defined by {@code ForbricClassLoader} and not by a module layer. Its one consumer on
+	 * this path, {@code ModStateManager}, does {@code ServiceLoader.load(layer, IModStateProvider.class)}; the boot
+	 * layer holds no such provider, so it gets the empty map it would get from any non-ModLauncher layer. The kernel
+	 * rewrites the other {@code getGameLayer()} callers that must not resolve (see
+	 * {@code ForgeBindingsLookupInjector}), so this only fills the seam those rewrites do not name.
+	 */
+	private static void seedForge52ModuleLayerManager(ClassLoader gameLoader, Class<?> fmlLoader) {
+		try {
+			Field field = fmlLoader.getDeclaredField("moduleLayerManager");
+			field.setAccessible(true);
+			if (field.get(null) != null) return;
+			Class<?> manager = Class.forName("cpw.mods.modlauncher.api.IModuleLayerManager", false, gameLoader);
+			Object boot = java.lang.ModuleLayer.boot();
+			Object standIn = Proxy.newProxyInstance(gameLoader, new Class<?>[] {manager}, (proxy, method, args) -> {
+				if (method.getDeclaringClass() == Object.class) {
+					return switch (method.getName()) {
+						case "toString" -> "ForbricModuleLayerStandIn";
+						case "hashCode" -> System.identityHashCode(proxy);
+						case "equals" -> proxy == args[0];
+						default -> null;
+					};
+				}
+				return Optional.of(boot);
+			});
+			field.set(null, standIn);
+			ForbricLog.info("[Forbric/Seed] gave Forge 52's FMLLoader a ModuleLayer stand-in — getGameLayer() "
+					+ "returns the boot layer instead of NPEing; ModLauncher, which would have filled it, is not run");
+		} catch (NoSuchFieldException | ClassNotFoundException absent) {
+			ForbricLog.debug("[Forbric/Seed] Forge 52 FMLLoader.moduleLayerManager seam absent — skipping");
+		} catch (Throwable t) {
+			ForbricLog.warn("[Forbric/Seed] could not seed Forge 52's FMLLoader.moduleLayerManager", unwrap(t));
+		}
+	}
+
+	/**
+	 * PORT(1.21.1): seeds Forge 52's {@code FMLLoader.loadingModList} — the field {@code FMLLoader.getLoadingModList()}
+	 * returns, and that Forge's {@code ModLoader} constructor reads.
+	 *
+	 * <p>Forge 52 carries no {@code LoadingModListImpl}/{@code ModSorter$State} lazy holder (the 26.2 shape the
+	 * loader-list machinery above is written for): {@code LoadingModList.INSTANCE} is written by
+	 * {@code LoadingModList.of(files, mods, error)}, and {@code FMLLoader.loadingModList} is a plain static field the
+	 * genuine loader fills during its scan. The kernel runs no scan, so both stay null and the first MinecraftForge
+	 * patch to touch them dies. Measured on the 1.21.1 merged base: {@code Bootstrap.bootStrap → Blocks.<clinit> →
+	 * Items.<clinit> → Item.components → ForgeHooks.gatherItemComponents → ForgeEventFactory.<clinit> →
+	 * ModLoader.get() → new ModLoader() → FMLLoader.getLoadingModList()} NPE — i.e. before Main's lifecycle window,
+	 * which is why this runs from {@link #seedForgeFmlLoader} (pre-Main) and not from {@link #seedForgeLoadingModList}.
+	 *
+	 * <p>Seeded EMPTY: a no-mod instance genuinely has no MinecraftForge-family mods to report, and
+	 * {@code LoadingModList.of} also assigns {@code INSTANCE}, so {@code LoadingModList.get()} answers from the same
+	 * object. No-op once the field is set (a base that keeps the 26.2 holder, or a second call in one JVM).
+	 */
+	private static void seedForge52LoadingModList(ClassLoader gameLoader, Class<?> fmlLoader) {
+		try {
+			Field field = fmlLoader.getDeclaredField("loadingModList");
+			field.setAccessible(true);
+			if (field.get(null) != null) return;
+			Class<?> loadingModList = Class.forName("net.minecraftforge.fml.loading.LoadingModList", false, gameLoader);
+			Class<?> earlyError = Class.forName("net.minecraftforge.fml.loading.EarlyLoadingException", false, gameLoader);
+			Method of = loadingModList.getMethod("of", List.class, List.class, earlyError);
+			Object empty = of.invoke(null, List.of(), List.of(), null);
+			// LoadingModList's own constructor leaves brokenFiles null — the genuine loader's scan fills it with the
+			// mod files it could not read — and Forge's ModLoader constructor streams it next to getErrors(). A list
+			// the kernel seeds therefore has to carry the empty answer, not the absent one.
+			Field broken = loadingModList.getDeclaredField("brokenFiles");
+			broken.setAccessible(true);
+			if (broken.get(empty) == null) broken.set(empty, List.of());
+			field.set(null, empty);
+			ForbricLog.info("[Forbric/Seed] seeded Forge 52's FMLLoader.loadingModList (empty, zero mods) — the "
+					+ "MinecraftForge patches read it during Bootstrap, before the mod-loading window");
+		} catch (NoSuchFieldException | ClassNotFoundException absent) {
+			ForbricLog.debug("[Forbric/Seed] Forge 52 FMLLoader.loadingModList seam absent — skipping");
+		} catch (Throwable t) {
+			ForbricLog.warn("[Forbric/Seed] could not seed Forge 52's FMLLoader.loadingModList", unwrap(t));
 		}
 	}
 

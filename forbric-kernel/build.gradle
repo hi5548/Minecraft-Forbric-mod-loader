@@ -240,6 +240,11 @@ dependencies {
 tasks.withType(JavaCompile).configureEach {
 	options.encoding = 'UTF-8'
 	options.release = 21
+	// Porting measure: a retarget's game-side compile is expected to fail in bulk, and javac's default cap of
+	// 100 errors hides the size of the job. -Pforbric.maxErrors=N raises it for a census run; nothing else sets it.
+	if (project.hasProperty('forbric.maxErrors')) {
+		options.compilerArgs += ['-Xmaxerrs', project.property('forbric.maxErrors')]
+	}
 }
 
 // The GAME-side set only compiles when the staged jars exist. Point developers at the pipeline otherwise.

@@ -69,6 +69,10 @@ final class PatchedMcBuilder {
 
 	ArtifactResult build(Path userdevJar, ForgeArtifacts.UserdevConfig cfg, Path forgeRuntimeJar) throws IOException {
 		String coordinate = fa.patchedMcCoordinate();
+		// Keep the merge's named base reachable even when the patched jar itself is served from the cache: the
+		// rename step does not rerun, but the merge downstream still needs a same-namespace fallback jar.
+		Path cachedNamed = workDir.resolve("client-official.jar");
+		if (Files.isRegularFile(cachedNamed)) namedVanilla = cachedNamed;
 		if (BuildStamp.isFresh(outJar)) {
 			log.accept("[patched] up-to-date: " + outJar.getFileName());
 			return new ArtifactResult(coordinate, outJar, Util.sha1(outJar), Files.size(outJar));
@@ -77,7 +81,6 @@ final class PatchedMcBuilder {
 
 		// 1) tools
 		log.accept("[patched] fetching tools + Forge userdev");
-		Path mergetool = dl(MERGETOOL);
 		Path installertools = dl(INSTALLERTOOLS);
 		Path binarypatcher = dl(cfg.binpatcherCoordinate);
 		String atCoord = findLib(cfg, "net.minecraftforge", "accesstransformers", "net.minecraftforge:accesstransformers:8.2.2");
@@ -100,31 +103,40 @@ final class PatchedMcBuilder {
 		Path serverJar = dlDir.resolve("server.jar");
 		downloadServer(serverJar);
 
-		// 4) BUNDLER_EXTRACT + merge (--ann API)
+		// 4) BUNDLER_EXTRACT the server jar (both pipelines need it)
 		Path serverMain = workDir.resolve("server-main.jar");
 		tool.runJar(installertools, List.of("--task", "BUNDLER_EXTRACT",
 				"--input", serverJar.toString(), "--output", serverMain.toString(), "--jar-only"),
 				"installertools BUNDLER_EXTRACT");
-		Path clean = workDir.resolve("clean.jar");
-		tool.runJar(mergetool, List.of("--merge", "--client", clientJar.toString(),
-				"--server", serverMain.toString(), "--output", clean.toString(),
-				"--keep-data", "--keep-meta", "--ann", "API"),
-				"mergetool --merge --ann API");
 
-		// 5) extract binpatches + ATs from the userdev jar
-		Zips.extractEntries(userdevJar, workDir, cfg.binpatchesEntry, cfg.ats.get(0));
-		Path joinedLzma = workDir.resolve(cfg.binpatchesEntry);
+		// 5) the userdev AT config (both pipelines)
+		Zips.extractEntries(userdevJar, workDir, cfg.ats.get(0));
 		Path atCfg = workDir.resolve(cfg.ats.get(0));
 
-		// 6) binarypatcher --apply
-		Path patchedSubset = workDir.resolve("patched-subset.jar");
-		tool.runJar(binarypatcher, binpatcherArgs(cfg, clean, patchedSubset, joinedLzma),
-				"binarypatcher --apply " + cfg.binpatchesEntry);
-
-		// 7) overlay patched classes onto the clean merge + strip signatures
-		log.accept("[patched] overlay patched classes onto clean + strip signatures");
-		Path patchedFull = workDir.resolve("patched-full.jar");
-		overlay(clean, patchedSubset, patchedFull);
+		// 6) patch the game. Two pipelines, decided by the game jar itself:
+		//    - Mojmap-native (26.2): merge the two sides, then the userdev joined.lzma targets that merge.
+		//    - Obfuscated (1.21.x): joined.lzma targets SRG on a jar Forge's dev toolchain built and does not
+		//      apply here; the official install pipeline does — rename each side to Mojmap, apply the
+		//      per-side binpatches the installer ships, then merge. See 实验/forbric/p0/P0-FINDINGS.md (F1).
+		Path patchedFull;
+		if (isObfuscated(clientJar)) {
+			patchedFull = officialPipeline(clientJar, serverMain, binarypatcher);
+		} else {
+			Path mergetool = dl(MERGETOOL);
+			Path clean = workDir.resolve("clean.jar");
+			tool.runJar(mergetool, List.of("--merge", "--client", clientJar.toString(),
+					"--server", serverMain.toString(), "--output", clean.toString(),
+					"--keep-data", "--keep-meta", "--ann", "API"),
+					"mergetool --merge --ann API");
+			Zips.extractEntries(userdevJar, workDir, cfg.binpatchesEntry);
+			Path joinedLzma = workDir.resolve(cfg.binpatchesEntry);
+			Path patchedSubset = workDir.resolve("patched-subset.jar");
+			tool.runJar(binarypatcher, binpatcherArgs(cfg, clean, patchedSubset, joinedLzma),
+					"binarypatcher --apply " + cfg.binpatchesEntry);
+			log.accept("[patched] overlay patched classes onto clean + strip signatures");
+			patchedFull = workDir.resolve("patched-full.jar");
+			overlay(clean, patchedSubset, patchedFull);
+		}
 
 		// 8) apply access transformers
 		Path patchedAt = workDir.resolve("patched-at.jar");
@@ -145,6 +157,75 @@ final class PatchedMcBuilder {
 	}
 
 	// ---- steps ----
+
+	/**
+	 * The renamed (named/Mojmap) but UNPATCHED client jar, once the official pipeline has made one. The merge
+	 * needs it as its fallback base: feeding the raw obfuscated vanilla jar there copies every obfuscated class
+	 * whose name matches nothing in the patched jars — measured at 8,047 classes and 4,321 new dangling
+	 * references before this existed.
+	 */
+	java.util.Optional<Path> namedVanilla() {
+		return java.util.Optional.ofNullable(namedVanilla);
+	}
+
+	private Path namedVanilla;
+
+	/**
+	 * Whether this game ships obfuscated. Probed from the jar rather than pinned, so the pipeline follows the
+	 * artifact: 26.2 is Mojmap-native and the merge-then-patch path applies; 1.21.x is not and the official
+	 * install pipeline does.
+	 */
+	private static boolean isObfuscated(Path clientJar) throws IOException {
+		return !Zips.isMojmapNamed(clientJar);
+	}
+
+	/**
+	 * The official install pipeline for an obfuscated game: rename each side to Mojmap with Mojang's own
+	 * mappings, apply the per-side binpatches the Forge installer ships, then merge the two patched sides.
+	 *
+	 * <p>Why not the userdev {@code joined.lzma}: its targets are SRG member names on a jar Forge's dev
+	 * toolchain built, and it refuses the obfuscated merge on the first class whose checksum it can compare
+	 * (P0, see {@code 实验/forbric/p0/P0-FINDINGS.md} F1). The official binpatches apply cleanly to the
+	 * renamed jars (rc=0, measured).
+	 */
+	private Path officialPipeline(Path clientJar, Path serverMain, Path binarypatcher) throws IOException {
+		log.accept("[patched] obfuscated game: official install pipeline (rename → per-side binpatch → merge)");
+		Path installertools = dl(Pins.INSTALLERTOOLS);
+		Path fart = dl(Pins.FART);
+		Zips.extractEntries(dl(fa.installerCoordinate()), workDir, "data/client.lzma", "data/server.lzma");
+
+		Path clientPatched = patchSide(installertools, fart, binarypatcher, "client", clientJar,
+				workDir.resolve("data/client.lzma"));
+		Path serverPatched = patchSide(installertools, fart, binarypatcher, "server", serverMain,
+				workDir.resolve("data/server.lzma"));
+
+		Path merged = workDir.resolve("patched-full.jar");
+		tool.runJar(dl(MERGETOOL), List.of("--merge", "--client", clientPatched.toString(),
+				"--server", serverPatched.toString(), "--output", merged.toString(),
+				"--keep-data", "--keep-meta", "--ann", "API"),
+				"mergetool --merge (patched client+server)");
+		return merged;
+	}
+
+	/** Rename one side of the game to Mojmap and apply that side's official binpatches. */
+	private Path patchSide(Path installertools, Path fart, Path binarypatcher, String side, Path input,
+			Path binpatches) throws IOException {
+		Path mappings = workDir.resolve(side + "-mojmaps.tsrg");
+		tool.runJar(installertools, List.of("--task", "DOWNLOAD_MOJMAPS", "--sanitize",
+				"--version", fa.mcVersion, "--side", side, "--output", mappings.toString()),
+				"installertools DOWNLOAD_MOJMAPS (" + side + ")");
+		Path named = workDir.resolve(side + "-official.jar");
+		tool.runJar(fart, List.of("--input", input.toString(), "--output", named.toString(),
+				"--names", mappings.toString(), "--ann-fix", "--ids-fix", "--src-fix", "--record-fix",
+				"--strip-sigs", "--reverse"),
+				"FART --reverse (obf → Mojmap, " + side + ")");
+		Path patched = workDir.resolve(side + "-patched.jar");
+		tool.runJar(binarypatcher, List.of("--clean", named.toString(), "--output", patched.toString(),
+				"--apply", binpatches.toString(), "--data", "--unpatched"),
+				"binarypatcher --apply data/" + side + ".lzma");
+		if ("client".equals(side)) namedVanilla = named;
+		return patched;
+	}
 
 	private List<String> binpatcherArgs(ForgeArtifacts.UserdevConfig cfg, Path clean, Path output, Path patch) {
 		List<String> out = new ArrayList<>();

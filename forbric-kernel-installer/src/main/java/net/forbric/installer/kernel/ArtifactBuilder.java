@@ -98,11 +98,15 @@ final class ArtifactBuilder {
 				forgeUserdev);
 		ForgeArtifacts.UserdevConfig forgeCfg = ForgeArtifacts.readConfig(forgeUserdev);
 
+		// An obfuscated game's runtime must come from the PRODUCTION universal: the userdev config names
+		// ...-srg, whose classes reference the game by SRG member names and dangle against the Mojmap base
+		// (measured: 3,628 of 3,664 dangling references on the first 1.21.1 link check).
+		String universalOverride = Zips.isMojmapNamed(vanilla) ? null : fa.productionUniversal(http, dl);
 		ArtifactResult forgeRuntime = new ForgeRuntimeBuilder(fa, http, build, out.resolve("forge-runtime.jar"), log)
-				.build(forgeCfg);
-		ArtifactResult forgePatched = new PatchedMcBuilder(fa, http, mcDir, build,
-				out.resolve("patched-mc-forge-" + mcVersion + ".jar"), log)
-				.build(forgeUserdev, forgeCfg, forgeRuntime.file);
+				.build(forgeCfg, universalOverride);
+		PatchedMcBuilder patchedMc = new PatchedMcBuilder(fa, http, mcDir, build,
+				out.resolve("patched-mc-forge-" + mcVersion + ".jar"), log);
+		ArtifactResult forgePatched = patchedMc.build(forgeUserdev, forgeCfg, forgeRuntime.file);
 
 		// ---- NeoForge ----
 		log.accept("");
@@ -125,7 +129,12 @@ final class ArtifactBuilder {
 		log.accept("");
 		log.accept("== merging ==");
 		MergedBaseTool merge = new MergedBaseTool(tools, log);
-		ArtifactResult merged = merge.merge(jvm, vanilla, forgePatched.file, neoPatched.file,
+		// The merge's fallback base must be in the SAME namespace as the patched jars. 26.2's vanilla already
+		// is (Mojmap-native). An obfuscated game's is not: feeding it in copies every obfuscated class whose
+		// name matches nothing in the patched jars straight into the merged base (measured: 8,047 classes,
+		// 4,321 new dangling references). When the patcher renamed the game, its named client is the input.
+		Path mergeBase = patchedMc.namedVanilla().orElse(vanilla);
+		ArtifactResult merged = merge.merge(jvm, mergeBase, forgePatched.file, neoPatched.file,
 				forgeRuntime.file, neoRuntime.file,
 				out.resolve("patched-mc-merged-" + mcVersion + ".jar"),
 				out.resolve("merge-conflicts.txt"),

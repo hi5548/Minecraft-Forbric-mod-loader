@@ -147,10 +147,18 @@ final class MergedBaseTool {
 			throws IOException {
 		Path tools = unpackTools();
 		List<String> tail = new ArrayList<>();
+		// Per-version baseline when the tools jar carries one (the 1.21.1 generation's is a different set of
+		// dangling references than 26.2's), else the generic name 26.2 used. Probe the unpacked TOOLS JAR, not
+		// this class's classpath: the tools jar rides in the installer as a file, so a getResource here always
+		// answers "no" and silently picks the 26.2 baseline (measured: 27 false "new" losses).
+		String baselineResource = "/net/forbric/tools/link-check-baseline-" + Pins.MINECRAFT + ".txt";
+		if (!Zips.containsEntry(tools, baselineResource.substring(1))) {
+			baselineResource = "/net/forbric/tools/link-check-baseline.txt";
+		}
 		int code = exec.exec(List.of(
 				jvm.javaBin().toString(),
 				"-cp", tools.toString(), LINK_CHECK_MAIN,
-				"--baseline-resource", "/net/forbric/tools/link-check-baseline.txt",
+				"--baseline-resource", baselineResource,
 				mergedJar.toString(), neoRuntime.toString(), forgeRuntimeInterop.toString()),
 				"link-checking the merged base", tail);
 		String summary = tail.stream()

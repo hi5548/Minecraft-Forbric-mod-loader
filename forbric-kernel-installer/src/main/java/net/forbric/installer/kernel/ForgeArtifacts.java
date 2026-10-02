@@ -76,6 +76,47 @@ final class ForgeArtifacts {
 		return OUT_GROUP + ":patched-mc-forge:" + forgeVersion;
 	}
 
+	/**
+	 * The Forge installer jar. Carries {@code data/client.lzma} and {@code data/server.lzma} — the per-side
+	 * binpatches the official install applies to the renamed (Mojmap) jars — plus the {@code install_profile}
+	 * whose processor list the official-pipeline port mirrors.
+	 */
+	String installerCoordinate() {
+		return "net.minecraftforge:forge:" + forgeVersion + ":installer";
+	}
+
+	/**
+	 * The PRODUCTION universal coordinate, read from the Forge installer's {@code version.json}.
+	 *
+	 * <p>For an obfuscated game the userdev config names {@code ...:universal-srg}, whose members are SRG names
+	 * that dangle against a Mojmap base — measured at 3,628 of 3,664 dangling references in the first 1.21.1
+	 * link check. What an actual install puts on the classpath is the plain {@code :universal} the installer
+	 * profile lists, so that list is the source rather than a classifier rule.
+	 *
+	 * @return the production coordinate, or null when the profile does not name one (26.2's does)
+	 */
+	String productionUniversal(Http http, Path dlDir) throws IOException {
+		String coordinate = installerCoordinate();
+		Path installer = dlDir.resolve(Util.coordinateToPath(stripExtension(coordinate))
+				.substring(Util.coordinateToPath(stripExtension(coordinate)).lastIndexOf('/') + 1));
+		http.ensureWithFallback(forgeUrl(coordinate), centralUrl(coordinate), installer);
+		byte[] raw = Zips.readEntry(installer, "version.json");
+		if (raw == null) return null;
+		Object root = Json.parse(new String(raw, java.nio.charset.StandardCharsets.UTF_8));
+		if (!(root instanceof Map<?, ?> map)) return null;
+		Object libraries = map.get("libraries");
+		if (!(libraries instanceof List<?> list)) return null;
+		String prefix = "net.minecraftforge:forge:" + forgeVersion + ":";
+		for (Object entry : list) {
+			if (!(entry instanceof Map<?, ?> lib)) continue;
+			Object name = lib.get("name");
+			if (name instanceof String s && s.startsWith(prefix) && s.substring(prefix.length()).equals("universal")) {
+				return s;
+			}
+		}
+		return null;
+	}
+
 	/** The Forbric bridge {@code @Mod} that opens the Fabric-content window inside Forge's registration span. */
 	String bridgeCoordinate() {
 		return OUT_GROUP + ":forbric-bridge:" + forgeVersion;

@@ -95,6 +95,29 @@ final class Zips {
 		}
 	}
 
+	/**
+	 * Whether a jar file contains an entry. Used for deciding which packaged baseline the tools jar carries —
+	 * a {@code getResource} on this class would ask the INSTALLER's classpath, and the tools jar rides inside
+	 * it as a file, not as classpath entries, so that probe always answers "no" and silently selects the
+	 * fallback baseline.
+	 */
+	static boolean containsEntry(Path jar, String name) throws IOException {
+		try (ZipFile zf = new ZipFile(jar.toFile())) {
+			return zf.getEntry(name) != null;
+		}
+	}
+
+	/**
+	 * Whether a game jar is already deobfuscated (Mojmap-named). Probed from the artifact, not pinned: the
+	 * pipeline decisions that depend on it (official rename path, which universal the runtime is built from,
+	 * which base the merge falls back on) follow the jar, and a pin could be wrong about what is on disk.
+	 */
+	static boolean isMojmapNamed(Path gameJar) throws IOException {
+		try (ZipFile zf = new ZipFile(gameJar.toFile())) {
+			return zf.getEntry("net/minecraft/world/level/block/Block.class") != null;
+		}
+	}
+
 	/** True for a JAR signature side-file ({@code META-INF/*.SF|RSA|DSA|EC}) — stripped when re-serializing classes. */
 	static boolean isSignatureFile(String name) {
 		String u = name.toUpperCase(Locale.ROOT);

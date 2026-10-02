@@ -58,6 +58,15 @@ final class ForgeRuntimeBuilder {
 
 	/** Build (or reuse) the merged runtime jar; returns its coordinate/path/sha1/size. */
 	ArtifactResult build(ForgeArtifacts.UserdevConfig cfg) throws IOException {
+		return build(cfg, null);
+	}
+
+	/**
+	 * @param universalOverride the universal coordinate to build from instead of the userdev config's, or null.
+	 *                          An obfuscated game's userdev config names {@code ...:universal-srg}; its classes
+	 *                          reference the game by SRG member names and dangle against a Mojmap base.
+	 */
+	ArtifactResult build(ForgeArtifacts.UserdevConfig cfg, String universalOverride) throws IOException {
 		String coordinate = fa.runtimeCoordinate();
 		if (BuildStamp.isFresh(outJar)) {
 			log.accept("[forge-runtime] up-to-date: " + outJar.getFileName());
@@ -69,7 +78,7 @@ final class ForgeRuntimeBuilder {
 		//    these in via the dl/ cache; they are CLASS-retention and inert at runtime, but including them keeps
 		//    the merged jar byte-for-byte a superset of the regression-validated reference).
 		List<String> inputs = new ArrayList<>();
-		inputs.add(cfg.universalCoordinate);
+		inputs.add(universalOverride != null ? universalOverride : cfg.universalCoordinate);
 		for (String lib : cfg.libraries) {
 			if (!isProvidedElsewhere(lib)) inputs.add(lib);
 		}

@@ -29,11 +29,16 @@ final class Pins {
 	private Pins() {
 	}
 
+	/**
+	 * P1 (2026-10-02): retargeted from 26.2 to 1.21.1. The version pins below are the port's; the
+	 * official-pipeline tools at the end are what an OBFUSCATED game needs (26.2 is Mojmap-native and used
+	 * none of them). Evidence and measurements: {@code 实验/forbric/p0/P0-FINDINGS.md}.
+	 */
 	/** The only Minecraft version this generation supports. */
-	static final String MINECRAFT = "26.2";
+	static final String MINECRAFT = "1.21.1";
 
 	/** MinecraftForge, in its own {@code <mc>-<fml>} coordinate form. */
-	static final String FORGE = "26.2-65.0.1";
+	static final String FORGE = "1.21.1-52.1.16";
 
 	/**
 	 * NeoForge, on the first release line rather than a beta.
@@ -52,7 +57,7 @@ final class Pins {
 	 * mods-button redirect names, and which would have failed silently. {@code ForeignTypeCarrierTest} now checks
 	 * every such name against the carrier.
 	 */
-	static final String NEOFORGE = "26.2.0.88";
+	static final String NEOFORGE = "21.1.252";
 
 	/**
 	 * NeoFormRuntime, pinned to the build actually validated rather than the newest published one.
@@ -77,6 +82,18 @@ final class Pins {
 	 * twice — once inside the merged base, once in {@code neoforge-runtime.jar}.
 	 */
 	static final String NFRT_RESULT = "gameJarNoRecomp";
+
+	/**
+	 * The official install pipeline's tools, for an obfuscated game.
+	 *
+	 * <p>{@code install_profile.json} in 1.21.1's Forge installer names installertools 1.4.3 for
+	 * {@code DOWNLOAD_MOJMAPS} and ForgeAutoRenamingTool 1.0.6 for the rename; its binpatches are applied to
+	 * the RENAMED (Mojmap) jars, not to the obfuscated merge the userdev path patches. P0 measured this
+	 * end-to-end — the userdev {@code joined.lzma} refuses the merge with a checksum mismatch (its targets are
+	 * SRG member names), while the official binpatches apply cleanly (rc=0).
+	 */
+	static final String INSTALLERTOOLS = "net.minecraftforge:installertools:1.4.3:fatjar";
+	static final String FART = "net.minecraftforge:ForgeAutoRenamingTool:1.0.6:all";
 
 	/** The NeoForge artifact NFRT is pointed at. The bare coordinate does not exist on the Maven. */
 	static String neoforgeUserdevCoordinate() {

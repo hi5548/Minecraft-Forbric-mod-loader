@@ -262,6 +262,12 @@ tasks.register('mergeToolsJar', Jar) {
 	from('src/test/resources/merge/link-check-baseline.txt') {
 		into 'net/forbric/tools'
 	}
+	// Per-version baselines when a generation carries them (the 1.21.1 port's dangling set differs from
+	// 26.2's). The installer picks link-check-baseline-<mc>.txt first and falls back to the generic name.
+	from('src/test/resources/merge') {
+		include 'link-check-baseline-*.txt'
+		into 'net/forbric/tools'
+	}
 	from { configurations.toolsRuntimeClasspath.collect { it.isDirectory() ? it : zipTree(it) } }
 	// ASM's own jar metadata: signatures (meaningless once the classes are repacked, and fatal if kept -- the
 	// JVM rejects a signed entry whose jar has changed), module descriptors (this jar is a classpath jar, and a

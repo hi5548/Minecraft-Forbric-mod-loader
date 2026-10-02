@@ -76,6 +76,11 @@ tasks.register('buildMergeTools', Exec) {
 	// cover: a baseline-only change left this task UP-TO-DATE and the installer shipping the previous baseline,
 	// so players' installs judged the merge against a different list than every gate in the tree.
 	inputs.file(linkBaseline).withPropertyName('linkBaseline')
+	// Per-version baselines (link-check-baseline-<mc>.txt) ride in the same jar. They were covered by neither
+	// input either: after the 1.21.1 baseline was added, this Exec stayed UP-TO-DATE and the installer kept
+	// unpacking a tools jar with no 1.21.1 baseline in it, which reads as "27 new dangling references".
+	inputs.files(fileTree("${loaderDir}/src/test/resources/merge") { include 'link-check-baseline-*.txt' })
+			.withPropertyName('linkBaselines')
 	// The one file this task makes. Declaring the shared build/libs let buildLoaderJars' output decide whether
 	// this task was up to date.
 	outputs.file(mergeToolsJar)

@@ -100,12 +100,64 @@ prependDirectoryWithNamespace(ResourceKey, Operation<String>)
 - 实测：上述两类 16 tests / 3 skipped / 0 failed；`mixin` + `boot` + `transform` 三包与基线**逐一对齐**
   ——改动前后各 29 个失败且集合完全相同（`comm` 双向为空，全是本 checkout 缺 staged 游戏 jar 的既失败）。
 
-## 6. 待判（交付的下一个观测点）
+## 6. 切片读数（W7Harness，`reports/2026-10-03-registryloader-pin/`，内核 `16e70adb` sha `2e1183e9`）
 
-**修正后的 fabric 切片**：观察量 = `Registry loading errors` = 0、以及 fabric 主体的第一行 `loaded`。
-按 §3 的形状差，此处唯一的行为变化是 pin 从此**真的**生效（`RegistryLoaderMixin` 被排除），代价是本世代失去
-`DynamicRegistrySetupCallback`。若切片仍失败，则名字错误是**必要但不充分**，下一读点是
-`fabric-resource-conditions` 的 `checkResourceCondition`/`KernelFabricConditions` 这条唯一的静默丢弃路径。
+**pin 现在真的生效了**（本改动唯一的可观测行为差异，逐字）：
 
-**未做**：未跑游戏 JVM/切片（共享机器，属 harness lane）；未把 0.116.17 模块 jar staged 成测试 fixture
-（想让 §5 第二条在本地也由红到绿，需要那一步）。
+```
+[Forbric/Mixin] suppressed mixin RegistryLoaderMixin from fabric-registry-sync-v0 (fabric-registry-sync-v0.mixins.json)
+```
+
+**而 world load 的失败逐字节不变**：两个主体（cristellib / balm）仍是 `registry-load`，
+`>> Errors in element minecraft:painting_variant: IllegalStateException: Registry must be non-empty`，
+`cr`/`req` 不变 ⇒ **名字错误是必要但不充分**。
+
+附带发现（已修，见 `6cb5cf19`）：第一版实现的两个世代 pin 列表让抑制日志为**配置里不存在的那个类**也打印了一行
+"已抑制"——与刚从审计文案里删掉的同一种假陈述；现只报本配置真有的名字。
+
+## 7. §6 那个读点已被字节清掉（Q1/Q2 的答案都是"否"）
+
+1. **模块自己的判定不会丢无条件的元素**：`ResourceConditionsImpl.applyResourceConditions(JsonObject, String,
+   ResourceLocation, HolderLookup$Provider)` 里 `if (!obj.has("fabric:load_conditions"))` 跳到 **156: `iconst_1;
+   ireturn`**（保留）；condition codec 解析失败也落到同一处（先打 `LOGGER.error(… skipping …)`，仍保留）。
+   只有"键在、解析成功、`test()` 返回 false"才是 FALSE。`RegistryLoaderMixin.checkResourceCondition` 仅在 FALSE 时
+   `reader.close(); ci.cancel()`。vanilla 的 painting/wolf 文件没有任何条件键。
+2. **kernel 的 `KernelFabricConditions` 在缺席/未知时答"保留"**：`alsoAskFabric` 先判
+   `input instanceof JsonObject json && json.has(KEY)`（无键的根本不问），`ask(...)` 在两条失败路径（句柄缺失、invoke 抛）
+   都返回 `null`，而丢弃分支是 `Boolean.FALSE.equals(keep)`；代码里写明理由（"failing closed here would delete content
+   over a reflection problem"）。
+
+⇒ 条件路径不是 dropper，§6 作废。当前首选假设：**`configurePackRepository` 之后包 SELECTION 被改写，ResourceManager
+根本拿不到 vanilla pack**——那会静默清空**每一个** vanilla datapack registry，而只有两个 `requiredNonEmpty` 的上报；
+fabric 闭包里唯一会改写选中列表的是 `fabric-resource-loader-v0` 的 `ResourcePackManagerMixin`（26.2 世代的
+`PackRepositoryMixin`）经 `ModResourcePackUtil.refreshAutoEnabledPacks`。该假设由 W7Harness 用单旋钮矩阵验证（步骤 1 =
+`-Dforbric.disableMixinConfigs=fabric-resource-loader-v0.mixins.json`；全红则改用 `-Dforbric.mixinDiagnostics` 让
+静默软跳过的注入现形）。
+
+## 8. 机制与修法（bisect-1 之后确认）
+
+bisect-1（`-Dforbric.disableMixinConfigs=fabric-resource-loader-v0.mixins.json`）把 dropper 锁在这个 config 内，
+字节链随后闭合：
+
+1. 合并基底的 `PackRepository` 是 **26.2 形状**（有 `rebuildSelected(Collection)List`、`addPack`、`removePack`，
+   且 `rebuildSelected` 内确实调 `ImmutableList.copyOf`）⇒ fabric `ResourcePackManagerMixin.handleAutoEnableDisable`
+   的 `@At(INVOKE, ImmutableList.copyOf)` 锚能落，并在返回前把正在构造的选中列表交给
+   `ModResourcePackUtil.refreshAutoEnabledPacks(list, available)`。
+2. 该方法首句 `enabled.removeIf(p -> ((FabricResourcePackProfile) p).fabric_isHidden())`；而
+   `ResourcePackProfileMixin.fabric_isHidden()` 是 `parentsPredicate != DEFAULT_PARENT_PREDICATE` 的同一性判定，
+   `parentsPredicate` **只在那个 mixin 自己的无参构造里赋值一次**（类上无 `Initialiser`）。合并基底的 `Pack`
+   构造是 merge 的、NeoForge 改过形 ⇒ 该构造没进去时字段停在 JVM 默认 `null` ⇒ **每个包都读成 hidden ⇒ 选中列表被清空**。
+3. 清空**无异常、无 INFO**：重新加回的循环嵌在被过滤的列表上（`enabled.listIterator()`），列表一空循环体零次执行，
+   `fabric_parentsEnabled` 也不会被调用（null 不 NPE）⇒ `createResourceManager()` 拿到零个 pack ⇒
+   **每个 datapack registry 从空装载**，只有两个 `requiredNonEmpty` 的上报。
+
+修法：`FabricResourcePackProfileMixinAdapter`（同一约定：adapter + 开关 `-Dforbric.fabricResourcePackProfile=off`）
+在 `fabric_isHidden()` 的同一性判定前补一条 `parentsPredicate == null` ⇒ 跳到**既有 false 分支**；
+只补「未设过」这一种情形，显式设过 predicate 的包照旧 hidden。
+
+## 9. 尚未做
+
+- 游戏 JVM/切片不在本 agent lane（共享机器；由 W7Harness 跑）。
+- 0.116.17 模块 jar 未 staged 成测试 fixture ⇒ §5 第二条生成测试在本 checkout 只 skip；要它本地也由红到绿需那一步。
+- 未把抑制日志行写成测试（断言日志串不是行为契约）。
+

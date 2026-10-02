@@ -1087,7 +1087,72 @@ public final class KernelBoot {
 				+ "the kernel — handing to vanilla boot", side.name().toLowerCase());
 
 		Method main = mainClass.getMethod("main", String[].class);
-		main.invoke(null, (Object) gameArgs.toArray(new String[0]));
+		// The last-resort exit sweep.
+		//
+		// ExitHookInjector calls ClientShutdown from the RETURN of the side's own end of life (Minecraft.close /
+		// DedicatedServer.onServerExit), and that is still the primary point — but a RETURN hook does not run when
+		// the method THROWS. Measured 2026-10-02 on 1.21.1, the dedicated server does: DedicatedServer.onServerExit
+		// → ConfigTracker.forceUnload → closeConfig → ModConfig.fireEvent → ModContainer.dispatchConfigEvent NPEs
+		// because `this.configHandler` is null (the kernel drives the Forge lifecycle and never assigns it). The
+		// exception leaves onServerExit, so its RETURN hook is skipped and a night-config FileWatcher's non-daemon
+		// ScheduledThreadPoolExecutor is never stopped — the JVM then sits at DestroyJavaVM forever after "Stopping
+		// server" (thread dump: pool-N-thread-1 parked in DelayedWorkQueue.take). This boundary runs on the path the
+		// hook missed.
+		//
+		// The sweep must NOT run when this invoke returns on the server: MinecraftServer.spin starts the game on a
+		// "Server thread" and returns immediately, so `main.invoke` returns as the server is still BOOTING (measured:
+		// sweeping here stopped the two boot-time watchers, set ClientShutdown's one-shot guard, and missed the
+		// third watcher created once the server configs loaded). Wait for the real end — that thread dying.
+		// Idempotent: ClientShutdown returns immediately if the injected hook already ran.
+		boolean started = true;
+		try {
+			main.invoke(null, (Object) gameArgs.toArray(new String[0]));
+		} catch (Throwable failure) {
+			// The game main itself threw (a policy stop leaves this way): no server thread to wait on.
+			started = false;
+			throw failure;
+		} finally {
+			if (started) awaitServerThread(side);
+			net.forbric.kernel.interop.ClientShutdown.stopLeakedBackgroundExecutors(loader);
+		}
+	}
+
+	/**
+	 * Blocks until the dedicated server's own thread has ended, then returns; a no-op on the client, whose main
+	 * method runs the whole session and returns at the true end.
+	 *
+	 * <p>{@code MinecraftServer.spin} runs the game on a thread named {@code Server thread} and returns from
+	 * {@code main} as soon as it has started one, so the JVM's exit is gated on that thread, not on {@code main}
+	 * returning. Waiting here is what makes the exit sweep run at the moment the server actually stops.
+	 */
+	private static void awaitServerThread(Side side) {
+		if (side != Side.SERVER) return;
+		Thread server = null;
+		// spin() has already started the thread by the time main.invoke returns; poll only to be robust to that
+		// ordering, with a short bound so a boot that never reached the server (a crash before spin) still exits.
+		long deadline = System.nanoTime() + 3_000_000_000L;
+		while (server == null && System.nanoTime() < deadline) {
+			for (Thread thread : Thread.getAllStackTraces().keySet()) {
+				if ("Server thread".equals(thread.getName())) {
+					server = thread;
+					break;
+				}
+			}
+			if (server == null) {
+				try {
+					Thread.sleep(50);
+				} catch (InterruptedException interrupted) {
+					Thread.currentThread().interrupt();
+					return;
+				}
+			}
+		}
+		if (server == null || server == Thread.currentThread()) return;
+		try {
+			server.join();
+		} catch (InterruptedException interrupted) {
+			Thread.currentThread().interrupt();
+		}
 	}
 
 	/**

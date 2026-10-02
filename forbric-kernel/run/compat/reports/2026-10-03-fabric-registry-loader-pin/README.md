@@ -155,7 +155,14 @@ bisect-1（`-Dforbric.disableMixinConfigs=fabric-resource-loader-v0.mixins.json`
 在 `fabric_isHidden()` 的同一性判定前补一条 `parentsPredicate == null` ⇒ 跳到**既有 false 分支**；
 只补「未设过」这一种情形，显式设过 predicate 的包照旧 hidden。
 
-## 9. 尚未做
+## 9. 两条读数提示（W7Harness 复核，供下一位）
+
+- **`-Dforbric.debug` 单写无效**：`ForbricLog.java:43` 用 `Boolean.getBoolean`，只有字面 `true` 才算打开，
+  裸标志把属性设成空串、仍是关的（同一主体的两份日志逐行相同：961 行 vs 2265 行）。要 `-Dforbric.debug=true`。
+- **debug 真开时 `registries in the Fabric namespace` 仍不出现** ⇒ `KernelRegistryDirectories` 的
+  `path.equals(merged)` 对每个注册表都成立 ⇒ **目录判定从不分歧，不是 dropper**（这条负结果已记，免得重读）。
+
+## 10. 尚未做
 
 - 游戏 JVM/切片不在本 agent lane（共享机器；由 W7Harness 跑）。
 - 0.116.17 模块 jar 未 staged 成测试 fixture ⇒ §5 第二条生成测试在本 checkout 只 skip；要它本地也由红到绿需那一步。

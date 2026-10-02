@@ -34,9 +34,9 @@ import java.util.function.Consumer;
  *
  * <p>The profile inherits from vanilla, which is what lets the launcher resolve assets, natives and the base
  * libraries by itself; on top of that it carries the kernel as {@code mainClass}, Forbric's jars and the kernel's
- * dependencies as libraries, and — as game arguments — the three jars the kernel opens the game with. The
- * kernel's own argument parser takes those four flags out and forwards everything else to the game, so the
- * launcher's own arguments can arrive in any order around them.
+ * dependencies as libraries, and — as game arguments — the jars the kernel opens the game with plus the mapping
+ * data it remaps Fabric mods with. The kernel's own argument parser takes those flags out and forwards everything
+ * else to the game, so the launcher's own arguments can arrive in any order around them.
  *
  * <p>The Minecraft libraries are listed explicitly rather than left to the classpath: the kernel has to OWN them
  * (mods weave into DataFixerUpper and friends), and only the version JSON knows which ones this version uses.
@@ -96,9 +96,16 @@ public final class Installer {
 		libraryEntries.addAll(stageBundledJars(libraries, remote));
 		libraryEntries.addAll(stageGameArtifacts(libraries, artifacts, mcVersion));
 
+		// The mapping data the kernel remaps Fabric guests with: Fabric's intermediary mappings and Mojang's
+		// client mappings, fetched here and staged as plain files under .forbric/mappings/ (never classpath
+		// entries, never redistributed). Nothing is remapped WITHOUT them, so a missing pair is not a degraded
+		// install but the 26.2 shape; the kernel treats a remembered-but-unreadable pair as a launch failure.
+		ArtifactBuilder.Mappings mappings = new ArtifactBuilder(log)
+				.fetchMappings(mcDir, mcVersion, clientMappingsUrl(baseJson));
+
 		Path profile = versions.resolve(id).resolve(id + ".json");
 		Files.createDirectories(profile.getParent());
-		Files.writeString(profile, Json.write(profile(id, mcVersion, libraryEntries, mcLibraries)),
+		Files.writeString(profile, Json.write(profile(id, mcVersion, libraryEntries, mcLibraries, mappings)),
 				StandardCharsets.UTF_8);
 		log.accept("wrote " + profile);
 
@@ -114,7 +121,7 @@ public final class Installer {
 	// --- the profile ------------------------------------------------------------------------------------------
 
 	private Map<String, Object> profile(String id, String mcVersion, List<Map<String, Object>> libraries,
-			List<String> mcLibraries) {
+			List<String> mcLibraries, ArtifactBuilder.Mappings mappings) {
 		Map<String, Object> profile = new LinkedHashMap<>();
 		profile.put("id", id);
 		profile.put("inheritsFrom", mcVersion);
@@ -133,6 +140,12 @@ public final class Installer {
 				+ libraryRef(coordinate("net.forbric:neoforge-runtime", mcVersion)));
 		game.add("--libraryPath");
 		game.add(String.join(java.io.File.pathSeparator, mcLibraries));
+		// The mapping data, in the order the kernel's parser reads it: Fabric's intermediary mappings, then
+		// Mojang's client mappings. ABSOLUTE paths, unlike the three flags above: the files live outside
+		// libraries/, so the launcher has no ${library_directory} to substitute them through, and this profile is
+		// already specific to the machine the artifacts were built on.
+		game.add("--mappings");
+		game.add(mappings.intermediary() + java.io.File.pathSeparator + mappings.mojmap());
 
 		Map<String, Object> arguments = new LinkedHashMap<>();
 		arguments.put("game", game);
@@ -140,6 +153,16 @@ public final class Installer {
 		profile.put("arguments", arguments);
 		profile.put("libraries", new ArrayList<Object>(libraries));
 		return profile;
+	}
+
+	/** The base version JSON's {@code downloads.client_mappings.url}, or null when the version lists none. */
+	private static String clientMappingsUrl(Map<String, Object> baseJson) {
+		Object downloads = baseJson.get("downloads");
+		if (!(downloads instanceof Map<?, ?> map)) return null;
+		Object mappings = map.get("client_mappings");
+		if (!(mappings instanceof Map<?, ?> entry)) return null;
+		Object url = entry.get("url");
+		return url instanceof String s ? s : null;
 	}
 
 	/**

@@ -37,6 +37,9 @@ import net.forbric.kernel.classloading.ForbricClassLoader;
 import net.forbric.kernel.classloading.LoaderProbePolicy;
 import net.forbric.kernel.fabric.FabricModDiscovery;
 import net.forbric.kernel.discovery.ForbricModDiscoverer;
+import net.forbric.kernel.mapping.FabricGuestMappings;
+import net.forbric.kernel.mapping.FabricGuestRemapper;
+import net.forbric.kernel.mapping.ForbricMappings;
 import net.forbric.kernel.metadata.forge.EcosystemVersions;
 import net.forbric.kernel.mixin.KernelMixinBootstrap;
 import net.forbric.kernel.mixin.MixinConfigOwners;
@@ -137,9 +140,10 @@ public final class KernelBoot {
 
 	/**
 	 * Runs the shared boot for {@code side}. {@code args} are the raw process args:
-	 * {@code --gameJar}/{@code --runtimeJar}/{@code --libraryPath} are consumed here ({@code --runtimeJar} takes
-	 * either one jar or several joined by the platform path separator); everything after {@code --}
-	 * (and any unrecognized token) is forwarded to the game's {@code Main.main}.
+	 * {@code --gameJar}/{@code --runtimeJar}/{@code --libraryPath}/{@code --mappings} are consumed here
+	 * ({@code --runtimeJar} takes either one jar or several joined by the platform path separator; so does
+	 * {@code --mappings}, which names Fabric's intermediary mappings then Mojang's client mappings); everything
+	 * after {@code --} (and any unrecognized token) is forwarded to the game's {@code Main.main}.
 	 */
 	public static void launch(Side side, String[] args) throws Throwable {
 		net.forbric.api.CompatibilityFindings.reset();
@@ -151,6 +155,7 @@ public final class KernelBoot {
 		List<Path> gameJars = new ArrayList<>();
 		Path gameJar = null;
 		String libraryPath = null;
+		String mappingsArgument = null;
 		boolean afterSep = false;
 
 		for (int i = 0; i < args.length; i++) {
@@ -183,6 +188,7 @@ public final class KernelBoot {
 					}
 				}
 				case "--libraryPath" -> libraryPath = req(args, ++i, a);
+				case "--mappings" -> mappingsArgument = req(args, ++i, a);
 				case "--" -> afterSep = true;
 				default -> gameArgs.add(a);
 			}
@@ -201,6 +207,20 @@ public final class KernelBoot {
 
 		Path gameDir = extractGameDir(gameArgs, side.stripGameDir);
 		String gameVersion = detectGameVersion(gameJar);
+
+		// W2: Fabric guests ship compiled against intermediary and the merged base runs Mojmap, so the kernel
+		// remaps them — with the two mapping files the installer staged and named on the command line. No
+		// argument at all is the legal 26.2 shape (identity, nothing to remap); an argument that names files this
+		// machine does not have fails the launch here, at the top, rather than defining every Fabric class under
+		// a name nothing resolves. Published before discovery builds the FabricLoader, which wires the resolver
+		// mods query through FabricLoader.getMappingResolver().
+		FabricGuestMappings guestMappings = FabricGuestMappings.fromArgument(mappingsArgument);
+		FabricGuestMappings.install(guestMappings);
+
+		if (guestMappings.present()) {
+			ForbricLog.info("[Forbric/Mapping] guest remap enabled: %s → %s", guestMappings.describe(),
+					ForbricMappings.NAMED);
+		}
 
 		// Two separate jars can declare the SAME mod id — inevitable the moment a Fabric pack and a NeoForge pack
 		// are merged. MultiLoaderArbiter cannot see that (it is keyed by jar path), and left alone both jars enter
@@ -288,6 +308,18 @@ public final class KernelBoot {
 		// Fabric mods (+ extracted JiJ children). Also Mojmap on this game version. Creates the FabricLoader.
 		List<Path> fabricJars = KernelFabricEcosystem.build(fabricScan, side.envType, gameDir, gameVersion,
 				gameArgs.toArray(new String[0]), dupes, gameJar);
+
+		// W2: rename every Fabric guest — each jar the loader will define classes from, the extracted JiJ children
+		// included — from the intermediary namespace it was compiled against to the Mojmap namespace the merged
+		// base runs in, BEFORE it joins the owned classpath. The classpath handed to the remapper is the game and
+		// its libraries in the TARGET namespace, which is what lets tiny-remapper resolve inherited members.
+		// Content-addressed under .forbric-kernel/remap, so an unchanged jar is remapped once ever; with no
+		// mapping data staged (or no Fabric jar at all) the list comes back untouched — see FabricGuestRemapper.
+		List<Path> remapClasspath = new ArrayList<>(runtimeJars);
+		remapClasspath.addAll(minecraftLibraries);
+		if (gameJar != null) remapClasspath.add(gameJar);
+		fabricJars = FabricGuestRemapper.remapAll(fabricJars, guestMappings,
+				gameDir.resolve(".forbric-kernel").resolve("remap"), remapClasspath);
 
 		// Game-side bundled libraries (MixinExtras) and the kernel's own runtime jar. The latter also carries
 		// the kernel's client assets -- the Mods button's icon lives in it -- so its extracted path is handed to

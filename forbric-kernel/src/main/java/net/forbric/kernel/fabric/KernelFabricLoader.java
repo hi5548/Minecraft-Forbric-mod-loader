@@ -47,6 +47,7 @@ import net.fabricmc.loader.impl.entrypoint.EntrypointStorage;
 
 import net.forbric.kernel.classloading.FabricLoaderInternals;
 import net.forbric.kernel.fabric.KernelModMetadata.EntrypointDecl;
+import net.forbric.kernel.mapping.FabricGuestMappings;
 import net.forbric.kernel.util.ForbricLog;
 
 /**
@@ -93,7 +94,13 @@ public final class KernelFabricLoader implements FabricLoader {
 	private final String rawGameVersion;
 
 	private final ObjectShare objectShare = new KernelObjectShare();
-	private final MappingResolver mappingResolver = new KernelMappingResolver();
+	/**
+	 * The resolver every Fabric mod reaches through {@code FabricLoader.getMappingResolver()}. Built from this
+	 * launch's staged mapping data ({@code FabricGuestMappings.installed()}); with none staged it is the identity
+	 * resolver, which is the 26.2 shape.
+	 */
+	private final MappingResolver mappingResolver =
+			new KernelMappingResolver(FabricGuestMappings.installed());
 
 	private final List<ModContainer> mods = new ArrayList<>();
 	private final Map<String, ModContainer> modsById = new LinkedHashMap<>();

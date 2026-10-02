@@ -159,4 +159,49 @@ final class ArtifactBuilder {
 		}
 		return result;
 	}
+
+	/**
+	 * The two mapping files the kernel reads at load time, in the order the launch argument names them.
+	 */
+	record Mappings(Path intermediary, Path mojmap) {
+	}
+
+	/**
+	 * Fetches and stages the mapping data the kernel needs to run Fabric guests, and nothing else needs.
+	 *
+	 * <p>On 1.21.x the game ships obfuscated and a Fabric mod ships compiled against <b>intermediary</b>, while
+	 * the merged base runs Mojmap. Neither mapping file can reach from one to the other alone: Fabric's
+	 * intermediary mappings join the obfuscated column to intermediary, Mojang's client mappings join the same
+	 * obfuscated column to Mojmap, and the kernel joins them on that shared column. So both are fetched, exactly
+	 * like the game artifacts: at install time, on the user's machine, never redistributed.
+	 *
+	 * <p>They land in {@code <mcDir>/.forbric/mappings/}, named for the version they belong to — a data
+	 * directory, not {@code libraries/}: the kernel opens them by path, they are never classpath entries, and
+	 * they must not be confused with the jars a launcher resolves. {@link Installer} writes their absolute paths
+	 * into the profile's game arguments.
+	 *
+	 * @param clientMappingsUrl the base version JSON's {@code downloads.client_mappings.url}
+	 */
+	Mappings fetchMappings(Path mcDir, String mcVersion, String clientMappingsUrl) throws IOException {
+		if (clientMappingsUrl == null || clientMappingsUrl.isBlank()) {
+			throw new IOException("Mojang's version JSON for " + mcVersion + " lists no client_mappings download,"
+					+ " and the kernel cannot rename Fabric guests from intermediary to Mojmap without it");
+		}
+
+		Path dir = mcDir.resolve(".forbric").resolve("mappings");
+		Files.createDirectories(dir);
+		Path intermediary = dir.resolve("intermediary-" + mcVersion + ".jar");
+		Path mojmap = dir.resolve("client-" + mcVersion + ".txt");
+
+		Http http = new Http(log);
+		// The same coordinate Fabric's own toolchain resolves: net.fabricmc:intermediary:<mcVersion>.
+		http.ensure("https://maven.fabricmc.net/net/fabricmc/intermediary/" + mcVersion
+				+ "/intermediary-" + mcVersion + ".jar", intermediary);
+		http.ensure(clientMappingsUrl, mojmap);
+
+		log.accept("staged the mapping data the kernel remaps Fabric mods with:");
+		log.accept("  " + intermediary);
+		log.accept("  " + mojmap);
+		return new Mappings(intermediary, mojmap);
+	}
 }

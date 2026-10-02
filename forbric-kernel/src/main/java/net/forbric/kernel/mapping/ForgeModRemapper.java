@@ -29,13 +29,20 @@ import net.fabricmc.tinyremapper.TinyRemapper;
 import net.forbric.api.Ecosystem;
 
 /**
- * Remaps a Forge/NeoForge mod jar from the Mojang "named" (Mojmap) namespace it was compiled against to
- * Forbric's canonical runtime namespace (intermediary), using {@link ForbricMappings} to drive tiny-remapper.
+ * Drives tiny-remapper over a guest mod jar with {@link ForbricMappings}, in either direction the spine serves.
  *
- * <p>This is the engine behind the {@code DEOBF_REMAP} transform phase: after this, a Forge mod's bytecode
- * references the game by the same intermediary names the Fabric substrate runs in, so its classes link and
- * load in the same instance. tiny-remapper resolves inheritance from the game/library jars passed as the
- * remap classpath (in the named namespace), so inherited members map correctly too.
+ * <p>Two callers, two directions, one engine:
+ * <ul>
+ *   <li>{@link #remapJar(Path, Path, ForbricMappings, List)} with {@link #mappingProvider} — Mojmap to
+ *       intermediary, the weld-era direction, when the runtime is intermediary-named.</li>
+ *   <li>{@code provider(mappings, INTERMEDIARY, NAMED)} — intermediary to Mojmap, which is what the sovereign
+ *       kernel needs on 1.21.x: the merged base is Mojmap-named and a Fabric guest ships compiled against
+ *       intermediary, so its bytecode is renamed before it joins the classpath ({@code FabricGuestRemapper}).
+ *       The reverse direction also produces the Mojmap game jar used as a remap classpath.</li>
+ * </ul>
+ *
+ * tiny-remapper resolves inheritance from the game/library jars passed as the remap classpath (in the TARGET
+ * namespace), so inherited members map correctly too.
  */
 public final class ForgeModRemapper {
 	private ForgeModRemapper() {

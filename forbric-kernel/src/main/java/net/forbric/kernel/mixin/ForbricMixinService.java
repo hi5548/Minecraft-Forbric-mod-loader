@@ -290,6 +290,10 @@ public final class ForbricMixinService
 		CreateEntitySoundMixinAdapter.adapt(node, this::mergedBaseNodeWithCode);
 		CreateHudMixinAdapter.adapt(node, this::mergedBaseNodeWithCode);
 		FabricRegistryLoaderMixinAdapter.adapt(node, this::mergedBaseNodeWithCode);
+		// …and the pack-hidden answer cannot read "hidden" out of an unset parent predicate: that empties the pack
+		// selection outright (the re-add loop is nested inside the list it just filtered) and every datapack
+		// registry loads from nothing, silently.
+		FabricResourcePackProfileMixinAdapter.adapt(node, this::mergedBaseNodeWithCode);
 		FabricRegistryInitializationMixinAdapter.adapt(node);
 		FabricCreativePagerMixinAdapter.adapt(node);
 		KernelClientHookMixinAnchors.adapt(node, this::mergedBaseNodeWithCode);

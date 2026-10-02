@@ -348,3 +348,67 @@ Verified here: with `COMPUTE_FRAMES` the class defines, links and initialises cl
 `ClassWriter(0)` makes the new gate fail with the **same** `VerifyError: Expecting a stack map frame … @16:
 aload_1 … same_frame(@27)` the client arm hit. The gate reproduces the field failure exactly, so it is the check
 that would have caught it before the arm.
+
+## 12. The re-run after the fix — the criterion IS met: the hand-off is not the cause
+
+Re-run by W7Harness against the fixed commit `9bfc1e1b`, frozen kernel
+`eb8f8c5d4832083e451122526263afc904575f9332615cf9b804ab540692636a` (W7Harness's own clean-worktree build reproduced
+the sha exactly). Two runs, same subject and pin discipline: the transform **on**
+(`reports/2026-10-03-client-frames/`) and the transform **off**, `-Dforbric.payloadWorkOrdering=off`
+(`reports/2026-10-03-client-ordering-off/`).
+
+**The fix took.** `VerifyError` count is **0** in both runs (was the sole failure in §10), and the transform's own
+line appears exactly once in the ON run — `[Forbric/PayloadOrdering] …enqueueWork now submits its work
+unconditionally…`.
+
+**`joined world via quick-play` is absent in both runs** (`grep -c` = 0). The rows are otherwise identical:
+
+```
+ON   run=STALL exit=143 world=false frames=0 strict=false cause=crash seconds=218 contended=false
+OFF  run=STALL exit=143 world=false frames=0 strict=false cause=crash seconds=217 contended=false
+     compatibility_policy=continue   mixin_fit=default   (both)
+```
+
+Screens, both runs, in order: `GenericMessageScreen → BackupConfirmScreen → LevelLoadingScreen →
+DisconnectedScreen`, disconnect reason `Network Protocol Error`.
+
+**ON**, verbatim — the NPE is reached through the main-thread queue, which is the transform doing its job:
+
+```
+[Render thread/ERROR]: Failed to handle registry data map sync:
+java.lang.NullPointerException: Cannot invoke "net.minecraft.client.multiplayer.ClientLevel.registryAccess()" because "net.minecraft.client.Minecraft.getInstance().level" is null
+	at forbric/net.neoforged.neoforge.registries.ClientRegistryManager.lambda$handleDataMapSync$1(ClientRegistryManager.java:41)
+	at forbric/net.minecraft.util.thread.BlockableEventLoop.lambda$submitAsync$0(BlockableEventLoop.java:60)
+	at java.base/java.util.concurrent.CompletableFuture$AsyncSupply.run(CompletableFuture.java:1789)
+	at forbric/net.minecraft.util.thread.BlockableEventLoop.doRunTask(BlockableEventLoop.java:148)
+```
+
+**OFF**, verbatim — the same NPE, reached inline instead:
+
+```
+[Render thread/ERROR]: Failed to handle registry data map sync:
+java.lang.NullPointerException: Cannot invoke "net.minecraft.client.multiplayer.ClientLevel.registryAccess()" because "net.minecraft.client.Minecraft.getInstance().level" is null
+	at net.neoforged.neoforge.network.handling.ClientPayloadContext.enqueueWork(ClientPayloadContext.java:31)
+	at net.neoforged.neoforge.network.handling.MainThreadPayloadHandler.lambda$handle$0(MainThreadPayloadHandler.java:16)
+	at net.neoforged.neoforge.registries.ClientRegistryManager.handleDataMapSync(ClientRegistryManager.java:39)
+```
+
+A normalised line-multiset diff of the two consoles leaves only the transform's own line and the two stack frames
+above (submit path vs inline path) plus their consequence; every other observable — verdict, exit, screens,
+disconnect reason, the `handleDataMapSync` NPE, zero frames, zero `joined world` — is identical. In both, the
+console also shows, before the NPE, a `ClientboundLoginPacket` failure:
+`java.lang.ClassCastException: class java.util.Optional cannot be cast to class net.minecraft.world.level.dimension.DimensionType`
+at `ClientboundLoginPacket.handle(ClientboundLoginPacket.java:69)`, i.e. the login packet throws before any level is
+created.
+
+**Verdict, exactly to the artifact's criterion.** Absence of `joined world via quick-play` **with the same
+`Network Protocol Error`** means the hand-off was not the ordering's cause and candidate 2's mechanism needs
+re-reading. That is now established, with the transform verified and visibly active (submit path in the ON frame,
+inline path in the OFF frame), and the two runs indistinguishable otherwise: the payload is handled before
+`Minecraft.level` exists whether its work is submitted or run inline. No further claim is made here; in particular
+the `ClientboundLoginPacket` `ClassCastException` is recorded as what the console shows, not diagnosed.
+
+**Fixture note (W7Harness, recorded so the next comparison does not trip on it).** The two runs' spawn positions
+differ (`(-29.5, 66.0, 54.5)` ON vs `(-26.5, 65.0, 49.5)` OFF), so the staged client world fixture is not
+byte-identical run to run; a future comparison that depends on world *state* should reset the fixture explicitly.
+It changes nothing above — the failure is identical in both.

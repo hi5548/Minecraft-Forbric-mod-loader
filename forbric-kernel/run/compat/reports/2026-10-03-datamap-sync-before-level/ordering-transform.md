@@ -9,8 +9,11 @@ in `KernelBoot`, with the switch `-Dforbric.payloadWorkOrdering=off`. Compiled a
 (`VerifyError: Expecting a stack map frame` at `enqueueWork(Runnable) @16`), so the client disconnects before the
 join and the semantic question was never reached. **Fixed in `9bfc1e1b`** by writing the class with
 `COMPUTE_FRAMES` (README §11): the branch rewrite invalidates the carrier's `StackMapTable`, so it cannot be
-preserved. The shape test gained a link-verification gate; the arm is re-run against the fix. What follows is the
-change as written for review, kept
+preserved. The shape test gained a link-verification gate. The re-run against the fix, on and off (README §12),
+takes the `VerifyError` to zero and shows the transform working (the NPE is reached through the submit path with it
+on, the inline path with it off) but the join still fails identically: **`joined world via quick-play` is absent
+with the same `Network Protocol Error`, so the hand-off was not the ordering's cause and candidate 2's mechanism
+needs re-reading.** What follows is the change as written for review, kept
 unchanged so the landed file can be diffed against the spec: the landed file adds only the standard kill switch
 (`PROPERTY`/`enabled()`/guard) and drops the "not landed yet" paragraph from the javadoc.
 

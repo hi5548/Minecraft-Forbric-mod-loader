@@ -19,13 +19,11 @@ package net.forbric.kernel.boot;
 import static net.forbric.kernel.boot.PassiveSeederLoadingModListTest.call;
 import static net.forbric.kernel.boot.PassiveSeederLoadingModListTest.seededList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
@@ -50,8 +48,9 @@ import net.forbric.kernel.discovery.ModFileScanner;
 
 /**
  * The {@code ModFile}s in the seeded NeoForge {@code LoadingModList} answer {@code getScanResult()} — against the
- * STAGED neoforge-runtime bytecode, whose getter throws "Scanning of this mod file has not started yet." whenever
- * {@code futureScanResult} is null.
+ * STAGED neoforge-runtime bytecode. PORT(1.21.1): that getter joins {@code futureScanResult} and then returns the
+ * {@code fileModFileScanData} field (26.2 returned the future's value and threw "Scanning of this mod file has not
+ * started yet." when it was null); the seeding therefore writes the lazy index into that field.
  *
  * <p>What paid for it: RollingGate's constructor walks {@code LoadingModList.getModFiles()} and reads every entry's
  * {@code getFile().getScanResult().getAnnotations()} for its rule containers. Seeded files had no scan, so it threw
@@ -60,7 +59,7 @@ import net.forbric.kernel.discovery.ModFileScanner;
  * <p>The claims, each its own failure mode: a NeoForge jar answers with ITS index, and with the same object
  * {@code KernelModFile} hands out for that jar; nothing is scanned until a mod asks; a Fabric presence entry and a
  * MinecraftForge entry answer empty, never with the index of a jar another ecosystem is running; a jar that cannot
- * be indexed answers empty instead of throwing; and {@code -Dforbric.seededScanData=off} is the old throw.
+ * be indexed answers empty instead of throwing; and {@code -Dforbric.seededScanData=off} leaves the index unset.
  */
 class PassiveSeederScanResultTest {
 	private static final String RULES = "Lprobe/Rules;";
@@ -156,8 +155,14 @@ class PassiveSeederScanResultTest {
 		// ModFileScanner.scan hands back null for a perfectly readable jar.
 		assumeTrue(Files.isRegularFile(PassiveSeederLoadingModListTest.NEO_RUNTIME), "staged neoforge-runtime absent");
 		Path stubs = PassiveSeederLoadingModListTest.loggingStubs(tmp.resolve("stubs"));
+		// Child of this test's loader, NOT the platform loader: ModInfo.<clinit> builds a DefaultArtifactVersion,
+		// which needs commons-lang3 (a test-runtime dependency), and the platform loader cannot see it — the whole
+		// list then falls back to empty and this test measures nothing. The kernel's own game-side classes stay
+		// off this loader (they are not on the test classpath; the URL list below deliberately omits the compiled
+		// runtime output), which is exactly what makes the index un-materialisable here.
 		try (URLClassLoader game = new URLClassLoader(new URL[] {stubs.toUri().toURL(),
-				PassiveSeederLoadingModListTest.NEO_RUNTIME.toUri().toURL()}, ClassLoader.getPlatformClassLoader())) {
+				PassiveSeederLoadingModListTest.NEO_RUNTIME.toUri().toURL()},
+				PassiveSeederScanResultTest.class.getClassLoader())) {
 			Path mods = Files.createDirectories(tmp.resolve("mods"));
 			writeJar(mods.resolve("brokenprobe.jar"), "META-INF/neoforge.mods.toml", toml("brokenprobe"),
 					"probe/broken/RuleContainer");
@@ -171,7 +176,7 @@ class PassiveSeederScanResultTest {
 	}
 
 	@Test
-	void offSwitchIsTheOldNotStartedYetThrow() throws Exception {
+	void offSwitchLeavesTheIndexUnset() throws Exception {
 		try (URLClassLoader game = runtimeLoader()) {
 			Path mods = Files.createDirectories(tmp.resolve("mods"));
 			writeJar(mods.resolve("offprobe.jar"), "META-INF/neoforge.mods.toml", toml("offprobe"),
@@ -180,10 +185,11 @@ class PassiveSeederScanResultTest {
 			System.setProperty(ModFileScanner.SEEDED_INDEX_PROPERTY, "off");
 			Object list = seed(game, mods);
 
-			InvocationTargetException thrown = assertThrows(InvocationTargetException.class,
-					() -> scanOf(list, "offprobe"));
-			assertInstanceOf(IllegalStateException.class, thrown.getCause());
-			assertEquals("Scanning of this mod file has not started yet.", thrown.getCause().getMessage());
+			// PORT(1.21.1): 26.2's getScanResult() threw "Scanning of this mod file has not started yet." when the
+			// scan had not run. 1.21.1's getter has no such branch — it joins futureScanResult (null here) and
+			// returns the unset fileModFileScanData — so the observable off-state is null.
+			assertNull(scanOf(list, "offprobe"),
+					"switched off: the seeded file carries no index, as before this seeding existed");
 		}
 	}
 

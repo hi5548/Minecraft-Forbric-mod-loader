@@ -17,6 +17,7 @@
 package net.forbric.kernel.boot;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -25,6 +26,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
@@ -117,18 +119,25 @@ class PassiveSeederLoadingModListTest {
 		assertNotNull(call(seeded.get(0), "getConfig"), "ModInfo.getConfig() must never be null");
 		// The synthetic ModFile is what keeps toString()/getFilePath() from NPE-ing on a mod-loading error path.
 		assertNotNull(call(fileInfo, "getFile"), "the ModFileInfo must carry a file");
-		assertEquals("kerneltestmod", fileInfo.toString(), "ModFileInfo.toString() is modFile.getId()");
+		assertEquals("kerneltestmod", fileInfo.toString(), "ModFileInfo.toString() is its first mod's id");
 	}
 
 	@Test void versionArgumentsAreReadByTheNativeNeoForgeParser() throws Exception {
 		ClassLoader game = neoForgeLoader();
-		Class<?> parser = Class.forName("net.neoforged.fml.loading.ProgramArgs", true, game);
-		for (String version : List.of("26.2", "26.2.1")) {
-			Object args = parser.getMethod("from", String[].class).invoke(null, (Object) PassiveSeeder.neoForgeVersionArguments(version));
-			assertEquals(version, parser.getMethod("remove", String.class).invoke(args, "fml.mcVersion"));
+		// PORT(1.21.1): 26.2's net.neoforged.fml.loading.ProgramArgs does not exist on 1.21.1. FML's own
+		// launch-handler argument container is targets.ArgumentList, with the same --fml.mcVersion spelling and the
+		// same from(String...)/remove(String) pair. It is package-private, so the lookups are made accessible first.
+		Class<?> parser = Class.forName("net.neoforged.fml.loading.targets.ArgumentList", true, game);
+		Method from = parser.getMethod("from", String[].class);
+		Method remove = parser.getMethod("remove", String.class);
+		from.setAccessible(true);
+		remove.setAccessible(true);
+		for (String version : List.of("1.21.1", "1.21.4")) {
+			Object args = from.invoke(null, (Object) PassiveSeeder.neoForgeVersionArguments(version));
+			assertEquals(version, remove.invoke(args, "fml.mcVersion"));
 		}
-		Object absent = parser.getMethod("from", String[].class).invoke(null, (Object) PassiveSeeder.neoForgeVersionArguments(null));
-		assertNull(parser.getMethod("remove", String.class).invoke(absent, "fml.mcVersion"));
+		Object absent = from.invoke(null, (Object) PassiveSeeder.neoForgeVersionArguments(null));
+		assertNull(remove.invoke(absent, "fml.mcVersion"), "no detected game version must leave fml.mcVersion unset");
 	}
 
 	/**
@@ -147,12 +156,19 @@ class PassiveSeederLoadingModListTest {
 		FakeFmlLoader loader = new FakeFmlLoader();
 		PassiveSeeder.seedNeoForgeLoadingModList(game, FakeFmlLoader.class, loader, mods);
 		Object file = call(call(seededList(loader), "getModFileById", String.class, "kerneltestmod"), "getFile");
-		Object contents = call(file, "getContents");
-		assertEquals(jar.toAbsolutePath(), call(contents, "getPrimaryPath"));
-		assertEquals(Boolean.TRUE, call(contents, "containsFile", String.class, "kerneltestmod.toml"));
-		assertEquals("enabled = true\n", new String((byte[]) call(contents, "readFile", String.class, "kerneltestmod.toml"),
-				java.nio.charset.StandardCharsets.UTF_8));
-		assertEquals(Boolean.FALSE, call(contents, "containsFile", String.class, "missing.toml"));
+		// PORT(1.21.1): the file's jar is a cpw.mods.jarhandling.SecureJar behind getSecureJar(), read through
+		// ModFile.findResource(String...) — 26.2's getContents()/readFile()/containsFile() do not exist here.
+		Object secureJar = call(file, "getSecureJar");
+		assertEquals(jar.toAbsolutePath(), call(secureJar, "getPrimaryPath"));
+		assertEquals("enabled = true\n", Files.readString(resource(file, "kerneltestmod.toml")));
+		assertFalse(Files.exists(resource(file, "missing.toml")),
+				"a file the jar does not carry must not resolve to a real path");
+	}
+
+	/** {@code ModFile.findResource(String...)} — the 1.21.1 way a mod reads a file out of its own jar. */
+	private static Path resource(Object modFile, String name) throws Exception {
+		return (Path) modFile.getClass().getMethod("findResource", String[].class)
+				.invoke(modFile, (Object) new String[] {name});
 	}
 
 	@Test
@@ -229,7 +245,7 @@ class PassiveSeederLoadingModListTest {
 				"staged neoforge-runtime.jar absent — skipping real-bytecode LoadingModList seeding check");
 		Path stubs = loggingStubs(tmp.resolve("stubs"));
 		return new URLClassLoader(new URL[] {stubs.toUri().toURL(), NEO_RUNTIME.toUri().toURL()},
-				ClassLoader.getPlatformClassLoader());
+				PassiveSeederLoadingModListTest.class.getClassLoader());
 	}
 
 	/** Writes the logging stand-ins {@link #neoForgeLoader} describes into {@code dir}, and returns it. */

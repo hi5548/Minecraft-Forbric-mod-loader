@@ -205,7 +205,7 @@ class PassiveSeederFileConfigTest {
 		assumeTrue(Files.isRegularFile(PassiveSeederLoadingModListTest.NEO_RUNTIME), "staged neoforge-runtime.jar absent");
 		Path stubs = PassiveSeederLoadingModListTest.loggingStubs(tmp.resolve("stubs"));
 		return new URLClassLoader(new URL[] {stubs.toUri().toURL(), PassiveSeederLoadingModListTest.NEO_RUNTIME.toUri()
-				.toURL()}, ClassLoader.getPlatformClassLoader());
+				.toURL()}, PassiveSeederFileConfigTest.class.getClassLoader());
 	}
 
 	private static Path jar(Path jar, String neoToml) throws Exception {

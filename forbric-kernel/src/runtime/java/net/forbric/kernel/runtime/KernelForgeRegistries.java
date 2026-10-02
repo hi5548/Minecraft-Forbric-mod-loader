@@ -31,7 +31,7 @@ import net.forbric.kernel.util.Reflect;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceKey;
-import net.minecraftforge.eventbus.api.bus.BusGroup;
+import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.registries.ForgeRegistry;
 import net.minecraftforge.registries.RegisterEvent;
 import net.minecraftforge.registries.RegistryManager;
@@ -150,14 +150,14 @@ public final class KernelForgeRegistries {
 	 * Builds the 3-arg {@code RegisterEvent} for one target and posts it on one mod's bus.
 	 *
 	 * <p>Called once per (registry, mod) pair by the boot-side loop, which owns the isolation and the active
-	 * container. Resolving the bus per call rather than per mod is a map lookup on the {@code BusGroup} and keeps
+	 * container. Resolving the bus per call rather than per mod is a map lookup on the handle and keeps
 	 * the whole event lifetime inside this method.
 	 */
 	public static void post(Object busGroup, Object[] target) throws Exception {
 		@SuppressWarnings("unchecked")
 		ResourceKey<? extends Registry<?>> key = (ResourceKey<? extends Registry<?>>) target[0];
 		RegisterEvent event = EVENT_CTOR.newInstance(key, (ForgeRegistry<?>) target[2], (Registry<?>) target[1]);
-		RegisterEvent.getBus((BusGroup) busGroup).post(event);
+		((IEventBus) busGroup).post(event);
 	}
 
 	/**

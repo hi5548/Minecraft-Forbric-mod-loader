@@ -26,7 +26,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
 import net.forbric.kernel.boot.KernelForgeModContext.Handle;
-import net.minecraftforge.eventbus.api.bus.BusGroup;
+import net.minecraftforge.eventbus.api.BusBuilder;
+import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.ModContainer;
 import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.config.ModConfig;
@@ -42,10 +43,10 @@ import net.minecraftforge.unsafe.UnsafeHacks;
  * sorting.
  *
  * <p>The boot-side door is {@code KernelForgeModContext}, whose javadoc explains why traditional Forge needs its
- * own factory rather than reusing the NeoForge one: events run on EventBus 7 ({@code BusGroup} with a
- * {@code startup()} gate, not an {@code IEventBus}), a {@code @Mod} class is constructed with an
- * {@code FMLJavaModLoadingContext} rather than {@code (IEventBus, Dist, ModContainer)}, and {@code RegisterEvent}
- * is the 3-arg {@code (key, ForgeRegistry, Registry)} flavour.
+ * own factory rather than reusing the NeoForge one: the mod bus is a Forge-family {@code IEventBus} (EventBus 6's
+ * {@code start()} gate on 1.21.1; EventBus 7's {@code BusGroup}/{@code startup()} on 26.2), a {@code @Mod} class
+ * is constructed with an {@code FMLJavaModLoadingContext} rather than {@code (IEventBus, Dist, ModContainer)},
+ * and {@code RegisterEvent} is the 3-arg {@code (key, ForgeRegistry, Registry)} flavour.
  *
  * <h2>What is still reflective, and why</h2>
  *
@@ -75,12 +76,13 @@ public final class KernelForgeContainers {
 	 * clears it afterwards; the side effect never was.
 	 */
 	public static Handle create(String modId) throws Exception {
-		BusGroup busGroup = BusGroup.create("modBusFor" + modId, IModBusEvent.class);
+		// 1.21.1's MinecraftForge is on EventBus 6: one IEventBus per mod, gated by start() (see startup below).
+		IEventBus bus = BusBuilder.builder().markerType(IModBusEvent.class).build();
 		FMLModContainer container = UnsafeHacks.newInstance(FMLModContainer.class);
 		FMLJavaModLoadingContext jctx = UnsafeHacks.newInstance(FMLJavaModLoadingContext.class);
 
 		uset(FMLJavaModLoadingContext.class, "container", jctx, container);
-		uset(FMLModContainer.class, "eventBusGroup", container, busGroup);
+		uset(FMLModContainer.class, "eventBus", container, bus);
 		// FMLModContainer.context backs its contextExtension supplier; genuine Forge sets it in the ctor we skipped.
 		usetIfPresent(FMLModContainer.class, "context", container, jctx);
 		uset(ModContainer.class, "modId", container, modId);
@@ -95,7 +97,7 @@ public final class KernelForgeContainers {
 		// getModInfo() is null without this (the ctor arg we skipped); Forge's own config + display-test paths read it.
 		usetIfPresent(ModContainer.class, "modInfo", container, new KernelForgeModInfo(modId));
 
-		return new Handle(modId, busGroup, container, jctx);
+		return new Handle(modId, bus, container, jctx);
 	}
 
 	/**
@@ -152,9 +154,9 @@ public final class KernelForgeContainers {
 		return mod;
 	}
 
-	/** Opens the EventBus 7 {@code startup()} gate — no event dispatches before this. */
+	/** Opens the bus's start gate ({@code IEventBus.start()} on 1.21.1; EventBus 7's {@code startup()} on 26.2). */
 	public static void startup(Object busGroup) {
-		((BusGroup) busGroup).startup();
+		((IEventBus) busGroup).start();
 	}
 
 	/** Writes a field that MUST exist; a missing one is a real change in the carrier and has to be loud. */

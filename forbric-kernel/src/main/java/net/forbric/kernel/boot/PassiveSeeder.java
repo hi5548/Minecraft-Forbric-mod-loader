@@ -201,8 +201,17 @@ public final class PassiveSeeder {
 		try {
 			Class<?> fmlLoader = Class.forName(ForeignType.FML_LOADER.binary(Ecosystem.NEOFORGE), false, gameLoader);
 
-			Method getCurrentOrNull = fmlLoader.getDeclaredMethod("getCurrentOrNull");
-			getCurrentOrNull.setAccessible(true);
+			Method getCurrentOrNull;
+			try {
+				getCurrentOrNull = fmlLoader.getDeclaredMethod("getCurrentOrNull");
+				getCurrentOrNull.setAccessible(true);
+			} catch (NoSuchMethodException absent) {
+				// PORT(1.21.1): NeoForge 21.1's FMLLoader keeps its identity in STATIC fields and has a public
+				// no-arg constructor — there is no per-launch instance, so no getCurrentOrNull()/makeCurrent(), and
+				// no (ClassLoader,String[],Dist,boolean,Path) constructor. All of that is the 26.2 shape.
+				seedNeoForge21Loader(gameLoader, fmlLoader, gameDir, side, gameVersion);
+				return;
+			}
 			if (getCurrentOrNull.invoke(null) != null) {
 				ForbricLog.debug("[Forbric/Seed] NeoForge FMLLoader already current — not re-seeding");
 				return;
@@ -233,6 +242,77 @@ public final class PassiveSeeder {
 			ForbricLog.debug("[Forbric/Seed] NeoForge FMLLoader not present — skipping");
 		} catch (Throwable t) {
 			ForbricLog.warn("[Forbric/Seed] could not seed NeoForge FMLLoader identity", unwrap(t));
+		}
+	}
+
+	/**
+	 * PORT(1.21.1): seeds NeoForge 21.1's {@code FMLLoader} static identity — dist, production, gamePath,
+	 * versionInfo, gameLayer and the LoadingModList — because 21.1 keeps all of it in STATIC fields (javap on the
+	 * staged neoforge-runtime.jar: {@code private static Dist dist}, {@code private static VersionInfo versionInfo},
+	 * {@code private static ModuleLayer gameLayer}, {@code private static LoadingModList loadingModList},
+	 * {@code private static boolean production}, {@code private static Path gamePath}) and has only a public
+	 * no-arg constructor. The genuine values are written by {@code setupLaunchHandler(IEnvironment, VersionInfo)}
+	 * from ModLauncher's environment, which the kernel does not run.
+	 *
+	 * <p>Measured need: {@code Bootstrap.bootStrap} completes, the redirected lifecycle window fires, and
+	 * {@code KernelLifecycle.registerNeoForgeContent} constructs NeoForge's own {@code NeoForgeMod}; its
+	 * {@code <clinit>} reads {@code FMLLoader.versionInfo().neoForgeVersion()} (the
+	 * {@code JarVersionLookupHandler} fallback only answers for a class in a named module, and nothing is), so a
+	 * null {@code versionInfo} NPEs all of NeoForge registration — no data map type is registered, the kernel
+	 * records the required {@code neoforge-data-maps} finding, and STRICT policy stops the launch. {@code gameLayer}
+	 * is read by NeoForge's {@code ModLoader}; {@code loadingModList} by {@code FeatureFlags.<clinit>} during
+	 * Bootstrap.
+	 *
+	 * <p>{@code neoForgeVersion} comes from the carrier's own {@code neoforge.mods.toml}
+	 * ({@link net.forbric.kernel.metadata.forge.EcosystemVersions}) and {@code mcVersion} is the detected game
+	 * version. FML-loader and NeoForm versions are launcher-profile inputs the kernel has no runtime source for, so
+	 * they are left null rather than guessed; nothing on the mod-loading path dereferences them.
+	 */
+	private static void seedNeoForge21Loader(ClassLoader gameLoader, Class<?> fmlLoader, Path gameDir, Side side,
+			String gameVersion) throws Exception {
+		Class<?> distClass = Class.forName(ForeignType.DIST.binary(Ecosystem.NEOFORGE), false, gameLoader);
+		Object dist = Enum.valueOf(distClass.asSubclass(Enum.class), side.distName());
+		setStaticIfNull(fmlLoader, "dist", dist);
+
+		Field production = fmlLoader.getDeclaredField("production");
+		production.setAccessible(true);
+		production.setBoolean(null, PRODUCTION);
+
+		setStaticIfNull(fmlLoader, "gamePath", gameDir.toAbsolutePath());
+		// ModuleLayer.boot() is the honest answer where the game classes are defined by ForbricClassLoader and not
+		// by a ModLauncher layer: NeoForge's ModLoader reads it through getGameLayer(), and a service scan of the
+		// boot layer simply finds none of its providers.
+		setStaticIfNull(fmlLoader, "gameLayer", ModuleLayer.boot());
+
+		Field versionInfo = fmlLoader.getDeclaredField("versionInfo");
+		versionInfo.setAccessible(true);
+		if (versionInfo.get(null) == null) {
+			Class<?> infoClass = Class.forName("net.neoforged.fml.loading.VersionInfo", false, gameLoader);
+			Constructor<?> ctor = infoClass.getConstructor(String.class, String.class, String.class, String.class);
+			String neoVersion = net.forbric.kernel.metadata.forge.EcosystemVersions.provided("neoforge");
+			versionInfo.set(null, ctor.newInstance(neoVersion, null, gameVersion, null));
+		}
+
+		seedEmptyNeoForgeLoadingModList(gameLoader, fmlLoader);
+
+		ForbricLog.info("[Forbric/Seed] NeoForge 21.1 FMLLoader seeded (dist=%s, production=%s, neoforge=%s, mc=%s) — "
+				+ "static identity only, no lifecycle", side.distName(), PRODUCTION,
+				net.forbric.kernel.metadata.forge.EcosystemVersions.provided("neoforge"), gameVersion);
+	}
+
+	/** The STATIC-field twin of {@link #seedEmptyLoadingModList} for the 21.1 FMLLoader shape. */
+	private static void seedEmptyNeoForgeLoadingModList(ClassLoader gameLoader, Class<?> fmlLoader) {
+		try {
+			Field field = fmlLoader.getDeclaredField("loadingModList");
+			field.setAccessible(true);
+			if (field.get(null) != null) return;
+			Class<?> lmlCls = Class.forName(ForeignType.LOADING_MOD_LIST.binary(Ecosystem.NEOFORGE), false, gameLoader);
+			// LoadingModList.of(two ModFile lists, a ModInfo list, issues, dependencies) — the 21.1 five-arg shape.
+			Method of = lmlCls.getMethod("of", List.class, List.class, List.class, List.class, Map.class);
+			field.set(null, of.invoke(null, List.of(), List.of(), List.of(), List.of(), Map.of()));
+			ForbricLog.debug("[Forbric/Seed] seeded empty NeoForge LoadingModList (static, zero mods)");
+		} catch (Throwable t) {
+			ForbricLog.warn("[Forbric/Seed] could not seed empty NeoForge LoadingModList", unwrap(t));
 		}
 	}
 
@@ -1662,13 +1742,25 @@ public final class PassiveSeeder {
 					+ "and its mods tell every peer they are absent", unwrap(t));
 		}
 
-		// Traditional-Forge ModList keeps mods/indexedMods/sortedContainers as STATIC fields, null until mod
-		// loading. ServerStatusPing → ModList.forEachModContainer iterates indexedMods → NPE. Seed empties.
+		// Traditional-Forge ModList keeps mods/indexedMods/sortedContainers, null until mod loading.
+		// ServerStatusPing → ModList.forEachModContainer iterates indexedMods → NPE. Seed empties.
+		//
+		// PORT(1.21.1): they are INSTANCE fields on Forge 52 (26.2 made them static), so they are seeded on the
+		// ModList singleton — created empty here via ModList.of(...) when nothing else has, exactly as
+		// seedNeoForgeModList does for NeoForge. setStaticIfNull(modList, ...) NPE'd on f.get(null) for an
+		// instance field, which is the warning this replaces.
 		try {
 			Class<?> modList = Class.forName(ForeignType.MOD_LIST.binary(Ecosystem.FORGE), true, gameLoader);
-			setStaticIfNull(modList, "mods", List.of());
-			setStaticIfNull(modList, "indexedMods", Map.of());
-			setStaticIfNull(modList, "sortedContainers", List.of());
+			Object instance = modList.getMethod("get").invoke(null);
+			if (instance == null) {
+				// public static ModList of(List<ModFile>, List<ModInfo>) — stores INSTANCE.
+				instance = modList.getMethod("of", List.class, List.class).invoke(null, List.of(), List.of());
+			}
+			for (String name : List.of("mods", "indexedMods", "sortedContainers")) {
+				Field field = modList.getDeclaredField(name);
+				field.setAccessible(true);
+				if (field.get(instance) == null) field.set(instance, name.equals("indexedMods") ? Map.of() : List.of());
+			}
 			ForbricLog.debug("[Forbric/Seed] seeded empty traditional-Forge ModList collections (zero mods)");
 		} catch (ClassNotFoundException absent) {
 			ForbricLog.debug("[Forbric/Seed] traditional-Forge ModList not present — skipping");

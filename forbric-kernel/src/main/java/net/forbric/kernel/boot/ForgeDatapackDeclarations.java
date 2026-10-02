@@ -18,7 +18,18 @@ final class ForgeDatapackDeclarations {
 		try { eventClass = Class.forName(ForeignType.DATAPACK_NEW_REGISTRY_EVENT.binary(Ecosystem.FORGE), true, loader); }
 		catch (ClassNotFoundException absent) { return; }
 		Object event = eventClass.getConstructor().newInstance();
-		Object bus = eventClass.getField("BUS").get(null);
+		Object bus;
+		try {
+			bus = eventClass.getField("BUS").get(null);
+		} catch (NoSuchFieldException absent) {
+			// PORT(1.21.1): Forge 52 has no per-event BUS field — that is the 26.2 event-bus API; its events are
+			// posted on an IEventBus. The kernel wires no MinecraftForge mod bus on this generation (the Forge
+			// subscription layer rides the NeoForge bus), so the global bus is the only Forge IEventBus present;
+			// posting the declaration on it is the honest best effort, and process() below still collects whatever
+			// the event carries.
+			Class<?> forge = Class.forName("net.minecraftforge.common.MinecraftForge", false, loader);
+			bus = forge.getField("EVENT_BUS").get(null);
+		}
 		Class.forName(ForeignType.EVENT_BUS.binary(Ecosystem.FORGE), false, loader)
 				.getMethod("post", Class.forName(ForeignType.EVENT.binary(Ecosystem.FORGE), false, loader)).invoke(bus, event);
 		Method process = eventClass.getDeclaredMethod("process"); process.setAccessible(true); process.invoke(event);

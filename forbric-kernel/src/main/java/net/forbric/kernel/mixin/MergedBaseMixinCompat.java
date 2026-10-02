@@ -356,6 +356,16 @@ public final class MergedBaseMixinCompat {
 	 * rather than leave the mixin loose. See the {@code ModelManagerMixin} paragraph above.
 	 */
 	public static final List<String> SUPPRESSED_UNLESS_PRUNED = List.of(
+			// The ONLY pruner entry that needs one, and the reason the list exists. ModelManagerMixin is a
+			// half-application: the trimmed pair is the call and its argument, so the un-pruned mixin still applies
+			// and hands Fabric's deserializer an already-consumed stream — every block model dies quietly.
+			//
+			// The two Cluster-1 entries deliberately have NO off-arm pin, because their un-pruned state is not
+			// half-application and pinning them would change the off arm rather than restore it: the trade factory's
+			// redirect SOFT-SKIPS with Mixin's own warning (its fitting `create` sibling keeps applying, exactly the
+			// behaviour the pruner exists to give), and balm's mixin ABORTS loudly with InvalidInjectionException.
+			// Both are what -Dforbric.guestInjectorPruner=off is supposed to reproduce. Pinning either would lose
+			// the handlers the pruner keeps — see GuestInjectorPrunerTest.everyPinNamesAPrunerEntry.
 			"fabric-model-loading-api-v1.mixins.json:ModelManagerMixin");
 
 	public static final List<String> KEPT_MIXINS = List.of(

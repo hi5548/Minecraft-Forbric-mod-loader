@@ -34,7 +34,15 @@ import net.forbric.kernel.util.ForbricLog;
  * Removes named injector methods from a GUEST MIXIN class before Mixin reads it, so that a mixin whose other
  * injectors fit the merged base can apply instead of being pinned whole.
  *
- * <p>The one entry so far is fabric-model-loading-api-v1's {@code ModelManagerMixin}. NeoForge won the byte-merge
+ * <p>Three entries. balm's {@code FabricCropBlockMixin} (the two {@code getGrowthSpeed*} handlers, which anchor on
+ * a {@code BlockState.is(Block)} call the merged {@code getGrowthSpeed(BlockState, BlockGetter, BlockPos)} does not
+ * make — one unbound REQUIRED injector aborted the whole mixin, taking its two fitting {@code randomTick} handlers
+ * with it), fabric-object-builder-api-v1's trade-offer factory ({@code disableVanillaCheck}, whose target exists
+ * nowhere on the merged base, while its {@code create} sibling binds), and fabric-model-loading-api-v1's
+ * {@code ModelManagerMixin}. Each entry's annotation quotes its module's own spelling where one still applies; the
+ * {@code selectorPrefix} is the selector THIS transformer will find, i.e. the one the name layer leaves behind.
+ *
+ * <p>NeoForge won the byte-merge
  * of {@code ModelManager.lambda$loadBlockModels$2} and replaced vanilla's {@code CuboidModel.fromStream(Reader)}
  * there with its own {@code UnbakedModelParser.parse(Reader)} — the dispatch point for NeoForge {@code "loader"}
  * model formats. Fabric's {@code @Redirect cancelVanillaDeserialize} targets {@code fromStream}, so it cannot
@@ -66,9 +74,11 @@ import net.forbric.kernel.util.ForbricLog;
  * whose {@code method} list names {@code lambda$loadBlockModels$2}; a fabric-api that reshapes either leaves the
  * class untouched, with a warning, and the whole mixin then reads PARTIAL as it did before this class existed.
  *
- * <p>{@code -Dforbric.guestInjectorPruner=off} restores the previous behaviour EXACTLY: the pruner stands down and
- * {@code MergedBaseMixinCompat.SUPPRESSED_UNLESS_PRUNED} puts the whole-mixin pin back — never the half-applied
- * state.
+ * <p>{@code -Dforbric.guestInjectorPruner=off} restores the previous behaviour EXACTLY: the pruner stands down, and
+ * for an entry whose un-pruned state is a HALF-APPLICATION — {@code ModelManagerMixin} — {@code
+ * MergedBaseMixinCompat.SUPPRESSED_UNLESS_PRUNED} puts the whole-mixin pin back instead. The other two entries need
+ * no pin, because standing down reproduces the pre-pruner state by itself: the trade factory's redirect soft-skips
+ * (its fitting sibling still applies) and balm's mixin aborts with {@code InvalidInjectionException}.
  *
  * <p>The second entry is fabric-item-api-v1's {@code ItemStackMixin}. Its five tooltip injectors thread one
  * {@code @Share("index")} through vanilla's {@code addDetailsToTooltip}, which NeoForge turned into a dispatcher over

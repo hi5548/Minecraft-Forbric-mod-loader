@@ -30,6 +30,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.zip.ZipEntry;
@@ -167,6 +168,29 @@ class GuestInjectorPrunerTest {
 	 * finding on the owning config, naming the residual loss — and not a continue-or-quit question, since the
 	 * kernel ships this trim.
 	 */
+	/**
+	 * The whole-mixin pins ARE maintained by hand next to a table they must agree with, so they are checked against
+	 * it: a pin that outlives its pruner entry silently suppresses a mixin that may fit again, and a pin naming a
+	 * different config than the one the findings use is the same stale artefact wearing the right mixin name. Not
+	 * every entry needs one — only an un-pruned HALF-APPLICATION does — so this asserts agreement for the pins that
+	 * exist rather than their presence; the per-entry judgement lives in the comment beside each pin.
+	 */
+	@Test
+	void everyPinNamesAPrunerEntry() {
+		for (String pinned : net.forbric.kernel.mixin.MergedBaseMixinCompat.SUPPRESSED_UNLESS_PRUNED) {
+			int colon = pinned.indexOf(':');
+			String config = pinned.substring(0, colon), simple = pinned.substring(colon + 1);
+			String mixin = GuestInjectorPruner.TABLE.keySet().stream()
+					.filter(name -> name.endsWith("." + simple)).findFirst()
+					.orElseThrow(() -> new AssertionError("pinned " + pinned + " has no pruner entry"));
+			assertEquals(config, GuestInjectorPruner.CONFIGS.get(mixin), "pin and finding disagree on the config");
+		}
+		for (String mixin : GuestInjectorPruner.TABLE.keySet()) {
+			assertNotNull(GuestInjectorPruner.CONFIGS.get(mixin),
+					mixin + " has no config, so no finding can name its owner");
+		}
+	}
+
 	@Test
 	void eachPrunedInjectorIsAConfirmedFindingThatAsksNothing() throws Exception {
 		net.forbric.api.CompatibilityFindings.reset();

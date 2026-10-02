@@ -47,7 +47,11 @@ import net.forbric.kernel.util.ForbricLog;
  *
  * <p>Removes the branch only: the {@code INVOKEVIRTUAL isSameThread} + {@code IFEQ} pair becomes a {@code POP}
  * (the boolean is already on the stack) followed by the same jump target, so the submit path is entered
- * unconditionally. The now-dead inline block is left in place — removing it would move frame offsets for no gain.
+ * unconditionally. The now-dead inline block is left in place, and the class is written with
+ * {@code COMPUTE_FRAMES} because that new layout invalidates the carrier's {@code StackMapTable} — preserving the
+ * carrier's frames was measured to produce {@code VerifyError: Expecting a stack map frame} at the instruction
+ * after the GOTO, i.e. at the start of the dead block. The method has no reference-typed merge, so recomputation
+ * resolves no game class.
  *
  * <p>It changes semantics for EVERY payload, not just the data-map one (work enqueued while on the main thread
  * moves from "inline now" to "next queue drain, same thread, same tick, later point in it"), and nothing in the
@@ -104,7 +108,12 @@ public final class PayloadWorkOrderingTransformer implements ClassTransformer {
 		}
 		if (!changed) return classBytes;
 
-		ClassWriter writer = new ClassWriter(0);
+		// COMPUTE_FRAMES, NOT ClassWriter(0): replacing the conditional branch changes the control flow, and the
+		// carrier's own StackMapTable then describes a layout the verifier rejects — "Expecting a stack map frame"
+		// at the instruction after the GOTO, i.e. at the start of the now-dead inline block. The method has no
+		// merge of two reference types (the only branch left is the GOTO), so ASM's frame computation never needs
+		// to resolve a game class and does not have to load one.
+		ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_FRAMES);
 		node.accept(writer);
 		return writer.toByteArray();
 	}

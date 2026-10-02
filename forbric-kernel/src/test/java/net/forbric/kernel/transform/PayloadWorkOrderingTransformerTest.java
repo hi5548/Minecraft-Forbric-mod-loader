@@ -23,6 +23,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.net.URL;
+import java.net.URLClassLoader;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -54,10 +57,18 @@ import net.forbric.kernel.TestFixtures;
  * <p><b>What this proves, and what it must not be read as proving.</b> It proves the branch is gone — the
  * transformed {@code enqueueWork(Runnable)} has no {@code INVOKEVIRTUAL isSameThread} followed by a conditional
  * jump, and the {@code GOTO} that replaced the {@code IFEQ} lands on the same submit-path block the {@code IFEQ}
- * targeted. It does <b>not</b> prove that removing the branch is semantically safe for handlers that rely on the
- * inline form: work enqueued on the main thread now runs at the next queue drain instead of at that moment, and no
- * shape test can see a handler that depended on the old immediacy. That is why the falsification is a client arm
- * ({@code joined world via quick-play} on a kernel pinned to the commit carrying the transform), not this test.
+ * targeted — and, in {@link #theTransformedClassLinksUnderTheRealVerifier()}, that the class the transform writes
+ * still links under the JVM verifier. It does <b>not</b> prove that removing the branch is semantically safe for
+ * handlers that rely on the inline form: work enqueued on the main thread now runs at the next queue drain instead
+ * of at that moment, and no shape test can see a handler that depended on the old immediacy. That is why the
+ * falsification is a client arm ({@code joined world via quick-play} on a kernel pinned to the commit carrying the
+ * transform), not this test.
+ *
+ * <p>The link gate exists because the shape assertions are not enough: the first landed form of this transform
+ * replaced the branch with {@code POP}+{@code GOTO} but preserved the carrier's {@code StackMapTable}, and the
+ * shape assertions passed while the client refused to load the class
+ * ({@code VerifyError: Expecting a stack map frame} at the instruction after the GOTO). The fix recomputes frames;
+ * this test is what holds it.
  */
 class PayloadWorkOrderingTransformerTest {
 	private static final String OWNER = "net.neoforged.neoforge.network.handling.ClientPayloadContext";
@@ -114,9 +125,53 @@ class PayloadWorkOrderingTransformerTest {
 		}
 	}
 
-	private static byte[] clientPayloadContext() throws Exception {
+	/**
+	 * The gate the shape assertions cannot be: the class the transform writes must still LINK. Its
+	 * {@code StackMapTable} is exactly what a branch rewrite invalidates, and preserving the carrier's own table
+	 * was measured on the client as {@code VerifyError: Expecting a stack map frame} at the instruction after the
+	 * GOTO — a failure no assertion about instruction order or jump targets can see. The verifier here is the JVM's
+	 * own, over a loader built from the staged jars; no game is launched. ({@code CheckClassAdapter.verify} is not
+	 * usable in its place: its {@code SimpleVerifier} resolves every referenced type through the test's loader,
+	 * which has no game classes.)
+	 */
+	@Test
+	void theTransformedClassLinksUnderTheRealVerifier() throws Exception {
+		byte[] raw = clientPayloadContext();
+		byte[] transformed = new PayloadWorkOrderingTransformer().transform(OWNER, raw, null);
+		assertNotSame(raw, transformed, "the transform must edit the real class, not hand it back");
+
+		Path merged = TestFixtures.mergedBase();
+		Path forge = TestFixtures.stagedRoot().resolve("forge-runtime/forge-runtime.jar");
+		TestFixtures.require(merged != null && Files.isRegularFile(merged) && Files.isRegularFile(forge),
+				"the staged game jars for link verification");
+
+		try (URLClassLoader deps = new URLClassLoader(new URL[] { carrierJar().toUri().toURL(),
+				merged.toUri().toURL(), forge.toUri().toURL() }, getClass().getClassLoader())) {
+			ClassLoader defining = new ClassLoader(deps) {
+				@Override
+				protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+					if (OWNER.equals(name)) {
+						Class<?> loaded = findLoadedClass(name);
+						if (loaded == null) loaded = defineClass(name, transformed, 0, transformed.length);
+						if (resolve) resolveClass(loaded);
+						return loaded;
+					}
+					return super.loadClass(name, resolve);
+				}
+			};
+			// initialize=true -> link -> the JVM verifier runs over every method, the edited one included.
+			assertNotNull(Class.forName(OWNER, true, defining), "the transformed class must link and initialise");
+		}
+	}
+
+	private static Path carrierJar() {
 		Path jar = TestFixtures.stagedRoot().resolve("neoforge-runtime/neoforge-runtime.jar");
 		TestFixtures.requireFiles("the staged NeoForge carrier", jar);
+		return jar;
+	}
+
+	private static byte[] clientPayloadContext() throws Exception {
+		Path jar = carrierJar();
 		try (ZipFile zip = new ZipFile(jar.toFile())) {
 			ZipEntry entry = zip.getEntry(ENTRY);
 			assertNotNull(entry, ENTRY + " absent from " + jar);

@@ -587,13 +587,13 @@ public final class KernelLifecycle {
 		GameEventMultiplexer.install(cl, side.isClient());
 		GameEventMultiplexer.installDataMapWatch(cl);
 		startBus(cl, "net.neoforged.neoforge.common.NeoForge", "EVENT_BUS",
-				"net.neoforged.bus.api.IEventBus", "start", "NeoForge.EVENT_BUS");
+				ForeignType.EVENT_BUS.binary(Ecosystem.NEOFORGE), "start", "NeoForge.EVENT_BUS");
 		// 1.21.1's MinecraftForge is EventBus 6: the game bus is the static MinecraftForge.EVENT_BUS and its gate
 		// is IEventBus.start(). 26.2's EventBus 7 spelled this BusGroup.DEFAULT + startup(), and resolving that
 		// against this carrier found no class, took the "absent" branch, and left every Forge game listener on a
 		// bus nothing dispatched — silently, which is exactly the failure this method exists to make visible.
 		startBus(cl, "net.minecraftforge.common.MinecraftForge", "EVENT_BUS",
-				"net.minecraftforge.eventbus.api.IEventBus", "start", "MinecraftForge.EVENT_BUS");
+				ForeignType.EVENT_BUS.binary(Ecosystem.FORGE), "start", "MinecraftForge.EVENT_BUS");
 	}
 
 	/**
@@ -672,7 +672,7 @@ public final class KernelLifecycle {
 			baselineBus = bus;
 			baselineContainer = container;
 			Class<?> neoForgeMod = Class.forName("net.neoforged.neoforge.common.NeoForgeMod", false, cl);
-			Class<?> iEventBus = Class.forName("net.neoforged.bus.api.IEventBus", false, cl);
+			Class<?> iEventBus = Class.forName(ForeignType.EVENT_BUS.binary(Ecosystem.NEOFORGE), false, cl);
 			Class<?> modContainer = Class.forName(ForeignType.MOD_CONTAINER.binary(Ecosystem.NEOFORGE), false, cl);
 			neoForgeMod.getConstructor(iEventBus, distClass, modContainer)
 					.newInstance(bus, dist, container);
@@ -844,11 +844,15 @@ public final class KernelLifecycle {
 			// The rest of postRegisterEvents' tail, in its order. Cheap calls, and each one is a whole feature that
 			// simply did not exist: without fireSpawnPlacementEvent a mod's mob has no spawn rules and never
 			// generates, without BlockEntityTypeAddBlocksEvent a mod cannot attach its blocks to a vanilla block
-			// entity, and without registerModdedCategories its gamerules have no category to sit in.
+			// entity, and without earlyInit a client mod's block/item/fluid/effect extensions are never read.
 			// (CreativeModeTabRegistry.sortTabs is the kernel's sortNeoCreativeTabs, below, after the freeze.)
+			// PORT(1.21.1): GameRuleCategory.registerModdedCategories is NOT in this era's tail (the class does not
+			// exist), and ClientExtensionsManager.earlyInit IS — the era replaced one with the other.
 			invokeStaticOn(cl, "net.minecraft.world.entity.SpawnPlacements", "fireSpawnPlacementEvent");
 			postModBusEvent(cl, "net.neoforged.neoforge.event.BlockEntityTypeAddBlocksEvent");
-			invokeStaticOn(cl, "net.minecraft.world.level.gamerules.GameRuleCategory", "registerModdedCategories");
+			if (side.isClient()) {
+				invokeStaticOn(cl, "net.neoforged.neoforge.client.extensions.common.ClientExtensionsManager", "earlyInit");
+			}
 			// Last in postRegisterEvents: NeoForge builds its item tooltip appenders — every vanilla component line
 			// (enchantments, lore, attributes, durability, …) and every mod's. Left out of this copy of the tail,
 			// the merged ItemStack's dispatcher walked three empty lists and tooltips showed only the name.
@@ -898,13 +902,19 @@ public final class KernelLifecycle {
 	 * MinecraftForge's GATHER states, as {@code holder#field}: the core loader's two, then ForgeStatesProvider's
 	 * four. Every state {@code gatherAndInitializeMods} dispatches, and nothing past it: the LOAD and COMPLETE
 	 * phases (setup, IMC, FREEZE_DATA, NETWORK_LOCK) happen elsewhere and are not claimed here.
+	 *
+	 * <p>PORT(1.21.1): the fields are the 1.21.1 carrier's spellings, verified with javap. {@code UNFREEZE} is the
+	 * field whose ModLoadingState name is {@code UNFREEZE_DATA} (Forge names the field shorter than the state);
+	 * 26.2 named the field itself {@code UNFREEZE_DATA}. {@code OBJECT_HOLDERS}, the era's extra GATHER state
+	 * between CREATE_REGISTRIES and INJECT_CAPABILITIES, is deliberately not claimed: the kernel's stage does not
+	 * run object holders, and claiming a state it does not stand in for would make {@code hasCompletedState} lie.
 	 */
 	static final List<String> FORGE_GATHER_STATES = List.of(
 			"net.minecraftforge.fml.core.ModStateProvider#VALIDATE",
 			"net.minecraftforge.fml.core.ModStateProvider#CONSTRUCT",
 			"net.minecraftforge.common.ForgeStatesProvider#CREATE_REGISTRIES",
 			"net.minecraftforge.common.ForgeStatesProvider#INJECT_CAPABILITIES",
-			"net.minecraftforge.common.ForgeStatesProvider#UNFREEZE_DATA",
+			"net.minecraftforge.common.ForgeStatesProvider#UNFREEZE",
 			"net.minecraftforge.common.ForgeStatesProvider#LOAD_REGISTRIES");
 
 	/**
@@ -936,14 +946,21 @@ public final class KernelLifecycle {
 						+ "states stay uncompleted");
 				return 0;
 			}
-			Field completed = loader.getDeclaredField("COMPLETED_STATES");
+			// PORT(1.21.1): Forge 52's ModLoader is an instance (ModLoader.get()) holding a per-instance
+			// `completedStates` Set<IModLoadingState>; 26.2 kept a static COMPLETED_STATES set of state objects.
+			// The state fields are package-private, so they are read with getDeclaredField rather than getField.
+			Object instance = loader.getMethod("get").invoke(null);
+			Field completed = loader.getDeclaredField("completedStates");
 			completed.setAccessible(true);
-			java.util.Set<Object> states = (java.util.Set<Object>) completed.get(null);
+			java.util.Set<Object> states = (java.util.Set<Object>) completed.get(instance);
 			int added = 0;
 			for (String state : FORGE_GATHER_STATES) {
 				int hash = state.indexOf('#');
-				Object instance = Class.forName(state.substring(0, hash), true, cl).getField(state.substring(hash + 1)).get(null);
-				if (instance != null && states.add(instance)) added++;
+				Field field = Class.forName(state.substring(0, hash), true, cl)
+						.getDeclaredField(state.substring(hash + 1));
+				field.setAccessible(true);
+				Object stateInstance = field.get(null);
+				if (stateInstance != null && states.add(stateInstance)) added++;
 			}
 			if (added > 0) {
 				ForbricLog.info("[Forbric/Lifecycle] recorded %d MinecraftForge gather state(s) as completed "
@@ -1099,7 +1116,7 @@ public final class KernelLifecycle {
 	private static void registerNeoForgeClientContent(ClassLoader cl) {
 		try {
 			Class<?> clientMod = Class.forName("net.neoforged.neoforge.client.ClientNeoForgeMod", false, cl);
-			Class<?> iEventBus = Class.forName("net.neoforged.bus.api.IEventBus", false, cl);
+			Class<?> iEventBus = Class.forName(ForeignType.EVENT_BUS.binary(Ecosystem.NEOFORGE), false, cl);
 			Class<?> modContainer = Class.forName(ForeignType.MOD_CONTAINER.binary(Ecosystem.NEOFORGE), false, cl);
 			clientMod.getConstructor(iEventBus, modContainer).newInstance(baselineBus, baselineContainer);
 			ForbricLog.info("[Forbric/Lifecycle] constructed ClientNeoForgeMod on the baseline bus");
@@ -1249,7 +1266,7 @@ public final class KernelLifecycle {
 		try {
 			Class<?> eventCls = Class.forName(
 					"net.neoforged.neoforge.registries.DataPackRegistryEvent$NewRegistry", false, cl);
-			Class<?> busCls = Class.forName("net.neoforged.bus.api.IEventBus", false, cl);
+			Class<?> busCls = Class.forName(ForeignType.EVENT_BUS.binary(Ecosystem.NEOFORGE), false, cl);
 			Class<?> baseEvent = Class.forName("net.neoforged.bus.api.Event", false, cl);
 			Class<?> hooksCls = Class.forName(
 					"net.neoforged.neoforge.registries.DataPackRegistriesHooks", false, cl);
@@ -2409,10 +2426,10 @@ public final class KernelLifecycle {
 	}
 
 	/**
-	 * Called from the game side: {@code ClientModLoader.setupModResourcePacks(PackRepository)} inside
-	 * {@code Minecraft.<init>}, redirected here by {@code ClientPackHookInjector}. This is the one correctly-timed
-	 * handle on the live client {@code PackRepository} — before the first resource reload — so the kernel serves the
-	 * ecosystem jars' assets (NeoForge's shaders, Forge mods' textures/models) here.
+	 * Called from the game side: the head of {@code ClientModLoader.begin(Minecraft, PackRepository,
+	 * ReloadableResourceManager)} inside {@code Minecraft.<init>}, prepended by {@code ClientPackHookInjector}. This
+	 * is the one correctly-timed handle on the live client {@code PackRepository} — before the first resource reload
+	 * — so the kernel serves the ecosystem jars' assets (NeoForge's shaders, Forge mods' textures/models) here.
 	 *
 	 * <p>Both ecosystems' ClientModLoaders route here, so it may be called more than once;
 	 * {@link KernelClientPacks#addTo} is cheap and the repository de-dups by pack id.

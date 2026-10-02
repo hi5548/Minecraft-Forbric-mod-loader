@@ -68,7 +68,8 @@ public final class ItemUseOnInjector implements ClassTransformer {
 	static final String BRIDGE = "forbric$useOnItemFor";
 	static final String EVENT = "net/neoforged/neoforge/event/entity/player/UseItemOnBlockEvent";
 	static final String PHASE = EVENT + "$UsePhase";
-	static final String BUS = "net/neoforged/bus/api/IEventBus";
+	// PORT(1.21.1): named through the shared table so the Forge-family bus spelling cannot drift here alone.
+	static final String BUS = net.forbric.api.ForeignType.EVENT_BUS.internal(net.forbric.api.Ecosystem.NEOFORGE);
 
 	static boolean enabled() {
 		return !"off".equalsIgnoreCase(System.getProperty(PROPERTY, "on"));

@@ -17,24 +17,16 @@
 package net.forbric.kernel.mixin;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-import java.io.InputStream;
-import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.lang.reflect.Proxy;
-import java.net.URL;
-import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,23 +43,24 @@ import org.spongepowered.asm.mixin.transformer.IMixinTransformer;
 
 import net.forbric.kernel.classloading.LoaderProbePolicy;
 import net.forbric.kernel.transform.FmlContextLoaderRewriter;
-import net.forbric.kernel.transform.ModuleClassLoaderInitInjector;
 
 /**
- * A NeoForge mod that wraps the Mixin weaver the way NeoForge lets it — through FML's
- * {@code TransformingClassLoader} to {@code FMLMixinClassProcessor.transformer} — is the one that weaves from then
- * on: the rewritten cast gets the game-side view, the view holds the kernel's weaver, and the kernel reads the weaver
- * back through {@link MixinWeaverSlot} for every class.
+ * PORT(1.21.1): FML's {@code TransformingClassLoader} view is a documented no-op on this generation.
  *
- * <p>LibJF's ASM layer is the mod that paid for it: its plugin cast the context loader to that class and got
- * {@code ForbricClassLoader}, so "Could not initialize LibJF ASM" and none of its {@code libjf:asm} patches (LibJF
- * Data Manipulation's resource-pack hook) ever ran. The walk below is the walk its {@code MixinPlugin.onLoad}
- * makes, field for field.
+ * <p>On 26.2 {@code KernelFmlTransformerView.contextLoader} fabricated FML's ClassProcessor graph around the kernel's
+ * live Mixin weaver, so a NeoForge mod (LibJF's ASM layer) that casts the context loader to
+ * {@code net.neoforged.fml.classloading.transformation.TransformingClassLoader} could walk to the weaver. NeoForge
+ * 21.1 has no such class and no such graph — this carrier is ModLauncher 11-based — so the runtime answers the REAL
+ * loader, the guest's cast then fails, and it runs without its class patches, exactly as it did before the shim.
+ *
+ * <p>What remains load-bearing is that the seam is unchanged: {@code FmlContextLoaderRewriter} still injects the
+ * call between {@code Thread.getContextClassLoader} and the cast, so porting a real 21.1 view later is a body change,
+ * not a rewiring. These tests pin that injection and that the current body is the identity.
  */
 class FmlTransformerViewTest {
-	private static final Path STAGED = Path.of(System.getenv().getOrDefault("FORBRIC_OLD", "../forbric-loader"), "run");
 	private static final String PROBE = "com.example.libjf.MixinPlugin";
 	private static final String TRANSFORMING_LOADER = "net/neoforged/fml/classloading/transformation/TransformingClassLoader";
+	private static final String VIEW = "net/forbric/kernel/runtime/KernelFmlTransformerView";
 
 	private final IMixinTransformer kernelWeaver = weaver();
 
@@ -79,74 +72,58 @@ class FmlTransformerViewTest {
 	}
 
 	@Test
-	void aNeoForgeModThatWrapsTheWeaverIsTheOneThatWeaves() throws Exception {
-		MixinWeaverSlot.install(kernelWeaver);
-		try (GameLoader game = new GameLoader(true, rewritten(plugin()))) {
-			Object loader = probe(game);
-			assertEquals(TRANSFORMING_LOADER.replace('/', '.'), loader.getClass().getName(),
-					"the cast succeeded, on FML's own class");
-
-			// LibJF's MixinPlugin.onLoad, field for field.
-			Object classTransformer = read(loader, game.loadClass(TRANSFORMING_LOADER.replace('/', '.')), "classTransformer");
-			Object set = read(classTransformer, game.loadClass(
-					"net.neoforged.fml.classloading.transformation.ClassTransformer"), "processors");
-			Map<?, ?> processors = (Map<?, ?>) read(set, game.loadClass(
-					"net.neoforged.fml.classloading.transformation.ClassProcessorSet"), "processors");
-			Object mixinId = game.loadClass("net.neoforged.neoforgespi.transformation.ClassProcessorIds")
-					.getField("MIXIN").get(null);
-			Object processor = processors.get(mixinId);
-			Class<?> processorType = game.loadClass("net.neoforged.fml.loading.mixin.FMLMixinClassProcessor");
-			assertInstanceOf(processorType, processor);
-			Field transformer = processorType.getDeclaredField("transformer");
-			transformer.setAccessible(true);
-			assertSame(kernelWeaver, transformer.get(processor), "the view holds the weaver the kernel weaves with");
-
-			// Before the write-back the kernel still weaves with its own.
-			assertSame(kernelWeaver, MixinWeaverSlot.currentOr(kernelWeaver));
-			IMixinTransformer wrapper = weaver();
-			transformer.set(processor, wrapper);
-			assertSame(wrapper, MixinWeaverSlot.currentOr(kernelWeaver), "the wrapper weaves every class after this");
-
-			// A second mod walks the same view and finds the first one's wrapper, as on NeoForge.
-			assertSame(loader, probe(game));
-		}
-	}
-
-	@Test
-	void withoutTheRewriteTheCastFailsAsItAlwaysDid() throws Exception {
-		MixinWeaverSlot.install(kernelWeaver);
-		try (GameLoader game = new GameLoader(true, plugin())) {
-			assertCastFails(game);
-		}
-	}
-
-	@Test
-	void withoutTheInitialiserFixTheViewCannotExistAndTheCastFailsAsBefore() throws Exception {
-		assumeTrue(!Object.class.getModule().isOpen("java.lang.invoke",
-				getClass().getClassLoader().getUnnamedModule()), "this JVM opened java.lang.invoke");
-		MixinWeaverSlot.install(kernelWeaver);
-		try (GameLoader game = new GameLoader(false, rewritten(plugin()))) {
-			assertCastFails(game);
-			assertSame(kernelWeaver, MixinWeaverSlot.currentOr(kernelWeaver), "no view, so nothing to read back");
-			assertCastFails(game); // and asking again neither throws anything new nor retries
-		}
-	}
-
-	@Test
-	void beforeMixinIsUpTheKernelsLoaderComesBack() throws Exception {
-		try (GameLoader game = new GameLoader(true, rewritten(plugin()))) {
-			assertCastFails(game);
-		}
-	}
-
-	@Test
-	void switchedOffTheKernelsLoaderComesBack() throws Exception {
-		MixinWeaverSlot.install(kernelWeaver);
+	void theRewriterStillInjectsTheSeamForANeoForgeModThatWalksTheWeaver() {
 		byte[] rewritten = rewritten(plugin());
-		System.setProperty(MixinWeaverSlot.SWITCH, "off");
-		try (GameLoader game = new GameLoader(true, rewritten)) {
-			assertCastFails(game);
+		ClassNode node = parse(rewritten);
+		int injected = 0;
+		for (MethodNode method : node.methods) {
+			for (AbstractInsnNode insn : method.instructions) {
+				if (insn instanceof MethodInsnNode call && call.owner.equals(VIEW) && call.name.equals("contextLoader")) {
+					assertEquals("(Ljava/lang/ClassLoader;)Ljava/lang/ClassLoader;", call.desc);
+					injected++;
+				}
+			}
 		}
+		assertEquals(1, injected, "exactly one contextLoader call must sit between the loader and its cast");
+		assertTrue(containsCast(node), "the cast stays: a failing view must fail exactly where it always did");
+	}
+
+	@Test
+	void theViewAnswersTheRealLoaderOnThisGeneration() throws Exception {
+		Path compiled = Path.of(System.getProperty("forbric.testRuntimeClasses", "build/classes/java/runtime"));
+		assumeTrue(Files.isDirectory(compiled), "runtime classes not compiled yet");
+		try (java.net.URLClassLoader loader = new java.net.URLClassLoader(new java.net.URL[] {compiled.toUri().toURL()})) {
+			Class<?> view = Class.forName(VIEW.replace('/', '.'), true, loader);
+			ClassLoader real = loader;
+			Object answer = view.getMethod("contextLoader", ClassLoader.class).invoke(null, real);
+			assertSame(real, answer, "1.21.1 has no ClassProcessor graph, so the guest gets its own loader back");
+		}
+	}
+
+	@Test
+	void anAlreadyRewrittenPluginIsIdempotent() {
+		byte[] once = rewritten(plugin());
+		assertSame(once, rewritten(once), "a second pass finds its own call and stands down");
+	}
+
+	@Test
+	void switchedOffNothingIsRewritten() {
+		System.setProperty(MixinWeaverSlot.SWITCH, "off");
+		byte[] original = plugin();
+		assertSame(original, rewritten(original));
+	}
+
+	@Test
+	void aNonNeoForgeGuestsClassIsNotTouched() {
+		byte[] original = plugin();
+		byte[] out = new FmlContextLoaderRewriter(name -> LoaderProbePolicy.Family.FORGE).transform(PROBE, original, null);
+		assertSame(original, out);
+	}
+
+	@Test
+	void withoutTheMarkerMethodNothingIsRewritten() {
+		byte[] noWalk = pluginWithoutTheWalkedField();
+		assertSame(noWalk, rewritten(noWalk), "the field-name marker is what proves the cast is a walk to the weaver");
 	}
 
 	@Test
@@ -202,26 +179,18 @@ class FmlTransformerViewTest {
 		assertTrue(!weaving.isEmpty(), "found no weaving call to check");
 	}
 
-	private static void assertCastFails(GameLoader game) {
-		InvocationTargetException thrown = assertThrows(InvocationTargetException.class, () -> probe(game));
-		assertInstanceOf(ClassCastException.class, thrown.getCause());
-	}
-
-	private static Object probe(ClassLoader game) throws Exception {
-		Method probe = Class.forName(PROBE, true, game).getMethod("onLoad");
-		return probe.invoke(null);
-	}
-
-	private static Object read(Object target, Class<?> owner, String name) throws Exception {
-		Field field = owner.getDeclaredField(name);
-		field.setAccessible(true);
-		return field.get(target);
-	}
-
 	private static byte[] rewritten(byte[] plugin) {
-		byte[] out = new FmlContextLoaderRewriter(name -> LoaderProbePolicy.Family.NEOFORGE).transform(PROBE, plugin, null);
-		assertTrue(out != plugin, "the rewriter did not touch the plugin");
-		return out;
+		return new FmlContextLoaderRewriter(name -> LoaderProbePolicy.Family.NEOFORGE).transform(PROBE, plugin, null);
+	}
+
+	private static boolean containsCast(ClassNode node) {
+		for (MethodNode method : node.methods) {
+			for (AbstractInsnNode insn : method.instructions) {
+				if (insn instanceof org.objectweb.asm.tree.TypeInsnNode cast
+						&& cast.getOpcode() == Opcodes.CHECKCAST && TRANSFORMING_LOADER.equals(cast.desc)) return true;
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -245,52 +214,35 @@ class FmlTransformerViewTest {
 		return cw.toByteArray();
 	}
 
+	/** The same cast, but with no {@code "classTransformer"} marker in the method. */
+	private static byte[] pluginWithoutTheWalkedField() {
+		ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+		cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, PROBE.replace('.', '/'), null, "java/lang/Object", null);
+		MethodVisitor mv = cw.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "onLoad", "()Ljava/lang/Object;", null, null);
+		mv.visitCode();
+		mv.visitMethodInsn(Opcodes.INVOKESTATIC, "java/lang/Thread", "currentThread", "()Ljava/lang/Thread;", false);
+		mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/Thread", "getContextClassLoader", "()Ljava/lang/ClassLoader;", false);
+		mv.visitTypeInsn(Opcodes.CHECKCAST, TRANSFORMING_LOADER);
+		mv.visitInsn(Opcodes.ARETURN);
+		mv.visitMaxs(0, 0);
+		mv.visitEnd();
+		cw.visitEnd();
+		return cw.toByteArray();
+	}
+
+	private static ClassNode parse(byte[] bytes) {
+		ClassNode node = new ClassNode();
+		new ClassReader(bytes).accept(node, 0);
+		return node;
+	}
+
 	private static IMixinTransformer weaver() {
-		return (IMixinTransformer) Proxy.newProxyInstance(IMixinTransformer.class.getClassLoader(),
+		return (IMixinTransformer) java.lang.reflect.Proxy.newProxyInstance(IMixinTransformer.class.getClassLoader(),
 				new Class<?>[] {IMixinTransformer.class}, (proxy, method, args) -> switch (method.getName()) {
 					case "hashCode" -> System.identityHashCode(proxy);
 					case "equals" -> proxy == args[0];
 					case "toString" -> "weaver@" + Integer.toHexString(System.identityHashCode(proxy));
 					default -> null;
 				});
-	}
-
-	/**
-	 * The game side as far as this path needs it: the kernel's runtime classes, the NeoForge carrier and log4j
-	 * (ClassTransformer's logger). ModuleClassLoader goes through the injector, as the kernel's chain would put it;
-	 * the plugin is defined from the bytes given.
-	 */
-	private static final class GameLoader extends URLClassLoader {
-		private final boolean fixInitialiser;
-		private final byte[] plugin;
-
-		GameLoader(boolean fixInitialiser, byte[] plugin) throws Exception {
-			super(urls(), FmlTransformerViewTest.class.getClassLoader());
-			this.fixInitialiser = fixInitialiser;
-			this.plugin = plugin;
-		}
-
-		private static URL[] urls() throws Exception {
-			Path compiled = Path.of(System.getProperty("forbric.testRuntimeClasses", "build/classes/java/runtime"));
-			Path carrier = STAGED.resolve("neoforge-runtime/neoforge-runtime.jar");
-			assumeTrue(Files.isDirectory(compiled) && Files.isRegularFile(carrier), "staged runtime classes/carrier absent");
-			String log4j = System.getProperty("forbric.log4jApiForTests", "");
-			assumeTrue(!log4j.isEmpty() && Files.isRegularFile(Path.of(log4j)), "log4j-api absent");
-			return new URL[] {compiled.toUri().toURL(), carrier.toUri().toURL(), Path.of(log4j).toUri().toURL()};
-		}
-
-		@Override
-		protected Class<?> findClass(String name) throws ClassNotFoundException {
-			if (PROBE.equals(name)) return defineClass(name, plugin, 0, plugin.length);
-			if (fixInitialiser && "net.neoforged.fml.classloading.ModuleClassLoader".equals(name)) {
-				try (InputStream in = getResourceAsStream(name.replace('.', '/') + ".class")) {
-					byte[] bytes = new ModuleClassLoaderInitInjector().transform(name, in.readAllBytes(), null);
-					return defineClass(name, bytes, 0, bytes.length);
-				} catch (java.io.IOException unreadable) {
-					throw new ClassNotFoundException(name, unreadable);
-				}
-			}
-			return super.findClass(name);
-		}
 	}
 }

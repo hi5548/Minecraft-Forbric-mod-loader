@@ -29,12 +29,14 @@ class NeoPostRegisterTailCensusTest {
 	/** NeoForge's step → the strings the kernel's copy uses to take it. */
 	private static final Map<String, List<String>> REPLICATED = new LinkedHashMap<>();
 	static {
+		// PORT(1.21.1): the era's tail is five steps. GameRuleCategory.registerModdedCategories is gone (the class
+		// does not exist) and ItemTooltipHandler.init is gone (NeoForge 21.1 has no tooltip-appender event);
+		// ClientExtensionsManager.earlyInit took their place.
 		REPLICATED.put("net/neoforged/neoforge/common/CommonHooks.modifyAttributes", List.of("net.neoforged.neoforge.common.CommonHooks", "modifyAttributes"));
 		REPLICATED.put("net/minecraft/world/entity/SpawnPlacements.fireSpawnPlacementEvent", List.of("net.minecraft.world.entity.SpawnPlacements", "fireSpawnPlacementEvent"));
 		REPLICATED.put("new net/neoforged/neoforge/event/BlockEntityTypeAddBlocksEvent", List.of("net.neoforged.neoforge.event.BlockEntityTypeAddBlocksEvent"));
 		REPLICATED.put("net/neoforged/neoforge/common/CreativeModeTabRegistry.sortTabs", List.of("sortCreativeTabs"));
-		REPLICATED.put("net/minecraft/world/level/gamerules/GameRuleCategory.registerModdedCategories", List.of("net.minecraft.world.level.gamerules.GameRuleCategory", "registerModdedCategories"));
-		REPLICATED.put("net/neoforged/neoforge/common/tooltip/ItemTooltipHandler.init", List.of("net.forbric.kernel.runtime.KernelNeoTooltips", "init"));
+		REPLICATED.put("net/neoforged/neoforge/client/extensions/common/ClientExtensionsManager.earlyInit", List.of("net.neoforged.neoforge.client.extensions.common.ClientExtensionsManager", "earlyInit"));
 	}
 
 	@Test void everyStepAfterNeoForgesRegisterLoopIsOneTheKernelTakes() throws Exception {

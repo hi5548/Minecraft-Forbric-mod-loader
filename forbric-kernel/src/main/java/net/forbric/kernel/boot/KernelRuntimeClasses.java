@@ -312,13 +312,14 @@ public final class KernelRuntimeClasses {
 		CLASSES.put("net.forbric.kernel.runtime.KernelConversions", new Entry(Origin.COMPILED, List.of()));
 		// fabric-content-registries' fuel events on NeoForge's fuel builder; FabricFuelValuesInjector calls apply.
 		CLASSES.put("net.forbric.kernel.runtime.KernelFabricFuel", new Entry(Origin.COMPILED, List.of()));
-		// Fabric's fluid models for NeoForge's completeness check; FabricFluidModelsInjector calls hasModel.
+		// PORT(1.21.1): kept loadable, but its caller (FabricFluidModelsInjector) is retired — NeoForge 21.1 has no
+		// gatherFluidModels check. See the class for the 26.2 design it preserves.
 		CLASSES.put("net.forbric.kernel.runtime.KernelFabricFluidModels", new Entry(Origin.COMPILED, List.of()));
 		// Vanilla's compostables map behind NeoForge's data map: the merged ComposterBlock's bootStrap records vanilla's
 		// own entries and its four composter sites ask the rest (CompostablesFallbackInjector); no boot-side call.
 		CLASSES.put("net.forbric.kernel.runtime.KernelCompostables", new Entry(Origin.COMPILED, List.of()));
-		// NeoForge's item tooltip appenders, built once from the kernel's copy of postRegisterEvents' tail; also the
-		// per-container delivery NeoTooltipAppendersInjector sends ItemTooltipHandler.init's event through.
+		// PORT(1.21.1): a no-op on this generation (no tooltip appenders exist); kept loadable because boot calls
+		// init() after mod registration. NeoTooltipAppendersInjector, its 26.2 sender, is retired.
 		CLASSES.put("net.forbric.kernel.runtime.KernelNeoTooltips", new Entry(Origin.COMPILED, List.of(
 				new Call("init", void.class))));
 		// A MinecraftForge brewing recipe as NeoForge's registry reads it; wrapped in PotionBrewing.Builder.add.

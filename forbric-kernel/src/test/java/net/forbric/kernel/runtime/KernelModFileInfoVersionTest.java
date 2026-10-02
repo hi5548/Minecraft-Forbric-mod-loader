@@ -3,6 +3,7 @@ package net.forbric.kernel.runtime;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -131,25 +132,48 @@ class KernelModFileInfoVersionTest {
                 .getConstructor(String.class, Path.class).newInstance("versionprobe", jar);
     }
 
-    @Test void presenceAliasesHaveAnEmptyNativeResourceViewAndRealFilesKeepTheirResources() throws Exception {
+    /**
+     * The jar-contents seam after the 1.21.1 port.
+     *
+     * <p>26.2 handed every file a {@code net.neoforged.fml.jarcontents.JarContents} — an empty one for a presence
+     * alias — which this test enumerated with a {@code JarResourceVisitor}. Neither 26.2 type exists on 1.21.1: the
+     * file's contents are a {@code cpw.mods.jarhandling.SecureJar} behind {@code KernelModFile.getSecureJar()},
+     * read through {@code findResource(String...)}. 1.21.1 has no empty {@code SecureJar} factory, so a jar-less
+     * presence alias reports null — and it must never dereference null or replay another build's resources.
+     *
+     * <p>A real file keeps its resources: {@code KernelModFile.secureJarOf} builds its {@code SecureJar} through
+     * {@link net.forbric.kernel.boot.ForgeSecureJarStandIn} — the stand-in the seeded Forge/NeoForge
+     * {@code ModFile}s already use — because the carrier's own {@code SecureJar.from(Path...)} cannot initialise off
+     * ModLauncher (its {@code <clinit>} demands ModLauncher's {@code UnionFileSystemProvider}, which the kernel
+     * replaces). {@code findResource("META-INF", "neoforge.mods.toml")} therefore resolves to this file's own
+     * entry, which the test reads back.
+     */
+    @Test void presenceAliasesHaveNoNativeResourcesAndRealFilesKeepTheirOwn() throws Exception {
         Path jar = fixture("real.jar", "META-INF/neoforge.mods.toml", "1.0.0", null);
         try (URLClassLoader runtime = runtimeLoader()) {
             Class<?> fileType = runtime.loadClass("net.forbric.kernel.runtime.KernelModFile");
-            Class<?> contentsType = runtime.loadClass("net.neoforged.fml.jarcontents.JarContents");
-            Class<?> visitorType = runtime.loadClass("net.neoforged.fml.jarcontents.JarResourceVisitor");
             for (Path source : new Path[] {null, jar}) {
                 Object file = fileType.getConstructor(String.class, Path.class).newInstance("resourceprobe", source);
-                Object contents = fileType.getMethod("getContents").invoke(file);
-                assertNotNull(contents, "a native all-mod resource visitor must not dereference null for an alias");
-                java.util.List<String> names = new java.util.ArrayList<>();
-                Object visitor = java.lang.reflect.Proxy.newProxyInstance(runtime, new Class<?>[] {visitorType}, (proxy, method, args) -> {
-                    if (method.getName().equals("visit")) names.add((String) args[0]);
-                    return null;
-                });
-                contentsType.getMethod("visitContent", String.class, visitorType).invoke(contents, "", visitor);
-                if (source == null) assertTrue(names.isEmpty(), "aliases must not replay another build's resources");
-                else assertTrue(names.contains("META-INF/neoforge.mods.toml"), names.toString());
-                contentsType.getMethod("close").invoke(contents);
+                Object secureJar = fileType.getMethod("getSecureJar").invoke(file);
+                Path found = (Path) fileType.getMethod("findResource", String[].class)
+                        .invoke(file, (Object) new String[] {"META-INF", "neoforge.mods.toml"});
+                Path filePath = (Path) fileType.getMethod("getFilePath").invoke(file);
+                assertNotNull(filePath, "the path is never null, so a native walk of the file list cannot dereference null");
+                if (source == null) {
+                    // 26.2 answered JarContents.empty(path); 1.21.1 has no such factory, so an alias has nothing.
+                    assertNull(secureJar, "a jar-less alias has no SecureJar to hand out (PORT(1.21.1))");
+                    assertNull(found, "aliases must not replay another build's resources");
+                    assertFalse(filePath.equals(jar), "an alias never answers another build's path");
+                    assertEquals("resourceprobe.jar", fileType.getMethod("getFileName").invoke(file),
+                            "an alias answers its own placeholder name");
+                } else {
+                    assertNotNull(secureJar, "a real file exposes its own SecureJar");
+                    assertNotNull(found, "a real file resolves its own META-INF/neoforge.mods.toml");
+                    assertTrue(Files.isRegularFile(found), found.toString());
+                    assertTrue(Files.readString(found).contains("modId=\"versionprobe\""),
+                            "the resolved path must be this file's own entry");
+                    assertEquals(jar, filePath, "a real file answers its own jar");
+                }
             }
         }
     }

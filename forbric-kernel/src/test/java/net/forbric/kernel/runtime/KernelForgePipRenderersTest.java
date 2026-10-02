@@ -1,100 +1,57 @@
 package net.forbric.kernel.runtime;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
-import javax.tools.ToolProvider;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.ResourceLock;
 
-/** Runs the compiled bridge with small API stand-ins; no graphics device is required. */
+/**
+ * The 1.21.1 contract of {@link KernelForgePipRenderers}: {@code build()} (its only entry point) answers with a
+ * non-null, empty map, under the switch as well.
+ *
+ * <p>This class used to drive the 26.2 surface that filled the vanilla {@code GuiRenderer} map —
+ * {@code poolRegistrations(List)}, {@code build(List)} and {@code close(Map)}, together with
+ * {@code PictureInPictureRenderer}, NeoForge's {@code PictureInPictureRendererRegistration} and Forge's
+ * {@code RegisterPictureInPictureRendererEvent}. None of those types exist on 1.21.1 (the whole
+ * {@code net.minecraft.client.gui.render} package is absent), the production class's 26.2 members were removed
+ * rather than stubbed because their parameter and return types cannot load here, and there is no registration
+ * behaviour left to assert. What can be asserted is the contract the one surviving entry point still promises to
+ * the boot side: never null, always empty, and never throwing a {@code NoSuchMethodError} at the caller.
+ */
+@ResourceLock("system-properties")
 class KernelForgePipRenderersTest {
 	@TempDir Path temporary;
 
 	@Test
-	void mixedConstructorListRetainsSingletonIdentityAndNativeRegistrationsWithoutMutatingInput() throws Exception {
-		Path runtime = Path.of("build/classes/java/runtime");
-		assumeTrue(Files.isRegularFile(runtime.resolve("net/forbric/kernel/runtime/KernelForgePipRenderers.class")));
-		Map<String, String> sources = Map.of(
-				"net.minecraft.client.renderer.state.gui.pip.PictureInPictureRenderState", "public interface PictureInPictureRenderState {}",
-				"net.minecraft.client.gui.render.pip.PictureInPictureRenderer", """
-						public class PictureInPictureRenderer {
-						 public int closes;
-						 public Class getRenderStateClass() { return getClass(); }
-						 public void close() { closes++; }
-						}
-						""",
-				"net.neoforged.neoforge.client.gui.PictureInPictureRendererRegistration", "public class PictureInPictureRendererRegistration {}",
-				"com.google.common.collect.ImmutableMap", """
-						public class ImmutableMap extends java.util.LinkedHashMap {
-						 public static Builder builder() { return new Builder(); }
-						 public static class Builder {
-						  private final ImmutableMap values = new ImmutableMap();
-						  public void put(Object key, Object value) { values.put(key, value); }
-						  public ImmutableMap buildKeepingLast() { return values; }
-						 }
-						}
-						""",
-				"net.minecraftforge.client.event.RegisterPictureInPictureRendererEvent", """
-						public class RegisterPictureInPictureRendererEvent implements net.minecraftforge.eventbus.internal.Event {
-						 public static final Object REGISTERED = new net.minecraft.client.gui.render.pip.PictureInPictureRenderer();
-						 public static final net.minecraftforge.eventbus.api.bus.EventBus BUS = event -> {
-						  ((RegisterPictureInPictureRendererEvent)event).builder.put(String.class, REGISTERED);
-						  return false;
-						 };
-						 private final com.google.common.collect.ImmutableMap.Builder builder;
-						 public RegisterPictureInPictureRendererEvent(java.util.List list, com.google.common.collect.ImmutableMap.Builder builder) { this.builder = builder; }
-						}
-						""",
-				"net.minecraftforge.eventbus.api.bus.EventBus", "public interface EventBus { boolean post(net.minecraftforge.eventbus.internal.Event event); }",
-				"net.minecraftforge.eventbus.internal.Event", "public interface Event {}",
-				"net.forbric.kernel.util.ForbricLog", """
-						public class ForbricLog {
-						 public static void info(String text, Object... args) {}
-						 public static void warn(String text, Object... args) {}
-						 public static void warn(String text, Throwable failure) { throw new AssertionError(text, failure); }
-						 public static void debug(String text) {}
-						}
-						""",
-				"net.forbric.kernel.util.Reflect", "public class Reflect { public static Throwable unwrap(Throwable t) { return t; } }");
-		List<String> args = new ArrayList<>(List.of("-d", temporary.toString()));
-		for (var entry : sources.entrySet()) {
-			Path source = temporary.resolve(entry.getKey().replace('.', '/') + ".java");
-			Files.createDirectories(source.getParent());
-			Files.writeString(source, "package " + entry.getKey().substring(0, entry.getKey().lastIndexOf('.'))
-					+ ";\n" + entry.getValue());
-			args.add(source.toString());
-		}
-		assertEquals(0, ToolProvider.getSystemJavaCompiler().run(null, null, null, args.toArray(String[]::new)));
-		try (var loader = new URLClassLoader(new URL[] {temporary.toUri().toURL(), runtime.toUri().toURL()},
-				ClassLoader.getPlatformClassLoader())) {
+	void buildIsANonNullEmptyMapWithTheSwitchOnAndOff() throws Exception {
+		Path runtime = Path.of(System.getProperty("forbric.testRuntimeClasses", "build/classes/java/runtime"));
+		assumeTrue(Files.isRegularFile(runtime.resolve("net/forbric/kernel/runtime/KernelForgePipRenderers.class")),
+				"runtime source set not compiled");
+		String property = "forbric.forgePipRenderers";
+		String previous = System.getProperty(property);
+		try (var loader = new URLClassLoader(new URL[] {runtime.toUri().toURL()}, getClass().getClassLoader())) {
 			Class<?> bridge = loader.loadClass("net.forbric.kernel.runtime.KernelForgePipRenderers");
-			Object renderer = loader.loadClass("net.minecraft.client.gui.render.pip.PictureInPictureRenderer").getConstructor().newInstance();
-			Object registration = loader.loadClass("net.neoforged.neoforge.client.gui.PictureInPictureRendererRegistration").getConstructor().newInstance();
-			Object eventRenderer = loader.loadClass("net.minecraftforge.client.event.RegisterPictureInPictureRendererEvent").getField("REGISTERED").get(null);
-			for (List<?> input : List.of(List.of(), List.of(renderer), List.of(registration), List.of(registration, renderer))) {
-				List<?> pools = (List<?>) bridge.getMethod("poolRegistrations", List.class).invoke(null, input);
-				Map<?, ?> plain = (Map<?, ?>) bridge.getMethod("build", List.class).invoke(null, input);
-				assertEquals(input.contains(registration) ? List.of(registration) : List.of(), pools);
-				assertEquals(input.contains(renderer) ? 2 : 1, plain.size());
-				assertSame(eventRenderer, plain.get(String.class), "Forge event registrations must still be served");
-				if (input.contains(renderer)) assertSame(renderer, plain.get(renderer.getClass()));
-				assertEquals(0, renderer.getClass().getField("closes").getInt(renderer));
-			}
-			// Aliases in a mutable guest map must not close the same singleton twice.
-			bridge.getMethod("close", Map.class).invoke(null, Map.of("first", renderer, "alias", renderer));
-			assertEquals(1, renderer.getClass().getField("closes").getInt(renderer));
-			var failure = assertThrows(java.lang.reflect.InvocationTargetException.class,
-					() -> bridge.getMethod("poolRegistrations", List.class).invoke(null, List.of("invalid")));
-			assertInstanceOf(IllegalArgumentException.class, failure.getCause());
+			var build = bridge.getMethod("build");
+			Map<?, ?> on = (Map<?, ?>) build.invoke(null);
+			assertNotNull(on, "a boot-side repair that assigns this map cannot receive null");
+			assertTrue(on.isEmpty(), "nothing registers picture-in-picture renderers on 1.21.1");
+
+			System.setProperty(property, "off");
+			Map<?, ?> off = (Map<?, ?>) build.invoke(null);
+			assertNotNull(off);
+			assertTrue(off.isEmpty(), "the negative control keeps the map empty rather than changing its shape");
+		} finally {
+			if (previous == null) System.clearProperty(property);
+			else System.setProperty(property, previous);
 		}
 	}
 }

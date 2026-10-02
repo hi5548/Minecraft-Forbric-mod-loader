@@ -79,9 +79,9 @@ class RegistrationEventStepsTest {
 
 	// --- the plan -----------------------------------------------------------------------------------------------
 
-	/** The real carrier's method, when it is staged: seven calls, and the two the kernel keys on among them. */
+	/** The real carrier's method, when it is staged: six calls, and the two the kernel keys on among them. */
 	@Test
-	void theRealMethodIsAStraightRunOfSevenCalls() throws Exception {
+	void theRealMethodIsAStraightRunOfSixCalls() throws Exception {
 		assumeTrue(Files.isRegularFile(NEOFORGE_RUNTIME), "neoforge-runtime.jar not staged");
 		byte[] real;
 		try (ZipFile zip = new ZipFile(NEOFORGE_RUNTIME.toFile())) {
@@ -94,7 +94,17 @@ class RegistrationEventStepsTest {
 		List<RegistrationEventSteps.Step> steps = RegistrationEventSteps.plan(real);
 
 		assertNotNull(steps, "NeoForge's init is expected to be isolatable");
-		assertEquals(7, steps.size(), steps.toString());
+		// PORT(1.21.1): NeoForge 21.1's init is six calls; 26.2 had a seventh ("cauldron interactions") whose
+		// injector/class this era does not ship. Exact set pinned so a carrier that adds or drops one is seen.
+		assertEquals(6, steps.size(), steps.toString());
+		assertEquals(List.of(
+				new RegistrationEventSteps.Step("net/neoforged/neoforge/fluids/CauldronFluidContent", "init"),
+				new RegistrationEventSteps.Step("net/neoforged/neoforge/capabilities/CapabilityHooks", "init"),
+				new RegistrationEventSteps.Step("net/neoforged/neoforge/common/world/chunk/ForcedChunkManager", "init"),
+				new RegistrationEventSteps.Step("net/neoforged/neoforge/registries/RegistryManager", "initDataMaps"),
+				new RegistrationEventSteps.Step("net/neoforged/neoforge/internal/RegistrationEvents", "modifyComponents"),
+				new RegistrationEventSteps.Step("net/neoforged/neoforge/common/world/poi/PoiTypeExtender", "extendPoiTypes")),
+				steps, steps.toString());
 		assertTrue(steps.indexOf(RegistrationEventSteps.CAPABILITIES) >= 0, steps.toString());
 		assertTrue(steps.indexOf(RegistrationEventSteps.DATA_MAPS) > steps.indexOf(RegistrationEventSteps.CAPABILITIES),
 				"capabilities before data maps, as NeoForge orders them");

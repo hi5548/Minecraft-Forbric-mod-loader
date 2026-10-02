@@ -106,10 +106,14 @@ final class PortalSpawnFixture implements AutoCloseable {
 	private static void copyCarrierHook(Path classes, String jar, String owner) throws Exception {
 		ClassNode original = new ClassNode();
 		new ClassReader(ForgeSpawnFixture.staged(jar, owner)).accept(original, 0);
-		var hook = original.methods.stream().filter(m -> m.name.equals("onTrySpawnPortal")).findFirst().orElseThrow();
 		ClassWriter writer = new ClassWriter(0);
 		writer.visit(original.version, original.access, original.name, null, "java/lang/Object", null);
-		hook.accept(writer); writer.visitEnd();
+		// ForgeEventFactory.onTrySpawnPortal delegates to the class's own private static post(Event) helper; copy
+		// it too so the real 1.21.1 hook -- not a re-typed stub -- reaches MinecraftForge.EVENT_BUS.
+		for (String name : List.of("onTrySpawnPortal", "fire", "post")) {
+			original.methods.stream().filter(m -> m.name.equals(name)).findFirst().ifPresent(m -> m.accept(writer));
+		}
+		writer.visitEnd();
 		Files.write(classes.resolve(owner.replace('.', '/') + ".class"), writer.toByteArray());
 	}
 
@@ -144,8 +148,9 @@ final class PortalSpawnFixture implements AutoCloseable {
 		out.put("net.neoforged.bus.api.Event", "package net.neoforged.bus.api; public class Event {}");
 		out.put("net.neoforged.bus.api.EventPriority", "package net.neoforged.bus.api; public enum EventPriority { LOWEST }");
 		out.put("net.neoforged.bus.api.IEventBus", "package net.neoforged.bus.api; public interface IEventBus { <T extends Event> void addListener(EventPriority p, boolean canceled, Class<T> type, java.util.function.Consumer<T> c); Event post(Event e); }");
-		out.put("net.minecraftforge.eventbus.internal.Event", "package net.minecraftforge.eventbus.internal; public interface Event {}");
-		out.put("net.minecraftforge.eventbus.api.bus.CancellableEventBus", "package net.minecraftforge.eventbus.api.bus; public interface CancellableEventBus { boolean post(net.minecraftforge.eventbus.internal.Event e); }");
+		out.put("net.minecraftforge.eventbus.api.Event", "package net.minecraftforge.eventbus.api; public class Event { private boolean canceled; public boolean isCanceled(){return canceled;} public void setCanceled(boolean c){canceled=c;} }");
+		out.put("net.minecraftforge.eventbus.api.IEventBus", "package net.minecraftforge.eventbus.api; public interface IEventBus { boolean post(Event event); }");
+		out.put("net.minecraftforge.common.MinecraftForge", "package net.minecraftforge.common; public class MinecraftForge { public static final net.minecraftforge.eventbus.api.IEventBus EVENT_BUS=fixture.PortalProbe.forgeBus; }");
 		out.put("net.neoforged.neoforge.common.NeoForge", "package net.neoforged.neoforge.common; public class NeoForge { public static final net.neoforged.bus.api.IEventBus EVENT_BUS = fixture.PortalProbe.bus; }");
 		out.put("net.neoforged.neoforge.event.level.BlockEvent", eventSource(false));
 		out.put("net.minecraftforge.event.level.BlockEvent", eventSource(true));
@@ -173,7 +178,7 @@ final class PortalSpawnFixture implements AutoCloseable {
 			 public static RuntimeException neoFailure, forgeFailure; public static Runnable nested;
 			 public static UnaryOperator<Optional<PortalShape>> neoResult = x->x, forgeResult = x->x;
 			 public static final Bus bus = new Bus();
-			 public static final net.minecraftforge.eventbus.api.bus.CancellableEventBus forgeBus = e -> {
+			 public static final net.minecraftforge.eventbus.api.IEventBus forgeBus = e -> {
 			   forgeCalls++; trace.add("forge"); if(forgeFailure!=null)throw forgeFailure; return forgeCanceled;
 			 };
 			 public static class Bus implements IEventBus {
@@ -196,8 +201,7 @@ final class PortalSpawnFixture implements AutoCloseable {
 	private static String eventSource(boolean forge) {
 		return "package " + (forge ? "net.minecraftforge" : "net.neoforged.neoforge") + ".event.level; "
 				+ "public class BlockEvent { public static class PortalSpawnEvent "
-				+ (forge ? "implements net.minecraftforge.eventbus.internal.Event" : "extends net.neoforged.bus.api.Event") + " {"
-				+ (forge ? " public static final net.minecraftforge.eventbus.api.bus.CancellableEventBus BUS = fixture.PortalProbe.forgeBus;" : "")
+				+ (forge ? "extends net.minecraftforge.eventbus.api.Event" : "extends net.neoforged.bus.api.Event") + " {"
 				+ " private final net.minecraft.world.level.LevelAccessor level; private final net.minecraft.core.BlockPos pos;"
 				+ " private final net.minecraft.world.level.portal.PortalShape shape; private boolean canceled;"
 				+ " public PortalSpawnEvent(net.minecraft.world.level.LevelAccessor l,net.minecraft.core.BlockPos p,net.minecraft.world.level.block.state.BlockState s,net.minecraft.world.level.portal.PortalShape v){level=l;pos=p;shape=v;}"
@@ -211,7 +215,7 @@ final class PortalSpawnFixture implements AutoCloseable {
 				+ "public class " + (forge ? "ForgeEventFactory" : "EventHooks") + " {"
 				+ " public static Optional<PortalShape> onTrySpawnPortal(net.minecraft.world.level.LevelAccessor l, net.minecraft.core.BlockPos p, Optional<PortalShape> shape){"
 				+ " if(shape.isEmpty())return shape; var event=new " + prefix + ".event.level.BlockEvent.PortalSpawnEvent(l,p,l.getBlockState(p),shape.get());"
-				+ (forge ? " if(event.BUS.post(event))return Optional.empty(); return fixture.PortalProbe.forgeResult.apply(shape);"
+				+ (forge ? " if(net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(event))return Optional.empty(); return fixture.PortalProbe.forgeResult.apply(shape);"
 						: "net.neoforged.neoforge.common.NeoForge.EVENT_BUS.post(event); if(event.isCanceled())return Optional.empty(); return fixture.PortalProbe.neoResult.apply(shape);")
 				+ " } public static net.minecraft.world.item.ItemStack onItemUseFinish(net.minecraft.world.entity.LivingEntity e,net.minecraft.world.item.ItemStack a,int n,net.minecraft.world.item.ItemStack b){return b;} }";
 	}

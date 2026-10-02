@@ -13,15 +13,24 @@ import org.objectweb.asm.*;
 import org.objectweb.asm.tree.*;
 import org.objectweb.asm.tree.analysis.*;
 
+import net.forbric.kernel.TestFixtures;
+
+/**
+ * PORT(1.21.1): the merged Minecraft calls the carriers' client hooks against {@code ParticleEngine} (26.2's
+ * {@code ParticleResources}), and {@code ModelManager.reload} is vanilla's six-argument reload whose head runs
+ * NeoForge's geometry loader. Both repairs are re-derived onto those shapes.
+ */
 class MergedBaseForgeClientInitTest {
-    private static final Path STAGE = Path.of(System.getenv().getOrDefault("FORBRIC_OLD", "../forbric-loader"), "run");
     private static final String MINECRAFT = "net/minecraft/client/Minecraft";
     private static final String MODELS = "net/minecraft/client/resources/model/ModelManager";
     private static final String NEO = "net/neoforged/neoforge/client/ClientHooks";
     private static final String KERNEL = "net/forbric/kernel/runtime/KernelForgeClientInit";
     private static final String INIT = "(Lnet/minecraft/client/Minecraft;Lnet/minecraft/server/packs/resources/ReloadableResourceManager;)V";
-    private static final String PARTICLES = "(Lnet/minecraft/client/particle/ParticleResources;)V";
-    private static final String RELOAD = "(Lnet/minecraft/server/packs/resources/PreparableReloadListener$SharedState;Ljava/util/concurrent/Executor;Lnet/minecraft/server/packs/resources/PreparableReloadListener$PreparationBarrier;Ljava/util/concurrent/Executor;)Ljava/util/concurrent/CompletableFuture;";
+    private static final String PARTICLES = "(Lnet/minecraft/client/particle/ParticleEngine;)V";
+    private static final String RELOAD = "(Lnet/minecraft/server/packs/resources/PreparableReloadListener$PreparationBarrier;"
+            + "Lnet/minecraft/server/packs/resources/ResourceManager;Lnet/minecraft/util/profiling/ProfilerFiller;"
+            + "Lnet/minecraft/util/profiling/ProfilerFiller;Ljava/util/concurrent/Executor;Ljava/util/concurrent/Executor;)"
+            + "Ljava/util/concurrent/CompletableFuture;";
 
     @AfterEach void restoreSwitch() { System.clearProperty("forbric.forgeClientInit"); }
 
@@ -94,18 +103,23 @@ class MergedBaseForgeClientInitTest {
         byte[] before = bytes(existing);
         assertFalse(ForbricMergedBaseCompatTransformer.restoreForgeGeometryReload(existing));
         assertArrayEquals(before, bytes(existing));
-        ClassNode shifted = parse(input);
-        AbstractInsnNode first = code(method(shifted, "reload", RELOAD).instructions.getFirst());
-        ((VarInsnNode) first).var = 2;
-        before = bytes(shifted);
-        assertFalse(ForbricMergedBaseCompatTransformer.restoreForgeGeometryReload(shifted));
-        assertArrayEquals(before, bytes(shifted));
+
+        // A reload body that does not run NeoForge's geometry loader is not this seam either.
+        ClassNode unanchored = parse(input);
+        MethodNode reload = method(unanchored, "reload", RELOAD);
+        for (AbstractInsnNode insn : reload.instructions.toArray()) {
+            if (insn instanceof MethodInsnNode call && call.owner.equals("net/neoforged/neoforge/client/model/geometry/GeometryLoaderManager")
+                    && call.name.equals("init")) reload.instructions.remove(insn);
+        }
+        before = bytes(unanchored);
+        assertFalse(ForbricMergedBaseCompatTransformer.restoreForgeGeometryReload(unanchored));
+        assertArrayEquals(before, bytes(unanchored));
     }
 
     @Test void runtimeCallsLinkAgainstBothActualCarriersAndMergedOptions() throws Exception {
         for (String family : List.of("forge", "neoforge")) {
             String owner = family.equals("forge") ? "net/minecraftforge/client/ForgeHooksClient" : NEO;
-            ClassNode node = parse(read(STAGE.resolve(family + "-runtime/" + family + "-runtime.jar"), owner));
+            ClassNode node = parse(read(TestFixtures.stagedRoot().resolve(family + "-runtime/" + family + "-runtime.jar"), owner));
             for (String name : List.of("initClientHooks", "onRegisterParticleProviders")) {
                 MethodNode hook = method(node, name, name.equals("initClientHooks") ? INIT : PARTICLES);
                 assertEquals(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC,
@@ -114,10 +128,14 @@ class MergedBaseForgeClientInitTest {
         }
         ClassNode options = parse(game("net/minecraft/client/Options"));
         assertTrue((method(options, "load", "(Z)V").access & Opcodes.ACC_PUBLIC) != 0);
-        ClassNode forgeModels = parse(read(STAGE.resolve("forge-patched/patched-mc-forge-26.2.jar"), MODELS));
-        MethodInsnNode first = (MethodInsnNode) code(method(forgeModels, "reload", RELOAD).instructions.getFirst());
-        assertEquals("net/minecraftforge/client/model/geometry/GeometryLoaderManager", first.owner);
-        assertEquals("init", first.name);
+
+        // MinecraftForge's own patched ModelManager inits ITS geometry loader; the merged base's inits NeoForge's,
+        // which is why the kernel adds Forge's on top (the repair above).
+        Path forgePatched = TestFixtures.stagedJar("forge-patched", "patched-mc-forge-");
+        assumeTrue(forgePatched != null && Files.isRegularFile(forgePatched), "staged forge-patched base absent");
+        ClassNode forgeModels = parse(read(forgePatched, MODELS));
+        assertTrue(calls(forgeModels, "net/minecraftforge/client/model/geometry/GeometryLoaderManager", "init") >= 1,
+                "MinecraftForge's patched reload runs its own geometry loader");
     }
 
     private static byte[] baseline(String owner) throws Exception {
@@ -129,7 +147,11 @@ class MergedBaseForgeClientInitTest {
     private static byte[] transform(String owner, byte[] input) {
         return new ForbricMergedBaseCompatTransformer().transform(owner.replace('/', '.'), input, null);
     }
-    private static byte[] game(String owner) throws Exception {return read(STAGE.resolve("merged-base/patched-mc-merged-26.2.jar"), owner);}
+    private static byte[] game(String owner) throws Exception {
+        Path base = TestFixtures.mergedBase();
+        assumeTrue(base != null && Files.isRegularFile(base), "staged merged base absent");
+        return read(base, owner);
+    }
     private static byte[] read(Path jar, String owner) throws Exception {
         assumeTrue(Files.isRegularFile(jar), "staged jar absent: " + jar);
         try (ZipFile zip = new ZipFile(jar.toFile())) {return zip.getInputStream(zip.getEntry(owner + ".class")).readAllBytes();}

@@ -65,11 +65,15 @@ public enum ForeignType {
 			"net.neoforged.api.distmarker.Dist"),
 	EVENT_HOOKS("net.minecraftforge.common.ForgeHooks",
 			"net.neoforged.neoforge.event.EventHooks"),
+	// PORT(1.21.1): the era's Forge ships EventBus 6 (net.minecraftforge.eventbus.api.{Event,IEventBus,
+	// IEventListener}), not the 26.2 EventBus 7 records/traits (internal.Event, bus.EventBus, listener.EventListener).
+	// Verified with javap against the staged forge-runtime.jar; the older names simply do not exist there, so every
+	// reflective lookup keyed on them found nothing and the transform never fired.
 	/** The base of every event each family's bus dispatches (EventChainAuditInjector wraps both dispatches). */
-	EVENT("net.minecraftforge.eventbus.internal.Event",
+	EVENT("net.minecraftforge.eventbus.api.Event",
 			"net.neoforged.bus.api.Event"),
-	EVENT_BUS("net.minecraftforge.eventbus.api.bus.EventBus", "net.neoforged.bus.EventBus"),
-	EVENT_LISTENER("net.minecraftforge.eventbus.api.listener.EventListener", "net.neoforged.bus.api.EventListener"),
+	EVENT_BUS("net.minecraftforge.eventbus.api.IEventBus", "net.neoforged.bus.api.IEventBus"),
+	EVENT_LISTENER("net.minecraftforge.eventbus.api.IEventListener", "net.neoforged.bus.api.EventListener"),
 	DATAPACK_NEW_REGISTRY_EVENT("net.minecraftforge.registries.DataPackRegistryEvent$NewRegistry",
 			"net.neoforged.neoforge.registries.DataPackRegistryEvent$NewRegistry"),
 	DATAPACK_REGISTRY_DATA("net.minecraftforge.registries.DataPackRegistryEvent$DataPackRegistryData",
@@ -137,7 +141,9 @@ public enum ForeignType {
 	// button is bound to is a byte-merge outcome, and naming only the winner would make the replacement quietly
 	// conditional on a merge detail that has changed before.
 	MOD_LIST_SCREEN("net.minecraftforge.client.gui.ModListScreen",
-			"net.neoforged.neoforge.client.gui.modlist.ModListScreen"),
+			// PORT(1.21.1): NeoForge 21.1 keeps the Mods screen at client.gui.ModListScreen; the modlist sub-package
+			// is a later generation's move (verified against the staged neoforge-runtime.jar).
+			"net.neoforged.neoforge.client.gui.ModListScreen"),
 	MOD_BUS_EVENT("net.minecraftforge.fml.event.IModBusEvent",
 			"net.neoforged.fml.event.IModBusEvent"),
 	MOD_CONFIG_TYPE("net.minecraftforge.fml.config.ModConfig$Type",

@@ -21,12 +21,14 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeSet;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -63,13 +65,13 @@ class KernelForgeGatherStatesTest {
 	void everyGatherStateIsRecordedOnceTheKernelHasRunThem() throws Exception {
 		ClassLoader cl = fixture(true);
 		Object loadRegistries = state(cl, "net.minecraftforge.common.ForgeStatesProvider", "LOAD_REGISTRIES");
-		assertFalse(hasCompleted(cl, loadRegistries), "the stage the kernel replaced never recorded anything");
+		assertFalse(completed(cl).contains(loadRegistries), "the stage the kernel replaced never recorded anything");
 
 		assertEquals(6, KernelLifecycle.publishForgeGatherStates(cl));
-		assertTrue(hasCompleted(cl, loadRegistries), "Sheets' question now has the answer MinecraftForge would give");
+		assertTrue(completed(cl).contains(loadRegistries), "Sheets' question now has the answer MinecraftForge would give");
 		for (String entry : KernelLifecycle.FORGE_GATHER_STATES) {
 			int hash = entry.indexOf('#');
-			assertTrue(hasCompleted(cl, state(cl, entry.substring(0, hash), entry.substring(hash + 1))), entry);
+			assertTrue(completed(cl).contains(state(cl, entry.substring(0, hash), entry.substring(hash + 1))), entry);
 		}
 		assertEquals(0, KernelLifecycle.publishForgeGatherStates(cl), "a second call adds and re-runs nothing");
 	}
@@ -78,7 +80,7 @@ class KernelForgeGatherStatesTest {
 	void anInvalidLoadingStateCompletesNothing() throws Exception {
 		ClassLoader cl = fixture(false);
 		assertEquals(0, KernelLifecycle.publishForgeGatherStates(cl));
-		assertFalse(hasCompleted(cl, state(cl, "net.minecraftforge.common.ForgeStatesProvider", "LOAD_REGISTRIES")),
+		assertFalse(completed(cl).contains(state(cl, "net.minecraftforge.common.ForgeStatesProvider", "LOAD_REGISTRIES")),
 				"a failed load does not complete its states, natively or here");
 	}
 
@@ -87,7 +89,7 @@ class KernelForgeGatherStatesTest {
 		System.setProperty(KernelLifecycle.FORGE_LOADING_STATES, "off");
 		ClassLoader cl = fixture(true);
 		assertEquals(0, KernelLifecycle.publishForgeGatherStates(cl));
-		assertFalse(hasCompleted(cl, state(cl, "net.minecraftforge.common.ForgeStatesProvider", "LOAD_REGISTRIES")));
+		assertFalse(completed(cl).contains(state(cl, "net.minecraftforge.common.ForgeStatesProvider", "LOAD_REGISTRIES")));
 	}
 
 	/** The server records them at the end of its registration window, the client after the deferred Forge mods. */
@@ -113,11 +115,15 @@ class KernelForgeGatherStatesTest {
 		assumeTrue(Files.isRegularFile(jar), jar + " absent");
 		try (ZipFile zip = new ZipFile(jar.toFile())) {
 			ClassNode loader = read(zip, MOD_LOADER);
-			FieldNode set = loader.fields.stream().filter(f -> f.name.equals("COMPLETED_STATES")).findFirst().orElseThrow();
-			assertEquals("Ljava/util/HashSet;", set.desc);
-			assertTrue((set.access & Opcodes.ACC_STATIC) != 0);
+			// PORT(1.21.1): Forge 52's ModLoader is an instance: a per-loader `completedStates` Set<IModLoadingState>,
+			// reached through ModLoader.get(), and hasCompletedState(String) looks a state up by name then contains().
+			FieldNode set = loader.fields.stream().filter(f -> f.name.equals("completedStates")).findFirst().orElseThrow();
+			assertEquals("Ljava/util/Set;", set.desc);
+			assertTrue((set.access & Opcodes.ACC_STATIC) == 0, "the completed set is per-loader now, not static");
+			assertTrue(loader.methods.stream().anyMatch(m -> m.name.equals("get")
+					&& (m.access & Opcodes.ACC_STATIC) != 0), "the loader is reached through ModLoader.get()");
 			MethodNode has = loader.methods.stream().filter(m -> m.name.equals("hasCompletedState")).findFirst().orElseThrow();
-			assertTrue(reads(has, "COMPLETED_STATES") && calls(has, "contains"), "hasCompletedState is a set lookup");
+			assertTrue(reads(has, "completedStates") && calls(has, "contains"), "hasCompletedState is a set lookup");
 
 			Map<String, String> phases = new HashMap<>();
 			phases.putAll(phasesOf(read(zip, "net/minecraftforge/fml/core/ModStateProvider")));
@@ -126,17 +132,28 @@ class KernelForgeGatherStatesTest {
 				String field = entry.substring(entry.indexOf('#') + 1);
 				assertEquals("GATHER", phases.get(field), entry + " is not a GATHER state on this carrier");
 			}
-			assertEquals("COMPLETE", phases.get("FREEZE_DATA"), "the freeze is not claimed, and is not a gather state");
+			// The freeze field is FREEZE (its ModLoadingState name is FREEZE_DATA), and it is COMPLETE, not claimed.
+			assertEquals("COMPLETE", phases.get("FREEZE"), "the freeze is not claimed, and is not a gather state");
 		}
 	}
 
-	/** Sheets is the one reader of the set in the merged game and both carriers; a new one should be looked at. */
+	/**
+	 * The tripwire for a new reader of Forge's completed-state set.
+	 *
+	 * <p>PORT(1.21.1): in 26.2 the merged base's {@code Sheets.<clinit>} asked
+	 * {@code ModLoader.hasCompletedState(LOAD_REGISTRIES)} to decide whether it had loaded too early. The 1.21.1
+	 * merge took NeoForge's guard instead ({@code CommonModLoader.areRegistriesLoaded()}), so nothing in the
+	 * staged merged base or either runtime reads Forge's set (verified by scanning for callers, not by name).
+	 * The kernel still records the gather states — a Forge mod may ask, and a Forge-won merge would read them —
+	 * and this pins that no NEW reader appeared silently.
+	 */
 	@Test
-	void sheetsIsTheOnlyReaderOfTheCompletedStates() throws Exception {
+	void noStagedClassReadsForgeCompletedStates() throws Exception {
 		Path run = run();
-		List<Path> jars = List.of(run.resolve("merged-base/patched-mc-merged-26.2.jar"), carrier(),
+		// The merged base carries the Minecraft version in its name; TestFixtures resolves whichever was staged.
+		List<Path> jars = List.of(net.forbric.kernel.TestFixtures.mergedBase(), carrier(),
 				run.resolve("neoforge-runtime/neoforge-runtime.jar"));
-		for (Path jar : jars) assumeTrue(Files.isRegularFile(jar), jar + " absent");
+		for (Path jar : jars) assumeTrue(jar != null && Files.isRegularFile(jar), jar + " absent");
 		TreeSet<String> readers = new TreeSet<>();
 		byte[] needle = "hasCompletedState".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
 		for (Path jar : jars) {
@@ -156,7 +173,8 @@ class KernelForgeGatherStatesTest {
 				}
 			}
 		}
-		assertEquals(new TreeSet<>(List.of("net/minecraft/client/renderer/Sheets")), readers);
+		assertEquals(new TreeSet<>(), readers,
+				"something new reads ModLoader.hasCompletedState — decide whether it needs the gathered states");
 	}
 
 	private static boolean calledAfter(ClassNode node, String method, String first, String then) {
@@ -170,21 +188,28 @@ class KernelForgeGatherStatesTest {
 		return seen >= 0 && at > seen;
 	}
 
-	/** Which phase each static field of a states class is built with: the ModLoadingPhase or gather/complete call before its putstatic. */
+	/**
+	 * Which phase each field of a states class is built with: the ModLoadingPhase or gather/complete call before
+	 * its put. PORT(1.21.1): on Forge 52 the states are instance fields built in the constructor with PUTFIELD, not
+	 * static fields in {@code <clinit>} with PUTSTATIC, so both method bodies and both put opcodes are read.
+	 */
 	private static Map<String, String> phasesOf(ClassNode states) {
 		Map<String, String> out = new HashMap<>();
-		MethodNode clinit = states.methods.stream().filter(m -> m.name.equals("<clinit>")).findFirst().orElseThrow();
-		String phase = null;
-		for (AbstractInsnNode insn : clinit.instructions) {
-			if (insn instanceof FieldInsnNode field && field.getOpcode() == Opcodes.GETSTATIC
-					&& field.owner.equals("net/minecraftforge/fml/ModLoadingPhase")) phase = field.name;
-			if (insn instanceof MethodInsnNode call && call.owner.equals(states.name) && call.getOpcode() == Opcodes.INVOKESTATIC) {
-				if (call.name.equals("gather")) phase = "GATHER";
-				if (call.name.equals("complete")) phase = "COMPLETE";
-			}
-			if (insn instanceof FieldInsnNode field && field.getOpcode() == Opcodes.PUTSTATIC && field.owner.equals(states.name)) {
-				out.put(field.name, phase);
-				phase = null;
+		for (MethodNode init : states.methods) {
+			if (!init.name.equals("<clinit>") && !init.name.equals("<init>")) continue;
+			String phase = null;
+			for (AbstractInsnNode insn : init.instructions) {
+				if (insn instanceof FieldInsnNode field && field.getOpcode() == Opcodes.GETSTATIC
+						&& field.owner.equals("net/minecraftforge/fml/ModLoadingPhase")) phase = field.name;
+				if (insn instanceof MethodInsnNode call && call.owner.equals(states.name) && call.getOpcode() == Opcodes.INVOKESTATIC) {
+					if (call.name.equals("gather")) phase = "GATHER";
+					if (call.name.equals("complete")) phase = "COMPLETE";
+				}
+				if (insn instanceof FieldInsnNode field && (field.getOpcode() == Opcodes.PUTSTATIC || field.getOpcode() == Opcodes.PUTFIELD)
+						&& field.owner.equals(states.name)) {
+					out.put(field.name, phase);
+					phase = null;
+				}
 			}
 		}
 		return out;
@@ -218,42 +243,60 @@ class KernelForgeGatherStatesTest {
 		return Class.forName(holder, true, cl).getField(field).get(null);
 	}
 
-	private static boolean hasCompleted(ClassLoader cl, Object state) throws Exception {
-		return (Boolean) cl.loadClass(MOD_LOADER.replace('/', '.')).getMethod("hasCompletedState", Object.class).invoke(null, state);
+	private static Set<?> completed(ClassLoader cl) throws Exception {
+		Object loader = cl.loadClass(MOD_LOADER.replace('/', '.')).getMethod("get").invoke(null);
+		Field field = loader.getClass().getDeclaredField("completedStates");
+		field.setAccessible(true);
+		return (Set<?>) field.get(loader);
 	}
 
-	/** The carrier's shape in miniature: the set, the validity flag, the lookup, and the two state holders. */
+	/**
+	 * The carrier's shape in miniature: a static {@code get()} returning the one loader, the per-loader
+	 * {@code completedStates} set, the validity flag, and the two state holders. Mirrors Forge 52 (1.21.1), where
+	 * ModLoader is an instance; the 26.2 fixture's static COMPLETED_STATES / static hasCompletedState(Object).
+	 */
 	private static ClassLoader fixture(boolean valid) {
 		Map<String, byte[]> classes = new HashMap<>();
 		ClassWriter loader = new ClassWriter(ClassWriter.COMPUTE_MAXS);
 		loader.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, MOD_LOADER, null, "java/lang/Object", null);
-		loader.visitField(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC | Opcodes.ACC_FINAL, "COMPLETED_STATES", "Ljava/util/HashSet;", null, null).visitEnd();
+		loader.visitField(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC | Opcodes.ACC_FINAL, "INSTANCE", "L" + MOD_LOADER + ";", null, null).visitEnd();
+		loader.visitField(Opcodes.ACC_PRIVATE | Opcodes.ACC_FINAL, "completedStates", "Ljava/util/Set;", null, null).visitEnd();
 		loader.visitField(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC, "loadingStateValid", "Z", null, null).visitEnd();
 		MethodVisitor clinit = loader.visitMethod(Opcodes.ACC_STATIC, "<clinit>", "()V", null, null);
 		clinit.visitCode();
-		clinit.visitTypeInsn(Opcodes.NEW, "java/util/HashSet");
+		clinit.visitTypeInsn(Opcodes.NEW, MOD_LOADER);
 		clinit.visitInsn(Opcodes.DUP);
-		clinit.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/util/HashSet", "<init>", "()V", false);
-		clinit.visitFieldInsn(Opcodes.PUTSTATIC, MOD_LOADER, "COMPLETED_STATES", "Ljava/util/HashSet;");
+		clinit.visitMethodInsn(Opcodes.INVOKESPECIAL, MOD_LOADER, "<init>", "()V", false);
+		clinit.visitFieldInsn(Opcodes.PUTSTATIC, MOD_LOADER, "INSTANCE", "L" + MOD_LOADER + ";");
 		clinit.visitInsn(valid ? Opcodes.ICONST_1 : Opcodes.ICONST_0);
 		clinit.visitFieldInsn(Opcodes.PUTSTATIC, MOD_LOADER, "loadingStateValid", "Z");
 		clinit.visitInsn(Opcodes.RETURN);
 		clinit.visitMaxs(0, 0);
 		clinit.visitEnd();
+		MethodVisitor init = loader.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null);
+		init.visitCode();
+		init.visitVarInsn(Opcodes.ALOAD, 0);
+		init.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false);
+		init.visitVarInsn(Opcodes.ALOAD, 0);
+		init.visitTypeInsn(Opcodes.NEW, "java/util/HashSet");
+		init.visitInsn(Opcodes.DUP);
+		init.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/util/HashSet", "<init>", "()V", false);
+		init.visitFieldInsn(Opcodes.PUTFIELD, MOD_LOADER, "completedStates", "Ljava/util/Set;");
+		init.visitInsn(Opcodes.RETURN);
+		init.visitMaxs(0, 0);
+		init.visitEnd();
+		MethodVisitor get = loader.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "get", "()L" + MOD_LOADER + ";", null, null);
+		get.visitCode();
+		get.visitFieldInsn(Opcodes.GETSTATIC, MOD_LOADER, "INSTANCE", "L" + MOD_LOADER + ";");
+		get.visitInsn(Opcodes.ARETURN);
+		get.visitMaxs(0, 0);
+		get.visitEnd();
 		MethodVisitor validity = loader.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "isLoadingStateValid", "()Z", null, null);
 		validity.visitCode();
 		validity.visitFieldInsn(Opcodes.GETSTATIC, MOD_LOADER, "loadingStateValid", "Z");
 		validity.visitInsn(Opcodes.IRETURN);
 		validity.visitMaxs(0, 0);
 		validity.visitEnd();
-		MethodVisitor has = loader.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "hasCompletedState", "(Ljava/lang/Object;)Z", null, null);
-		has.visitCode();
-		has.visitFieldInsn(Opcodes.GETSTATIC, MOD_LOADER, "COMPLETED_STATES", "Ljava/util/HashSet;");
-		has.visitVarInsn(Opcodes.ALOAD, 0);
-		has.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/util/HashSet", "contains", "(Ljava/lang/Object;)Z", false);
-		has.visitInsn(Opcodes.IRETURN);
-		has.visitMaxs(0, 0);
-		has.visitEnd();
 		loader.visitEnd();
 		classes.put(MOD_LOADER.replace('/', '.'), loader.toByteArray());
 

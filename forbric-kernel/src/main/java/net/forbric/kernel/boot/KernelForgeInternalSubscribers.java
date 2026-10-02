@@ -33,7 +33,6 @@ import net.forbric.kernel.util.Reflect;
 
 /** Registers the Forge carrier's own subscribers, without re-posting any client or gameplay event. */
 public final class KernelForgeInternalSubscribers {
-    static final String FML_LOGIC = "net.minecraftforge.fml.javafmlmod.AutomaticEventSubscriber$EventBusSubscriberLogic";
     private static final Map<ClassLoader, Set<String>> ATTEMPTED = new WeakHashMap<>();
 
     private KernelForgeInternalSubscribers() {}
@@ -128,12 +127,19 @@ public final class KernelForgeInternalSubscribers {
         return new Result(registered, duplicate, wrongSide, foreign, noBus, failed);
     }
 
-    /** The native per-method registrar supports one-listener classes and Forge's own event validation rules. */
+    /**
+     * The native registrar for EventBus 6. FML's own auto-subscribe path is
+     * {@code AutomaticEventSubscriber.inject(ModContainer, ModFileScanData, ClassLoader)}, whose tail resolves the
+     * annotation's {@code Bus} constant and calls {@code Bus.bus().get().register(Class)}. There is no
+     * {@code register(BusGroup, Class)} and no separate cancellable/plain bus: {@code Bus.FORGE} is the game bus and
+     * {@code Bus.MOD} the active container's own bus — which is why the baseline context must be active while the
+     * MOD supplier is read.
+     */
     private static final class NativeRegistrar implements Registrar {
         private final ClassLoader loader;
         private final KernelForgeModContext.Handle baseline;
-        private Method register;
-        private Object defaultGroup;
+        private Class<?> busEnum;
+        private Method busSupplier, supplierGet;
 
         NativeRegistrar(ClassLoader loader, KernelForgeModContext.Handle baseline) {
             this.loader = loader;
@@ -142,19 +148,14 @@ public final class KernelForgeInternalSubscribers {
 
         @Override
         public void register(KernelEventSubscribers.Subscriber subscriber, KernelEventSubscribers.BusChoice bus) throws Exception {
-            if (register == null) {
-                Class<?> groupType = Class.forName("net.minecraftforge.eventbus.api.bus.BusGroup", false, loader);
-                defaultGroup = groupType.getField("DEFAULT").get(null);
-                Class<?> logic = Class.forName(FML_LOGIC, false, loader);
-                register = logic.getMethod("register", groupType, Class.class);
-                register.setAccessible(true);
+            if (bus == KernelEventSubscribers.BusChoice.SKIP) {
+                throw new IllegalStateException("unselected subscriber reached the native registrar");
             }
-            Object group = switch (bus) {
-                case DEFAULT -> defaultGroup;
-                case MOD -> baseline.busGroup();
-                case AUTO -> null; // FML chooses DEFAULT or the active mod's group from each event type.
-                case SKIP -> throw new IllegalStateException("unselected subscriber reached the native registrar");
-            };
+            if (busEnum == null) {
+                busEnum = Class.forName("net.minecraftforge.fml.common.Mod$EventBusSubscriber$Bus", false, loader);
+                busSupplier = busEnum.getMethod("bus");
+                supplierGet = java.util.function.Supplier.class.getMethod("get");
+            }
             Object previous = null;
             Object contextInstance = null;
             Method activate = null;
@@ -170,8 +171,14 @@ public final class KernelForgeInternalSubscribers {
             }
             try {
                 if (activate != null) activate.invoke(contextInstance, baseline.container());
+                // EventBus 6 has no null-group "route per event type": FORGE is the game bus, MOD the owning mod's.
+                // AUTO ("BOTH") cannot come from a real annotation on this carrier (Bus has only FORGE/MOD); treat
+                // it as Forge's own default rather than dropping the subscriber.
+                boolean mod = bus == KernelEventSubscribers.BusChoice.MOD;
+                Object constant = busEnum.getField(mod ? "MOD" : "FORGE").get(null);
+                Object eventBus = supplierGet.invoke(busSupplier.invoke(constant));
                 Class<?> type = Class.forName(subscriber.className(), true, loader);
-                register.invoke(null, group, type);
+                eventBus.getClass().getMethod("register", Object.class).invoke(eventBus, type);
             } finally {
                 if (activate != null) activate.invoke(contextInstance, previous);
             }

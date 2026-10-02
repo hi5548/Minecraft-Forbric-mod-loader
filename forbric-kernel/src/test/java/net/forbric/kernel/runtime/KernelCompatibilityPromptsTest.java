@@ -19,7 +19,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.ResourceLock;
 
-/** Executes the compiled GAME helper against recording game boundaries; no window or save is touched. */
+/**
+ * Executes the compiled GAME helper against recording game boundaries; no window or save is touched.
+ *
+ * <p>The compiled stub models 1.21.1's screen management on {@code Minecraft} itself — the public {@code screen}
+ * field, {@code setScreen(Screen)}, {@code getOverlay()}, {@code disconnect()} — rather than 26.2's
+ * {@code Minecraft.gui.{screen(),setScreen(),overlay()}} and {@code disconnectWithSavingScreen()}.
+ */
 @ResourceLock("ModCatalog") @ResourceLock("system-properties")
 class KernelCompatibilityPromptsTest {
 	@TempDir Path tmp;
@@ -125,7 +131,7 @@ class KernelCompatibilityPromptsTest {
 
 	@Test void failedScreenPresentationCannotBeMistakenForConsent() throws Exception {
 		try (Fixture fixture = fixture()) {
-			fixture.enterWorld(); fixture.gui.getClass().getField("fail").setBoolean(fixture.gui, true);
+			fixture.enterWorld(); fixture.minecraft.getClass().getField("fail").setBoolean(fixture.minecraft, true);
 			loseFeature(); fixture.tick();
 			assertEquals(List.of("save", "stop"), fixture.events());
 			CompatibilityDecision.queue();
@@ -136,7 +142,7 @@ class KernelCompatibilityPromptsTest {
 	@Test void aReplacingModCannotDismissTheWarningAndLeaveThePlayerInTheWorld() throws Exception {
 		try (Fixture fixture = fixture()) {
 			fixture.enterWorld(); loseFeature(); fixture.tick();
-			fixture.gui.getClass().getField("current").set(fixture.gui, null);
+			fixture.minecraft.getClass().getField("screen").set(fixture.minecraft, null);
 			fixture.tick();
 			assertEquals(List.of("screen:KernelCompatibilityScreen", "screen:KernelCompatibilityScreen"), fixture.events(),
 					"the warning comes straight back");
@@ -193,9 +199,9 @@ class KernelCompatibilityPromptsTest {
 
 	@Test void anActiveLoadingOverlayDefersThePromptWithoutLosingIt() throws Exception {
 		try (Fixture fixture = fixture()) {
-			fixture.gui.getClass().getField("loading").setBoolean(fixture.gui, true);
+			fixture.minecraft.getClass().getField("loading").setBoolean(fixture.minecraft, true);
 			loseFeature(); fixture.tick(); assertNull(fixture.screen());
-			fixture.gui.getClass().getField("loading").setBoolean(fixture.gui, false);
+			fixture.minecraft.getClass().getField("loading").setBoolean(fixture.minecraft, false);
 			fixture.tick(); assertEquals("KernelCompatibilityScreen", fixture.screen().getClass().getSimpleName());
 		}
 	}
@@ -204,27 +210,21 @@ class KernelCompatibilityPromptsTest {
 		Map<String, String> sources = Map.ofEntries(
 				Map.entry("net/minecraft/client/Minecraft.java", """
 					package net.minecraft.client;
+					import net.minecraft.client.gui.screens.Overlay;
+					import net.minecraft.client.gui.screens.Screen;
 					public class Minecraft {
-					 public final net.minecraft.client.gui.Gui gui = new net.minecraft.client.gui.Gui();
+					 public Screen screen;
 					 public net.minecraft.client.multiplayer.ClientLevel level;
 					 public static final java.util.List<String> events = new java.util.ArrayList<>();
-					 public boolean running = true;
+					 public boolean running = true; public boolean loading; public boolean fail;
 					 public boolean isRunning() { return running; }
-					 public void disconnectWithSavingScreen() { events.add("save"); level = null; }
-					 public void stop() { events.add("stop"); running = false; }
-					}
-					"""),
-				Map.entry("net/minecraft/client/gui/Gui.java", """
-					package net.minecraft.client.gui;
-					import net.minecraft.client.gui.screens.*;
-					public class Gui {
-					 public Screen current; public boolean loading; public boolean fail;
-					 public Screen screen() { return current; }
-					 public Overlay overlay() { return loading ? new Overlay() : null; }
-					 public void setScreen(Screen screen) {
+					 public Overlay getOverlay() { return loading ? new Overlay() : null; }
+					 public void setScreen(Screen next) {
 					  if (fail) throw new IllegalStateException("cannot draw");
-					  current = screen; net.minecraft.client.Minecraft.events.add("screen:" + (screen == null ? "null" : screen.getClass().getSimpleName()));
+					  screen = next; events.add("screen:" + (next == null ? "null" : next.getClass().getSimpleName()));
 					 }
+					 public void disconnect() { events.add("save"); level = null; }
+					 public void stop() { events.add("stop"); running = false; }
 					}
 					"""),
 				Map.entry("net/minecraft/client/gui/screens/Screen.java", """
@@ -232,6 +232,7 @@ class KernelCompatibilityPromptsTest {
 					public class Screen {
 					 public void onClose() {} protected void init() {}
 					 protected void setInitialFocus(net.minecraft.client.gui.components.events.GuiEventListener item) {}
+					 public java.util.List<net.minecraft.client.gui.components.events.GuiEventListener> children() { return java.util.List.of(); }
 					}
 					"""),
 				Map.entry("net/minecraft/client/gui/screens/ConfirmScreen.java", """
@@ -239,10 +240,10 @@ class KernelCompatibilityPromptsTest {
 					import net.minecraft.network.chat.Component;
 					import it.unimi.dsi.fastutil.booleans.BooleanConsumer;
 					public class ConfirmScreen extends Screen {
-					 protected net.minecraft.client.gui.components.Button noButton;
+					 protected Component noButton;
 					 private final BooleanConsumer answer;
 					 public final Component message;
-					 public ConfirmScreen(BooleanConsumer a, Component title, Component message, Component yes, Component no) { answer=a; this.message=message; }
+					 public ConfirmScreen(BooleanConsumer a, Component title, Component message, Component yes, Component no) { answer=a; this.message=message; this.noButton=no; }
 					 public void respond(boolean yes) { answer.accept(yes); }
 					}
 					"""),
@@ -250,7 +251,7 @@ class KernelCompatibilityPromptsTest {
 				Map.entry("net/minecraft/client/gui/screens/Overlay.java", "package net.minecraft.client.gui.screens; public class Overlay {}"),
 				Map.entry("net/minecraft/client/multiplayer/ClientLevel.java", "package net.minecraft.client.multiplayer; public class ClientLevel {}"),
 				Map.entry("net/minecraft/client/gui/components/events/GuiEventListener.java", "package net.minecraft.client.gui.components.events; public interface GuiEventListener {}"),
-				Map.entry("net/minecraft/client/gui/components/Button.java", "package net.minecraft.client.gui.components; public class Button implements net.minecraft.client.gui.components.events.GuiEventListener {}"),
+				Map.entry("net/minecraft/client/gui/components/Button.java", "package net.minecraft.client.gui.components; public class Button implements net.minecraft.client.gui.components.events.GuiEventListener { public net.minecraft.network.chat.Component getMessage() { return net.minecraft.network.chat.Component.literal(\"no\"); } }"),
 				Map.entry("net/minecraft/network/chat/Component.java", "package net.minecraft.network.chat; public interface Component { static MutableComponent literal(String value) { return new MutableComponent(value); } }"),
 				Map.entry("net/minecraft/network/chat/MutableComponent.java", "package net.minecraft.network.chat; public class MutableComponent implements Component { public final String text; public MutableComponent(String text) { this.text = text; } }"),
 				Map.entry("net/minecraft/client/gui/screens/DeathScreen.java", "package net.minecraft.client.gui.screens; public class DeathScreen extends Screen {}"),
@@ -269,16 +270,16 @@ class KernelCompatibilityPromptsTest {
 	}
 
 	private static final class Fixture implements AutoCloseable {
-		final URLClassLoader loader; final Class<?> type; final Object minecraft; final Object gui;
+		final URLClassLoader loader; final Class<?> type; final Object minecraft;
 		Fixture(URLClassLoader loader) throws Exception {
 			this.loader = loader; type = loader.loadClass("net.minecraft.client.Minecraft");
-			minecraft = type.getConstructor().newInstance(); gui = type.getField("gui").get(minecraft);
+			minecraft = type.getConstructor().newInstance();
 		}
 		void tick() throws Exception { loader.loadClass("net.forbric.kernel.runtime.KernelCompatibilityPrompts").getMethod("tick", type).invoke(null, minecraft); }
-		Object screen() throws Exception { return gui.getClass().getMethod("screen").invoke(gui); }
+		Object screen() throws Exception { return type.getField("screen").get(minecraft); }
 		void answer(boolean yes) throws Exception { loader.loadClass("net.minecraft.client.gui.screens.ConfirmScreen").getMethod("respond", boolean.class).invoke(screen(), yes); }
 		void setScreen(String simpleName) throws Exception {
-			gui.getClass().getField("current").set(gui, loader.loadClass("net.minecraft.client.gui.screens." + simpleName).getConstructor().newInstance());
+			type.getField("screen").set(minecraft, loader.loadClass("net.minecraft.client.gui.screens." + simpleName).getConstructor().newInstance());
 		}
 		String message() throws Exception {
 			Object message = loader.loadClass("net.minecraft.client.gui.screens.ConfirmScreen").getField("message").get(screen());

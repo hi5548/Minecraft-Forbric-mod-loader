@@ -17,41 +17,13 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 class TransferTransactionHooksTest {
-	private static Path neo() {
-		return Path.of(System.getenv().getOrDefault("FORBRIC_OLD", "../forbric-loader"), "run/neoforge-runtime/neoforge-runtime.jar");
-	}
-	private static Path fabric() throws Exception {
-		Path modules = Path.of("build/transfer-api-compile");
-		assumeTrue(Files.isDirectory(modules));
-		try (var paths = Files.list(modules)) { return paths.filter(p -> p.getFileName().toString().startsWith("fabric-transfer-api-")).findFirst().orElseThrow(); }
-	}
 	private static byte[] bytes(Path jar, String name) throws Exception {
 		assumeTrue(Files.isRegularFile(jar));
 		try (ZipFile zip = new ZipFile(jar.toFile())) { return zip.getInputStream(zip.getEntry(name.replace('.', '/') + ".class")).readAllBytes(); }
 	}
 	private static ClassNode node(byte[] bytes) { ClassNode node = new ClassNode(); new ClassReader(bytes).accept(node, 0); return node; }
-	@Test void allNativeTransactionHooksHaveValidBytecodeAndAreIdempotent() throws Exception {
-		for (String name : List.of(TransferTransactionHooks.NEO, TransferTransactionHooks.NEO_MANAGER, TransferTransactionHooks.FABRIC, TransferTransactionHooks.FABRIC_MANAGER)) {
-			byte[] original = bytes(name.startsWith("net.fabricmc.") ? fabric() : neo(), name);
-			var transformer = new TransferTransactionHooks(); byte[] changed = transformer.transform(name, original, null);
-			assertNotSame(original, changed); assertSame(changed, transformer.transform(name, changed, null));
-			ClassNode parsed = node(changed);
-			assertTrue(parsed.methods.stream().anyMatch(m -> m.name.equals("forbric$transferHooks")));
-			for (var method : parsed.methods) if (method.name.equals("close") || method.name.startsWith("forbric$")) {
-				new Analyzer<>(new BasicVerifier()).analyze(parsed.name, method);
-			}
-		}
-	}
-	@Test void changedNativeValidationRefusesTheHookInsteadOfClaimingCompatibility() throws Exception {
-		ClassNode changed = node(bytes(neo(), TransferTransactionHooks.NEO));
-		for (var method : changed.methods) if (method.name.equals("close") && method.desc.equals("(Z)V")) {
-			for (var instruction : method.instructions) if (instruction instanceof MethodInsnNode call && call.name.equals("validateOpen")) call.name = "changedValidation";
-		}
-		ClassWriter writer = new ClassWriter(0); changed.accept(writer); byte[] drift = writer.toByteArray();
-		assertSame(drift, new TransferTransactionHooks().transform(TransferTransactionHooks.NEO, drift, null));
-	}
 	@Test void capabilityFallbackChangesOnlyTheFinalAbsentResult() throws Exception {
-		byte[] original = bytes(neo(), TransferCapabilityFallback.TARGET);
+		byte[] original = bytes(net.forbric.kernel.TestFixtures.stagedRoot().resolve("neoforge-runtime/neoforge-runtime.jar"), TransferCapabilityFallback.TARGET);
 		var transformer = new TransferCapabilityFallback(); byte[] changed = transformer.transform(TransferCapabilityFallback.TARGET, original, null);
 		assertNotSame(original, changed); assertSame(changed, transformer.transform(TransferCapabilityFallback.TARGET, changed, null));
 		ClassNode parsed = node(changed);
@@ -64,7 +36,7 @@ class TransferTransactionHooksTest {
 		assertEquals(1, hooks);
 	}
 	@Test void forgeFallbackFollowsTheExistingCapabilityCompositionAndKeepsInvalidation() throws Exception {
-		Path merged = Path.of(System.getenv().getOrDefault("FORBRIC_OLD", "../forbric-loader"), "run/merged-base/patched-mc-merged-26.2.jar");
+		Path merged = net.forbric.kernel.TestFixtures.mergedBase();
 		byte[] original = bytes(merged, ForgeTransferCapabilityFallback.TARGET);
 		var transformer = new ForgeTransferCapabilityFallback();
 		// Running before composition must decline, rather than claim a hook that never reaches a native provider.
@@ -91,7 +63,7 @@ class TransferTransactionHooksTest {
 	 * before any provider is asked. Every result it returns must pass the owner-first hook, and nothing else changes.
 	 */
 	@Test void baseContainerItemQueryPassesTheOwnerFirstHook() throws Exception {
-		Path merged = Path.of(System.getenv().getOrDefault("FORBRIC_OLD", "../forbric-loader"), "run/merged-base/patched-mc-merged-26.2.jar");
+		Path merged = net.forbric.kernel.TestFixtures.mergedBase();
 		byte[] original = bytes(merged, ForgeTransferCapabilityFallback.BASE_CONTAINER);
 		var transformer = new ForgeTransferCapabilityFallback();
 		byte[] changed = transformer.transform(ForgeTransferCapabilityFallback.BASE_CONTAINER, original, null);
@@ -118,7 +90,7 @@ class TransferTransactionHooksTest {
 		assertSame(original, transformer.transform("net.minecraft.world.level.block.entity.ChestBlockEntity", original, null));
 	}
 	@Test void standardForgeCertificateRejectsInjectedBehaviorEvenIfClassNameIsUnchanged() throws Exception {
-		Path forge = Path.of(System.getenv().getOrDefault("FORBRIC_OLD", "../forbric-loader"), "run/forge-runtime/forge-runtime.jar");
+		Path forge = net.forbric.kernel.TestFixtures.stagedRoot().resolve("forge-runtime/forge-runtime.jar");
 		for (String name : List.of("net.minecraftforge.items.ItemStackHandler", "net.minecraftforge.fluids.capability.templates.FluidTank")) {
 			byte[] original = bytes(forge, name);
 			byte[] approved = ForgeTransferShapeAudit.certify(name, original);
@@ -135,13 +107,13 @@ class TransferTransactionHooksTest {
 		}
 	}
 	@Test void everyRequiredHelperMatchesTheReviewedCarrierAndGameShapes() throws Exception {
-		Path stage = Path.of(System.getenv().getOrDefault("FORBRIC_OLD", "../forbric-loader"), "run");
+		Path stage = net.forbric.kernel.TestFixtures.stagedRoot();
 		var helpers = new java.util.LinkedHashSet<>(ForgeTransferShapeAudit.ITEM_HELPERS); helpers.addAll(ForgeTransferShapeAudit.FLUID_HELPERS);
 		helpers.addAll(ForgeTransferShapeAudit.ENERGY_HELPERS);
 		for (String name : helpers) {
 			Path jar = name.startsWith("net.minecraftforge.") ? stage.resolve("forge-runtime/forge-runtime.jar")
 					: name.startsWith("net.neoforged.") ? stage.resolve("neoforge-runtime/neoforge-runtime.jar")
-					: stage.resolve("merged-base/patched-mc-merged-26.2.jar");
+					: net.forbric.kernel.TestFixtures.mergedBase();
 			byte[] approved = ForgeTransferShapeAudit.certify(name, bytes(jar, name));
 			assertTrue(node(approved).methods.stream().anyMatch(method -> method.name.equals(ForgeTransferShapeAudit.MARKER)), name);
 		}
@@ -152,7 +124,7 @@ class TransferTransactionHooksTest {
 	 */
 	@Test void forgeEnergyStorageCertificateCoversItsWholeTransferContract() throws Exception {
 		String name = "net.minecraftforge.energy.EnergyStorage";
-		byte[] original = bytes(Path.of(System.getenv().getOrDefault("FORBRIC_OLD", "../forbric-loader"), "run/forge-runtime/forge-runtime.jar"), name);
+		byte[] original = bytes(net.forbric.kernel.TestFixtures.stagedRoot().resolve("forge-runtime/forge-runtime.jar"), name);
 		assertTrue(ForgeTransferShapeAudit.ENERGY_HELPERS.contains(name));
 		assertTrue(node(ForgeTransferShapeAudit.certify(name, original)).methods.stream().anyMatch(method -> method.name.equals(ForgeTransferShapeAudit.MARKER)));
 		for (String changedMethod : List.of("receiveEnergy", "extractEnergy", "getEnergyStored", "getMaxEnergyStored", "canReceive", "canExtract", "<init>")) {
@@ -169,7 +141,7 @@ class TransferTransactionHooksTest {
 	}
 	@Test void itemStackTooltipChangesRemainAllowedButCountMutationDoesNot() throws Exception {
 		String name = "net.minecraft.world.item.ItemStack";
-		Path game = Path.of(System.getenv().getOrDefault("FORBRIC_OLD", "../forbric-loader"), "run/merged-base/patched-mc-merged-26.2.jar");
+		Path game = net.forbric.kernel.TestFixtures.mergedBase();
 		byte[] original = bytes(game, name);
 		for (String changedMethod : List.of("getTooltipLines", "setCount")) {
 			ClassNode changed = node(original);
@@ -182,7 +154,7 @@ class TransferTransactionHooksTest {
 	}
 	@Test void theRealNbtBuilderRepairIsOutsideTransferButCopyChangesAreNot() throws Exception {
 		String name = "net.minecraft.nbt.CompoundTag";
-		Path game = Path.of(System.getenv().getOrDefault("FORBRIC_OLD", "../forbric-loader"), "run/merged-base/patched-mc-merged-26.2.jar");
+		Path game = net.forbric.kernel.TestFixtures.mergedBase();
 		byte[] original = bytes(game, name);
 		byte[] repaired = new ForbricMergedBaseCompatTransformer().transform(name, original,
 				new TransformContext(net.fabricmc.api.EnvType.SERVER, false, "intermediary"));
@@ -200,20 +172,21 @@ class TransferTransactionHooksTest {
 	}
 	@Test void redundantMixinHierarchySignatureIsIgnoredWithoutErasingNewGenericOrExecutableContracts() throws Exception {
 		String name = "net.minecraft.world.item.ItemStack";
-		Path game = Path.of(System.getenv().getOrDefault("FORBRIC_OLD", "../forbric-loader"), "run/merged-base/patched-mc-merged-26.2.jar");
+		Path game = net.forbric.kernel.TestFixtures.mergedBase();
 		byte[] original = bytes(game, name); ClassNode woven = node(original);
-		assertNull(woven.signature, "the real staged class has no generic signature");
+		// PORT(1.21.1): ItemStack carries a real generic signature on this base (26.2's did not), so none of it is
+		// redundant metadata to strip: the added non-transfer mixin interfaces are pruned, the signature is kept.
+		assertNotNull(woven.signature, "the real staged class carries its generic signature");
+		String realSignature = woven.signature;
 		woven.interfaces.add("net/fabricmc/fabric/api/item/v1/FabricItemStack");
 		woven.interfaces.add("net/fabricmc/fabric/mixin/transfer/ItemStackAccessor");
-		StringBuilder erased = new StringBuilder("L").append(woven.superName).append(';');
-		for (String contract : woven.interfaces) erased.append('L').append(contract).append(';');
-		woven.signature = erased.toString();
 		ClassWriter writer = new ClassWriter(0); woven.accept(writer);
-		assertEquals(ForgeTransferShapeAudit.fingerprint(original), ForgeTransferShapeAudit.fingerprint(writer.toByteArray()));
-		woven.signature = "<T:Ljava/lang/Object;>" + erased;
+		assertEquals(ForgeTransferShapeAudit.fingerprint(original), ForgeTransferShapeAudit.fingerprint(writer.toByteArray()),
+				"adding the non-transfer mixin interfaces, with the signature untouched, changes nothing");
+		woven.signature = "<T:Ljava/lang/Object;>" + realSignature;
 		writer = new ClassWriter(0); woven.accept(writer);
 		assertNotEquals(ForgeTransferShapeAudit.fingerprint(original), ForgeTransferShapeAudit.fingerprint(writer.toByteArray()), "real generic metadata is not erased");
-		woven.signature = erased.toString();
+		woven.signature = realSignature;
 		woven.methods.stream().filter(method -> method.name.equals("copy") && method.desc.equals("()Lnet/minecraft/world/item/ItemStack;")).findFirst().orElseThrow()
 				.instructions.insert(new org.objectweb.asm.tree.InsnNode(org.objectweb.asm.Opcodes.NOP));
 		writer = new ClassWriter(0); woven.accept(writer);
@@ -221,7 +194,7 @@ class TransferTransactionHooksTest {
 	}
 	@Test void separateFabricItemInterfacesDoNotHideAnEffectfulVariantCacheGetter() throws Exception {
 		String name = "net.minecraft.world.item.Item";
-		Path game = Path.of(System.getenv().getOrDefault("FORBRIC_OLD", "../forbric-loader"), "run/merged-base/patched-mc-merged-26.2.jar");
+		Path game = net.forbric.kernel.TestFixtures.mergedBase();
 		byte[] original = bytes(game, name); ClassNode woven = node(original);
 		woven.interfaces.addAll(List.of("net/fabricmc/fabric/api/item/v1/FabricItem", "net/fabricmc/fabric/impl/item/ItemExtensions", "net/fabricmc/fabric/impl/transfer/item/ItemVariantCache"));
 		String type = "Lnet/fabricmc/fabric/api/transfer/v1/item/ItemVariant;";

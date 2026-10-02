@@ -41,8 +41,8 @@ import org.objectweb.asm.tree.analysis.Analyzer;
 import org.objectweb.asm.tree.analysis.BasicVerifier;
 
 /**
- * Verifies in real {@code neoforge-runtime.jar} bytecode that every {@code GuiLayer} registered with NeoForge's
- * layer manager passes through the kernel, and that the overloads which merely delegate are left alone.
+ * Verifies in real {@code neoforge-runtime.jar} bytecode that every {@code LayeredDraw$Layer} registered with
+ * NeoForge's layer manager passes through the kernel, and that the overloads which merely delegate are left alone.
  */
 class HudElementBridgeInjectorTest {
 	private static final Path NEOFORGE_RUNTIME =
@@ -51,11 +51,12 @@ class HudElementBridgeInjectorTest {
 
 	private static final String TARGET = "net.neoforged.neoforge.client.gui.GuiLayerManager";
 	private static final String ENTRY = "net/neoforged/neoforge/client/gui/GuiLayerManager.class";
-	private static final String LAYER = "Lnet/neoforged/neoforge/client/gui/GuiLayer;";
+	// PORT(1.21.1): the layer type is vanilla's LayeredDraw$Layer and there is a single layer-taking overload.
+	private static final String LAYER = "Lnet/minecraft/client/gui/LayeredDraw$Layer;";
 	private static final String HOOK = "net/forbric/kernel/boot/KernelHudBridge";
 
 	@Test
-	void routesBothGuiLayerOverloads() throws Exception {
+	void routesTheLayerOverload() throws Exception {
 		ClassNode node = transformed();
 
 		int routed = 0;
@@ -69,8 +70,8 @@ class HudElementBridgeInjectorTest {
 			assertPrologue(m);
 			routed++;
 		}
-		assertEquals(2, routed, "expected the (Identifier, GuiLayer) and (Identifier, GuiLayer, BooleanSupplier) "
-				+ "overloads — the NeoForge API drifted");
+		assertEquals(1, routed, "expected the single (ResourceLocation, LayeredDraw$Layer) overload — the "
+				+ "NeoForge API drifted");
 	}
 
 	@Test
@@ -82,8 +83,8 @@ class HudElementBridgeInjectorTest {
 			Type[] args = Type.getArgumentTypes(m.desc);
 			if (args.length >= 2 && LAYER.equals(args[1].getDescriptor())) continue;
 
-			// The Consumer overload and add(GuiLayerManager, BooleanSupplier) both funnel into the 3-arg one, so
-			// touching them here would wrap twice.
+			// add(GuiLayerManager, BooleanSupplier) re-adds a sub-manager's already-wrapped layers, so touching it
+			// here would wrap twice.
 			assertTrue(!callsHook(m), "add" + m.desc + " delegates and must not be routed a second time");
 		}
 	}
@@ -125,7 +126,7 @@ class HudElementBridgeInjectorTest {
 		return node;
 	}
 
-	/** ALOAD 1; ALOAD 2; INVOKESTATIC wrap; CHECKCAST GuiLayer; ASTORE 2 — and it must come FIRST. */
+	/** ALOAD 1; ALOAD 2; INVOKESTATIC wrap; CHECKCAST LayeredDraw$Layer; ASTORE 2 — and it must come FIRST. */
 	private static void assertPrologue(MethodNode m) {
 		AbstractInsnNode insn = m.instructions.getFirst();
 		while (insn != null && insn.getOpcode() == -1) insn = insn.getNext();

@@ -24,7 +24,10 @@ public final class SoundRegistryIdentityInjector implements ClassTransformer {
 		new ClassReader(bytes).accept(node, 0);
 		boolean changed = false;
 		for (MethodNode method : node.methods) {
-			if (!method.name.equals("<init>") || !method.desc.equals("(Lnet/minecraftforge/registries/RegistryManager;Lnet/minecraft/resources/Identifier;Lnet/minecraftforge/registries/RegistryBuilder;)V")) continue;
+			// PORT(1.21.1): the registry's name is ResourceLocation on this generation (Identifier is 26.2's
+			// spelling); everything else about the constructor — package-private visibility, the five index fields
+			// below and their types — is unchanged, verified with javap against the staged forge-runtime.jar.
+			if (!method.name.equals("<init>") || !method.desc.equals("(Lnet/minecraftforge/registries/RegistryManager;Lnet/minecraft/resources/ResourceLocation;Lnet/minecraftforge/registries/RegistryBuilder;)V")) continue;
 			var fields = new java.util.ArrayList<FieldInsnNode>();
 			for (AbstractInsnNode instruction : method.instructions.toArray()) {
 				if (!(instruction instanceof FieldInsnNode field) || field.getOpcode() != Opcodes.PUTFIELD

@@ -66,7 +66,7 @@ final class FinalizeSpawnFixture implements AutoCloseable {
 	}
 
 	private Object reason() throws Exception {
-		return type("net.minecraft.world.entity.EntitySpawnReason").getField("TRIAL_SPAWNER").get(null);
+		return type("net.minecraft.world.entity.MobSpawnType").getField("TRIAL_SPAWNER").get(null);
 	}
 
 	private Method method(String name) {
@@ -98,14 +98,13 @@ final class FinalizeSpawnFixture implements AutoCloseable {
 	private static Map<String, String> sources() {
 		Map<String, String> out = new LinkedHashMap<>();
 		for (String name : List.of("net.minecraft.world.DifficultyInstance", "com.mojang.datafixers.util.Either",
-				"net.minecraft.world.level.BaseSpawner", "net.minecraft.world.level.storage.ValueInput")) {
+				"net.minecraft.world.level.BaseSpawner", "net.minecraft.nbt.CompoundTag")) {
 			int dot = name.lastIndexOf('.'); out.put(name, "package " + name.substring(0, dot) + "; public class " + name.substring(dot + 1) + " {}");
 		}
-		for (String name : List.of("net.minecraft.world.entity.SpawnGroupData", "net.minecraft.world.level.ServerLevelAccessor",
-				"net.minecraftforge.eventbus.internal.Event")) {
+		for (String name : List.of("net.minecraft.world.entity.SpawnGroupData", "net.minecraft.world.level.ServerLevelAccessor")) {
 			int dot = name.lastIndexOf('.'); out.put(name, "package " + name.substring(0, dot) + "; public interface " + name.substring(dot + 1) + " {}");
 		}
-		out.put("net.minecraft.world.entity.EntitySpawnReason", "package net.minecraft.world.entity; public enum EntitySpawnReason { COMMAND, TRIAL_SPAWNER }");
+		out.put("net.minecraft.world.entity.MobSpawnType", "package net.minecraft.world.entity; public enum MobSpawnType { NATURAL, COMMAND, TRIAL_SPAWNER }");
 		out.put("fixture.Data", "package fixture; public class Data implements net.minecraft.world.entity.SpawnGroupData {}");
 		out.put("fixture.Level", "package fixture; public class Level implements net.minecraft.world.level.ServerLevelAccessor {}");
 		out.put("net.minecraft.world.entity.Entity", "package net.minecraft.world.entity; public class Entity { public double getX(){return 1;} public double getY(){return 2;} public double getZ(){return 3;} }");
@@ -114,7 +113,7 @@ final class FinalizeSpawnFixture implements AutoCloseable {
 			public class Mob extends Entity {
 			 private boolean cancelled;
 			 public void setSpawnCancelled(boolean value){cancelled=value;} public boolean isSpawnCancelled(){return cancelled;}
-			 public SpawnGroupData finalizeSpawn(net.minecraft.world.level.ServerLevelAccessor level,net.minecraft.world.DifficultyInstance difficulty,EntitySpawnReason reason,SpawnGroupData data){
+			 public SpawnGroupData finalizeSpawn(net.minecraft.world.level.ServerLevelAccessor level,net.minecraft.world.DifficultyInstance difficulty,MobSpawnType reason,SpawnGroupData data){
 			  fixture.FinalizeProbe.finalizes++; fixture.FinalizeProbe.trace.add("finalize");
 			  fixture.FinalizeProbe.finalDifficulty=difficulty; fixture.FinalizeProbe.finalData=data; fixture.FinalizeProbe.finalReason=reason;
 			  return fixture.FinalizeProbe.finalResult;
@@ -125,25 +124,26 @@ final class FinalizeSpawnFixture implements AutoCloseable {
 		out.put("fixture.Spawner", "package fixture; public class Spawner implements net.neoforged.neoforge.common.extensions.IOwnedSpawner { public com.mojang.datafixers.util.Either getOwner(){return new com.mojang.datafixers.util.Either();} }");
 		out.put("net.neoforged.bus.api.Event", "package net.neoforged.bus.api; public class Event {}");
 		out.put("net.neoforged.bus.api.IEventBus", "package net.neoforged.bus.api; public interface IEventBus { Event post(Event event); }");
-		out.put("net.minecraftforge.eventbus.api.bus.CancellableEventBus", "package net.minecraftforge.eventbus.api.bus; public interface CancellableEventBus { boolean post(net.minecraftforge.eventbus.internal.Event event); }");
 		out.put("net.neoforged.neoforge.common.NeoForge", "package net.neoforged.neoforge.common; public class NeoForge { public static final net.neoforged.bus.api.IEventBus EVENT_BUS=fixture.FinalizeProbe.neoBus; }");
-		String common = " private net.minecraft.world.entity.Mob mob; private net.minecraft.world.DifficultyInstance difficulty; private net.minecraft.world.entity.EntitySpawnReason reason;"
+		out.put("net.minecraftforge.eventbus.api.Event", "package net.minecraftforge.eventbus.api; public class Event { private boolean canceled; public boolean isCanceled(){return canceled;} public void setCanceled(boolean c){canceled=c;} }");
+		out.put("net.minecraftforge.eventbus.api.IEventBus", "package net.minecraftforge.eventbus.api; public interface IEventBus { boolean post(Event event); }");
+		out.put("net.minecraftforge.common.MinecraftForge", "package net.minecraftforge.common; public class MinecraftForge { public static final net.minecraftforge.eventbus.api.IEventBus EVENT_BUS=fixture.FinalizeProbe.forgeBus; }");
+		String common = " private net.minecraft.world.entity.Mob mob; private net.minecraft.world.DifficultyInstance difficulty; private net.minecraft.world.entity.MobSpawnType reason;"
 				+ " private net.minecraft.world.entity.SpawnGroupData data; private boolean canceled; public Object spawner;"
 				+ " public net.minecraft.world.DifficultyInstance getDifficulty(){return difficulty;} public void setDifficulty(net.minecraft.world.DifficultyInstance d){difficulty=d;}"
 				+ " public net.minecraft.world.entity.SpawnGroupData getSpawnData(){return data;} public void setSpawnData(net.minecraft.world.entity.SpawnGroupData d){data=d;}"
 				+ " public boolean isCanceled(){return canceled;} public void setCanceled(boolean c){canceled=c;} public net.minecraft.world.entity.Mob getEntity(){return mob;}"
 				+ " public void setSpawnCancelled(boolean c){mob.setSpawnCancelled(c);} public boolean isSpawnCancelled(){return mob.isSpawnCancelled();}";
 		out.put("net.neoforged.neoforge.event.entity.living.FinalizeSpawnEvent", "package net.neoforged.neoforge.event.entity.living; public class FinalizeSpawnEvent extends net.neoforged.bus.api.Event {"
-				+ common + " public net.minecraft.world.entity.EntitySpawnReason getSpawnType(){return reason;}"
+				+ common + " public net.minecraft.world.entity.MobSpawnType getSpawnType(){return reason;}"
 				+ " public FinalizeSpawnEvent(net.minecraft.world.entity.Mob m,net.minecraft.world.level.ServerLevelAccessor l,double x,double y,double z,net.minecraft.world.DifficultyInstance d,"
-				+ "net.minecraft.world.entity.EntitySpawnReason r,net.minecraft.world.entity.SpawnGroupData g,com.mojang.datafixers.util.Either s){mob=m;difficulty=d;reason=r;data=g;spawner=s;} }");
-		out.put("net.minecraftforge.event.entity.living.MobSpawnEvent", "package net.minecraftforge.event.entity.living; public class MobSpawnEvent { public static class FinalizeSpawn implements net.minecraftforge.eventbus.internal.Event {"
-				+ " public static final net.minecraftforge.eventbus.api.bus.CancellableEventBus BUS=fixture.FinalizeProbe.forgeBus;"
-				+ common + " public Object tag; public net.minecraft.world.entity.EntitySpawnReason getSpawnReason(){return reason;}"
+				+ "net.minecraft.world.entity.MobSpawnType r,net.minecraft.world.entity.SpawnGroupData g,com.mojang.datafixers.util.Either s){mob=m;difficulty=d;reason=r;data=g;spawner=s;} }");
+		out.put("net.minecraftforge.event.entity.living.MobSpawnEvent", "package net.minecraftforge.event.entity.living; public class MobSpawnEvent { public static class FinalizeSpawn extends net.minecraftforge.eventbus.api.Event {"
+				+ common + " public Object tag; public net.minecraft.world.entity.MobSpawnType getSpawnType(){return reason;}"
 				+ " public FinalizeSpawn(net.minecraft.world.entity.Mob m,net.minecraft.world.level.ServerLevelAccessor l,double x,double y,double z,net.minecraft.world.DifficultyInstance d,"
-				+ "net.minecraft.world.entity.EntitySpawnReason r,net.minecraft.world.entity.SpawnGroupData g,net.minecraft.world.level.storage.ValueInput t,net.minecraft.world.level.BaseSpawner s){mob=m;difficulty=d;reason=r;data=g;tag=t;spawner=s;} } }");
+				+ "net.minecraft.world.entity.MobSpawnType r,net.minecraft.world.entity.SpawnGroupData g,net.minecraft.nbt.CompoundTag t,net.minecraft.world.level.BaseSpawner s){mob=m;difficulty=d;reason=r;data=g;tag=t;spawner=s;} } }");
 		// Compile-only; replaced by NeoForge's actual hook before loading.
-		out.put("net.neoforged.neoforge.event.EventHooks", "package net.neoforged.neoforge.event; public class EventHooks { public static net.neoforged.neoforge.event.entity.living.FinalizeSpawnEvent finalizeMobSpawnSpawner(net.minecraft.world.entity.Mob m,net.minecraft.world.level.ServerLevelAccessor l,net.minecraft.world.DifficultyInstance d,net.minecraft.world.entity.EntitySpawnReason r,net.minecraft.world.entity.SpawnGroupData g,net.neoforged.neoforge.common.extensions.IOwnedSpawner s,boolean f){return null;} }");
+		out.put("net.neoforged.neoforge.event.EventHooks", "package net.neoforged.neoforge.event; public class EventHooks { public static net.neoforged.neoforge.event.entity.living.FinalizeSpawnEvent finalizeMobSpawnSpawner(net.minecraft.world.entity.Mob m,net.minecraft.world.level.ServerLevelAccessor l,net.minecraft.world.DifficultyInstance d,net.minecraft.world.entity.MobSpawnType r,net.minecraft.world.entity.SpawnGroupData g,net.neoforged.neoforge.common.extensions.IOwnedSpawner s,boolean f){return null;} }");
 		out.put("fixture.FinalizeProbe", """
 			package fixture;
 			import java.util.*; import java.util.function.*;
@@ -155,11 +155,11 @@ final class FinalizeSpawnFixture implements AutoCloseable {
 			 public static boolean forgeCanceled;
 			 public static final Mob mob=new Mob(); public static final Level level=new Level(); public static final Spawner spawner=new Spawner();
 			 public static DifficultyInstance difficulty=new DifficultyInstance(),finalDifficulty;
-			 public static SpawnGroupData originalData=new Data(),finalData,finalResult=new Data(); public static EntitySpawnReason finalReason;
+			 public static SpawnGroupData originalData=new Data(),finalData,finalResult=new Data(); public static MobSpawnType finalReason;
 			 public static Consumer<FinalizeSpawnEvent> neo=e->{}; public static Consumer<MobSpawnEvent.FinalizeSpawn> forge=e->{};
 			 public static FinalizeSpawnEvent lastNeo; public static MobSpawnEvent.FinalizeSpawn lastForge;
 			 public static final net.neoforged.bus.api.IEventBus neoBus=e->{neoPosts++;trace.add("neo");lastNeo=(FinalizeSpawnEvent)e;neo.accept(lastNeo);return e;};
-			 public static final net.minecraftforge.eventbus.api.bus.CancellableEventBus forgeBus=e->{
+			 public static final net.minecraftforge.eventbus.api.IEventBus forgeBus=e->{
 			  forgePosts++;trace.add("forge");lastForge=(MobSpawnEvent.FinalizeSpawn)e;forge.accept(lastForge);return forgeCanceled;
 			 };
 			}

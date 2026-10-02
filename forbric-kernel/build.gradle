@@ -239,6 +239,11 @@ dependencies {
 
 	testImplementation "org.junit.jupiter:junit-jupiter:${project.junit_version}"
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+	// The game side's version type is Maven's DefaultArtifactVersion, which the game supplies commons-lang3
+	// for at runtime (Minecraft 1.21.1's version.json lists org.apache.commons:commons-lang3). Tests that load
+	// KernelModInfo therefore need the same library on their link classpath; pinned like the other game-side
+	// libraries above, compile/link only, never bundled.
+	testRuntimeOnly 'org.apache.commons:commons-lang3:3.14.0'
 }
 
 tasks.withType(JavaCompile).configureEach {

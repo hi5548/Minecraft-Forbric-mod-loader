@@ -1,7 +1,6 @@
 package net.forbric.kernel.transform;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -27,51 +26,25 @@ import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.VarInsnNode;
 
-
-/** Real carrier bytecode: the two Forge builder repairs, the two splices into NeoForge's pass, and the switch. */
+/**
+ * The one carrier-side edit that survives on 1.21.1: the two splices into NeoForge's {@code runModifiers}.
+ *
+ * <p>PORT(1.21.1): 26.2 also carried two MinecraftForge builder repairs built around
+ * {@code net.minecraft.util.random.WeightedList$Builder} — the class does not exist on this generation and Forge 52
+ * calls {@code java.util.List.removeIf} directly — so both were deleted with their REQUIRED anchors (see
+ * {@link ForgeWorldModifierInjector}'s class doc). The test now pins the surviving seam: exactly two splices, each
+ * after a {@code Stream.toList} and before the {@code astore} that materialises the modifier list, and the
+ * single-anchor contract when the pass is switched off and back on.
+ */
 class ForgeWorldModifierInjectorTest {
 	private static final Path RUN = Path.of(System.getenv().getOrDefault("FORBRIC_OLD", System.getProperty("user.dir") + "/../forbric-loader"), "run").normalize();
-	private static final Path FORGE = RUN.resolve("forge-runtime/forge-runtime.jar");
 	private static final Path NEO = RUN.resolve("neoforge-runtime/neoforge-runtime.jar");
-	private static final Path MERGED = RUN.resolve("merged-base/patched-mc-merged-26.2.jar");
-	private static final String SPAWN_BUILDER = "net/minecraftforge/common/world/MobSpawnSettingsBuilder";
-	private static final String REMOVE_SPAWNS = "net/minecraftforge/common/world/ForgeBiomeModifiers$RemoveSpawnsBiomeModifier";
 	private static final String HOOKS = "net/neoforged/neoforge/server/ServerLifecycleHooks";
-	private static final String BUILDER = "net/minecraft/util/random/WeightedList$Builder";
 	private static final String KERNEL = "net/forbric/kernel/runtime/KernelForgeWorldgen";
 
 	@AfterEach
 	void clearSwitch() {
 		System.clearProperty(ForgeWorldModifierInjector.PROPERTY);
-	}
-
-	@Test
-	void thePremiseTheMergedBuilderHasCollectionAddAllAndNoIterableOverload() throws Exception {
-		ClassNode builder = parse(bytesOf(MERGED, BUILDER));
-		List<String> addAll = new ArrayList<>();
-		for (MethodNode m : builder.methods) if ("addAll".equals(m.name)) addAll.add(m.desc);
-		assertTrue(addAll.contains("(Ljava/util/Collection;)L" + BUILDER + ";"), addAll.toString());
-		assertFalse(addAll.contains("(Ljava/lang/Iterable;)L" + BUILDER + ";"),
-				"the merged builder grew Forge's Iterable overload — the descriptor repair is redundant, re-derive");
-	}
-
-	@Test
-	void spawnBuilderCallsCollectionAddAllAfterTheRepair() throws Exception {
-		ClassNode before = parse(bytesOf(FORGE, SPAWN_BUILDER));
-		assertEquals(1, calls(before, BUILDER, "addAll", "(Ljava/lang/Iterable;)L" + BUILDER + ";").size(), "premise");
-		ClassNode after = parse(transform(SPAWN_BUILDER, FORGE));
-		assertEquals(0, calls(after, BUILDER, "addAll", "(Ljava/lang/Iterable;)L" + BUILDER + ";").size());
-		assertEquals(1, calls(after, BUILDER, "addAll", "(Ljava/util/Collection;)L" + BUILDER + ";").size());
-	}
-
-	@Test
-	void removeSpawnsRoutesRemoveIfThroughTheKernelsCopyOfTheLostDefault() throws Exception {
-		ClassNode after = parse(transform(REMOVE_SPAWNS, FORGE));
-		List<MethodInsnNode> kernel = calls(after, KERNEL, "removeIfValue", null);
-		assertEquals(1, kernel.size());
-		assertEquals(Opcodes.INVOKESTATIC, kernel.getFirst().getOpcode());
-		assertEquals("(L" + BUILDER + ";Ljava/util/function/Predicate;)L" + BUILDER + ";", kernel.getFirst().desc);
-		assertTrue(calls(after, BUILDER, "removeIf", null).isEmpty(), "no removeIf on WeightedList$Builder may remain");
 	}
 
 	@Test
@@ -101,23 +74,18 @@ class ForgeWorldModifierInjectorTest {
 
 	@Test
 	void aSecondPassChangesNothingFurther() throws Exception {
-		for (String[] target : new String[][] { { SPAWN_BUILDER, "F" }, { REMOVE_SPAWNS, "F" }, { HOOKS, "N" } }) {
-			Path jar = "F".equals(target[1]) ? FORGE : NEO;
-			byte[] once = transform(target[0], jar);
-			assertSame(once, new ForgeWorldModifierInjector().transform(target[0].replace('/', '.'), once, null), target[0]);
-		}
+		byte[] once = transform(HOOKS, NEO);
+		assertSame(once, new ForgeWorldModifierInjector().transform(HOOKS.replace('/', '.'), once, null), HOOKS);
 	}
 
 	@Test
-	void theSwitchStandsAllThreeTargetsDownAndDeclaresScannedAnchors() throws Exception {
+	void theSwitchStandsTheTargetDownAndDeclaresScannedAnchors() throws Exception {
 		System.setProperty(ForgeWorldModifierInjector.PROPERTY, "off");
-		for (String[] target : new String[][] { { SPAWN_BUILDER, "F" }, { REMOVE_SPAWNS, "F" }, { HOOKS, "N" } }) {
-			byte[] bytes = bytesOf("F".equals(target[1]) ? FORGE : NEO, target[0]);
-			assertSame(bytes, new ForgeWorldModifierInjector().transform(target[0].replace('/', '.'), bytes, null), target[0]);
-		}
+		byte[] bytes = bytesOf(NEO, HOOKS);
+		assertSame(bytes, new ForgeWorldModifierInjector().transform(HOOKS.replace('/', '.'), bytes, null), HOOKS);
 		assertTrue(new ForgeWorldModifierInjector().anchors().anchors().isEmpty(), "off is a request, not a missed anchor");
 		System.clearProperty(ForgeWorldModifierInjector.PROPERTY);
-		assertEquals(3, new ForgeWorldModifierInjector().anchors().anchors().size());
+		assertEquals(1, new ForgeWorldModifierInjector().anchors().anchors().size());
 	}
 
 	@Test

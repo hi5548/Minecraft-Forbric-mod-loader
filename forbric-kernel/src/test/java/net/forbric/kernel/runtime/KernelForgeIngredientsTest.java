@@ -76,7 +76,10 @@ class KernelForgeIngredientsTest {
 				}
 			}
 		}
-		assertEquals(List.of("net/minecraftforge/common/ForgeHooks.ingredientBaseCodec"), forgeCalls,
-				"no hand-built dispatch: the carrier composes the either(registry dispatch, base) itself");
+		// PORT(1.21.1): Forge 52 names the composition enhanceIngredientCodec(base); ingredientBaseCodec is the
+		// 26.2 name. Verified with javap against forge-runtime.jar (52.1.16).
+		assertEquals(List.of("net/minecraftforge/common/ForgeHooks.enhanceIngredientCodec"), forgeCalls,
+				"no hand-built dispatch: the carrier composes the either(registry dispatch, base) itself, and on "
+						+ "1.21.1 that carrier entry point is ForgeHooks.enhanceIngredientCodec");
 	}
 }

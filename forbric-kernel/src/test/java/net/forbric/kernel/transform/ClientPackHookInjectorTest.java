@@ -18,7 +18,6 @@ package net.forbric.kernel.transform;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -26,6 +25,8 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -34,6 +35,7 @@ import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
@@ -47,105 +49,70 @@ import net.forbric.api.ForeignType;
 /**
  * Pins {@link ClientPackHookInjector} for BOTH Forge families.
  *
- * <p>It replaces the whole body of {@code ClientModLoader.setupModResourcePacks} with a call into the kernel, so
- * the kernel owns which resource packs a client mounts. It has no warn path: if the descriptor or the owner name
- * ever stops matching, nothing is rewritten, nothing is logged, and the client simply comes up without any mod's
- * assets — the failure looks like missing textures, not like a loader error.
- *
- * <p>The load-bearing detail is that the replacement body is {@code ALOAD 0; INVOKESTATIC hook; RETURN}. Slot 0
- * holds the {@code PackRepository} only because the method is STATIC. If a carrier ever made it an instance
- * method, slot 0 would be {@code this} and the kernel would be handed a {@code ClientModLoader} where it expects a
- * repository — so that modifier is asserted against the real carriers here, not assumed.
+ * <p>PORT(1.21.1): it prepends a kernel call to {@code ClientModLoader.begin(Minecraft, PackRepository,
+ * ReloadableResourceManager)} — 26.2's standalone {@code setupModResourcePacks(PackRepository)} does not exist on
+ * this generation. The repository is the SECOND argument (slot 1), not slot 0, and the method is static. If the
+ * descriptor ever stops matching, nothing is rewritten and nothing is logged; the client simply comes up without
+ * any mod's assets, which looks like missing textures rather than a loader error. The load-bearing detail is that
+ * the prepend keeps the carrier's own body: that body is what posts {@code AddPackFindersEvent}, and replacing it
+ * silently stops every Forge-family mod's built-in client pack from registering.
  */
 class ClientPackHookInjectorTest {
 	private static final Path RUN = Path.of(System.getenv().getOrDefault("FORBRIC_OLD", System.getProperty("user.dir") + "/../forbric-loader"), "run").normalize();
-	private static final String METHOD = "setupModResourcePacks";
-	private static final String DESC = "(Lnet/minecraft/server/packs/repository/PackRepository;)V";
+	private static final String METHOD = "begin";
+	private static final String DESC = "(Lnet/minecraft/client/Minecraft;Lnet/minecraft/server/packs/repository/PackRepository;"
+			+ "Lnet/minecraft/server/packs/resources/ReloadableResourceManager;)V";
 	private static final String HOOK_OWNER = "net/forbric/kernel/boot/KernelLifecycle";
 
 	private final ClientPackHookInjector injector = new ClientPackHookInjector();
 
-	/**
-	 * The premise of {@code ALOAD 0}, and a correction to what the class javadoc claims.
-	 *
-	 * <p>It says the injector redirects "each ecosystem's" {@code setupModResourcePacks}. On the staged carriers
-	 * that is only true of NeoForge: MinecraftForge's {@code ClientModLoader} has no such method at all — it takes
-	 * the repository in {@code begin(Minecraft, PackRepository, ReloadableResourceManager)} instead — so the
-	 * MinecraftForge entry in {@code OWNERS} matches nothing and is a hedge, not a live path. Asserting that
-	 * explicitly means a carrier that later ADDS the method makes this test fail, which is the moment to check
-	 * whether the hedge has become a second live rewrite.
-	 */
+	/** Both families declare {@code begin} statically with the repository at slot 1 — the premise of the prepend. */
 	@Test
-	void neoForgeDeclaresTheMethodStaticallyAndMinecraftForgeDoesNotDeclareItAtAll() throws Exception {
-		byte[] neo = carrier(Ecosystem.NEOFORGE);
-		assumeTrue(neo != null, "staged NeoForge carrier absent");
-
-		MethodNode m = method(parse(neo), METHOD, DESC);
-		assertNotNull(m, "NeoForge: " + METHOD + DESC + " is gone — the client pack hook silently stops applying "
-				+ "and no mod's assets are mounted");
-		assertTrue((m.access & Opcodes.ACC_STATIC) != 0, "NeoForge: " + METHOD + " is no longer static, so the "
-				+ "injector's ALOAD 0 would hand the kernel `this` instead of the PackRepository");
-
-		byte[] forge = carrier(Ecosystem.FORGE);
-		assumeTrue(forge != null, "staged MinecraftForge carrier absent");
-		assertNull(method(parse(forge), METHOD, DESC),
-				"MinecraftForge's ClientModLoader now declares " + METHOD + " — the OWNERS entry for it has stopped "
-						+ "being a hedge and become a live rewrite; re-check that the kernel should own both");
+	void bothCarriersDeclareBeginStaticallyWithTheRepositoryAtSlotOne() throws Exception {
+		for (Ecosystem eco : List.of(Ecosystem.NEOFORGE, Ecosystem.FORGE)) {
+			byte[] carrier = carrier(eco);
+			assumeTrue(carrier != null, "staged " + eco + " carrier absent");
+			MethodNode m = method(parse(carrier), METHOD, DESC);
+			assertNotNull(m, eco + ": " + METHOD + DESC + " is gone — the client pack hook silently stops applying "
+					+ "and no mod's assets are mounted");
+			assertTrue((m.access & Opcodes.ACC_STATIC) != 0, eco + ": " + METHOD + " is no longer static, so the "
+					+ "injector's ALOAD 1 would hand the kernel the Minecraft instance instead of the PackRepository");
+		}
 	}
 
 	@Test
-	void theNeoForgeCarrierIsRewrittenToCallTheKernel() throws Exception {
-		byte[] real = carrier(Ecosystem.NEOFORGE);
-		assumeTrue(real != null, "staged NeoForge carrier absent");
+	void bothCarriersAreRewrittenToCallTheKernelAndKeepTheirOwnBody() throws Exception {
+		for (Ecosystem eco : List.of(Ecosystem.NEOFORGE, Ecosystem.FORGE)) {
+			byte[] real = carrier(eco);
+			assumeTrue(real != null, "staged " + eco + " carrier absent");
 
-		String className = ForeignType.CLIENT_MOD_LOADER.binary(Ecosystem.NEOFORGE);
-		byte[] out = injector.transform(className, real, ctx());
-		assertTrue(out != real, "not rewritten");
+			MethodNode before = method(parse(real), METHOD, DESC);
+			List<Integer> beforeOpcodes = opcodes(before);
 
-		ClassNode node = parse(out);
-		MethodNode m = method(node, METHOD, DESC);
-		assertNotNull(hookCall(m), "the kernel hook call is missing");
+			byte[] out = injector.transform(ForeignType.CLIENT_MOD_LOADER.binary(eco), real, ctx());
+			assertTrue(out != real, eco + ": not rewritten");
 
-		// PREPENDED, not replaced, and this is the assertion that matters. The rewrite used to assign a whole new
-		// body of exactly ALOAD/INVOKESTATIC/RETURN — which threw away the carrier's own
-		// populatePackRepository call, and with it the AddPackFindersEvent it posts at the end. That event is how
-		// EVERY Forge-family mod registers a built-in client resource pack, so an optional pack stopped appearing
-		// in the resource-pack screen and an alwaysActive one left the mod rendering missing textures, silently.
-		// So: the kernel hook comes FIRST, and the original body is still there behind it.
-		assertSame(m.instructions.getFirst(), firstReal(m),
-				"the kernel hook must be the first thing the method does, before the carrier touches the repository");
-		assertEquals(Opcodes.ALOAD, firstReal(m).getOpcode());
-		assertTrue(postsThePackFinderEvent(m),
-				"the carrier's own populatePackRepository call must survive — it is the only thing that posts "
-						+ "AddPackFindersEvent, and nothing else in the kernel does");
-		new Analyzer<>(new BasicVerifier()).analyze(node.name, m);
+			ClassNode node = parse(out);
+			MethodNode m = method(node, METHOD, DESC);
+			assertNotNull(hookCall(m), eco + ": the kernel hook call is missing");
+			assertEquals(Opcodes.ALOAD, firstReal(m).getOpcode());
+			assertEquals(1, ((org.objectweb.asm.tree.VarInsnNode) firstReal(m)).var,
+					"the PackRepository is arg 1 of begin(...)");
+			// PREPENDED, not replaced: two instructions go in front, every original opcode survives behind them.
+			assertEquals(List.of(Opcodes.ALOAD, Opcodes.INVOKESTATIC), opcodes(m).subList(0, 2));
+			assertEquals(beforeOpcodes, opcodes(m).subList(2, opcodes(m).size()),
+					"the carrier's own body must survive — it is the only thing that posts AddPackFindersEvent");
+			new Analyzer<>(new BasicVerifier()).analyze(node.name, m);
+			assertSame(out, injector.transform(ForeignType.CLIENT_MOD_LOADER.binary(eco), out, ctx()),
+					eco + ": a second pass must find the hook and leave the class alone");
+		}
 	}
 
 	/** The first instruction that is not a label, line number or frame. */
-	private static org.objectweb.asm.tree.AbstractInsnNode firstReal(MethodNode m) {
-		org.objectweb.asm.tree.AbstractInsnNode insn = m.instructions.getFirst();
+	private static AbstractInsnNode firstReal(MethodNode m) {
+		AbstractInsnNode insn = m.instructions.getFirst();
 		while (insn != null && insn.getOpcode() < 0) insn = insn.getNext();
 		return insn;
-	}
-
-	/** Whether the method still reaches the carrier call whose tail posts {@code AddPackFindersEvent}. */
-	private static boolean postsThePackFinderEvent(MethodNode m) {
-		for (org.objectweb.asm.tree.AbstractInsnNode insn : m.instructions) {
-			if (insn instanceof org.objectweb.asm.tree.MethodInsnNode call
-					&& "populatePackRepository".equals(call.name)) {
-				return true;
-			}
-		}
-		return false;
-	}
-
-	/** The hedge really is inert today: handed the real MinecraftForge class, the injector changes nothing. */
-	@Test
-	void theMinecraftForgeCarrierIsUnchangedBecauseItHasNoSuchMethod() throws Exception {
-		byte[] real = carrier(Ecosystem.FORGE);
-		assumeTrue(real != null, "staged MinecraftForge carrier absent");
-
-		assertSame(real, injector.transform(ForeignType.CLIENT_MOD_LOADER.binary(Ecosystem.FORGE), real, ctx()));
 	}
 
 	/** A same-named method with a different descriptor is not the one, and must be left running. */
@@ -201,6 +168,14 @@ class ClientPackHookInjectorTest {
 			if (insn instanceof MethodInsnNode call && HOOK_OWNER.equals(call.owner)) return call;
 		}
 		return null;
+	}
+
+	private static List<Integer> opcodes(MethodNode method) {
+		List<Integer> out = new ArrayList<>();
+		for (AbstractInsnNode insn : method.instructions) {
+			if (insn.getOpcode() >= 0) out.add(insn.getOpcode());
+		}
+		return out;
 	}
 
 	private static byte[] synthetic(String desc, boolean isStatic) {

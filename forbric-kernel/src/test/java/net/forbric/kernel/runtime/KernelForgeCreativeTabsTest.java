@@ -32,7 +32,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-/** Executes the compiled runtime funnel against recording hook boundaries, without bootstrapping Minecraft. */
+/**
+ * Executes the compiled runtime funnel against recording hook boundaries, without bootstrapping Minecraft.
+ *
+ * <p>PORT(1.21.1): the fixture compiles the exact 1.21.1 shapes {@link KernelForgeCreativeTabs} resolves —
+ * {@code EventHooks}/{@code ForgeHooks.onCreativeModeTabBuildContents} with the tab's {@code ResourceKey} second
+ * argument, and the {@code BuiltInRegistries.CREATIVE_MODE_TAB} registry the bridge reads it from. On 26.2 the
+ * carriers took four arguments and the key did not exist, which is why the old stub set failed with
+ * {@code NoClassDefFoundError: net/minecraft/core/registries/BuiltInRegistries}.
+ */
 class KernelForgeCreativeTabsTest {
 	private static final String BRIDGE = "net.forbric.kernel.runtime.KernelForgeCreativeTabs";
 	private static final String TAB = "net.minecraft.world.item.CreativeModeTab";
@@ -87,6 +95,23 @@ class KernelForgeCreativeTabsTest {
 						  public interface DisplayItemsGenerator { void accept(ItemDisplayParameters parameters, Output output); }
 						}
 						""",
+				"net/minecraft/resources/ResourceKey.java", """
+						package net.minecraft.resources;
+						public class ResourceKey<T> { }
+						""",
+				"net/minecraft/core/Registry.java", """
+						package net.minecraft.core;
+						import net.minecraft.resources.ResourceKey;
+						public interface Registry<T> { java.util.Optional<ResourceKey<T>> getResourceKey(T value); }
+						""",
+				"net/minecraft/core/registries/BuiltInRegistries.java", """
+						package net.minecraft.core.registries;
+						import net.minecraft.core.Registry;
+						import net.minecraft.world.item.CreativeModeTab;
+						public class BuiltInRegistries {
+						  public static final Registry<CreativeModeTab> CREATIVE_MODE_TAB = value -> java.util.Optional.empty();
+						}
+						""",
 				"fixture/Trace.java", """
 						package fixture;
 						public class Trace {
@@ -119,11 +144,15 @@ class KernelForgeCreativeTabsTest {
 	private static String recordingHook(String pkg, String name, String family) {
 		// These boundaries record nesting and preserve callback arguments. They do not reproduce either
 		// carrier's visibility merge; the staged bytecode test pins that independent premise on the real jars.
+		// PORT(1.21.1): 26.2's onCreativeModeTabBuildContents took four arguments; 1.21.1's EventHooks and ForgeHooks
+		// both insert the tab's ResourceKey after the tab (javap on the staged runtimes). The key is not dereferenced
+		// by either carrier, and the recording boundary ignores it for the same reason.
 		return """
 				package %s;
+				import net.minecraft.resources.ResourceKey;
 				import net.minecraft.world.item.CreativeModeTab;
 				public class %s {
-				  public static void onCreativeModeTabBuildContents(CreativeModeTab tab,
+				  public static void onCreativeModeTabBuildContents(CreativeModeTab tab, ResourceKey<CreativeModeTab> key,
 				      CreativeModeTab.DisplayItemsGenerator generator, CreativeModeTab.ItemDisplayParameters parameters,
 				      CreativeModeTab.Output output) {
 				    fixture.Trace.calls.add("%s"); fixture.Trace.tabs.add(tab); fixture.Trace.parameters.add(parameters);

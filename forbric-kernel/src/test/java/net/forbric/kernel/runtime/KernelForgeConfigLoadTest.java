@@ -10,6 +10,7 @@ import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
@@ -26,10 +27,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.ResourceLock;
 import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.Handle;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
+import org.objectweb.asm.tree.InvokeDynamicInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
+import org.objectweb.asm.tree.MethodNode;
 
 /** The actual typed runtime helper runs against a minimal carrier-shaped fixture; TOML parsing is real NightConfig. */
 @ResourceLock("ModCatalog")
@@ -38,6 +42,7 @@ class KernelForgeConfigLoadTest {
     private static final String HOOK = "net.forbric.kernel.runtime.KernelForgeConfigLoad";
     private static final String CONFIG = "net/minecraftforge/fml/config/ModConfig";
     private static final String TRACKER = "net/minecraftforge/fml/config/ConfigTracker";
+    private static final String DIST_EXECUTOR = "net/minecraftforge/fml/DistExecutor";
     private static final Path FORGE = Path.of(System.getenv().getOrDefault("FORBRIC_OLD", "../forbric-loader"), "run/forge-runtime/forge-runtime.jar");
     @TempDir Path temporary;
 
@@ -56,14 +61,17 @@ class KernelForgeConfigLoadTest {
             assertEquals(Set.of("CLIENT", "COMMON", "SERVER"), type.fields.stream()
                     .filter(f -> (f.access & Opcodes.ACC_ENUM) != 0).map(f -> f.name).collect(java.util.stream.Collectors.toSet()));
             ClassNode states = read(zip, "net/minecraftforge/fml/core/ModStateProvider");
-            var stage = states.methods.stream().filter(m -> {
-                for (var i : m.instructions) if (i instanceof MethodInsnNode call && call.owner.equals(TRACKER)
-                        && call.name.equals("loadConfigs")) return true;
-                return false;
-            }).findFirst().orElseThrow();
+            // PORT(1.21.1): the CONFIG_LOAD stage (lambda$new$3) dispatches the CLIENT load through
+            // DistExecutor.unsafeRunWhenOn(CLIENT, supplier) — the supplier chain lambda$new$2 -> lambda$new$1 —
+            // and only afterwards loads COMMON directly. A flat field-read scan of the stage method therefore sees
+            // COMMON alone; resolve the invokedynamic supplier chain to recover the true eager order, CLIENT then
+            // COMMON. Verified with javap against forge-runtime.jar (52.1.16).
+            var stage = states.methods.stream().filter(m -> calls(m, DIST_EXECUTOR, "unsafeRunWhenOn"))
+                    .findFirst().orElseThrow(() -> new AssertionError("ModStateProvider has no CONFIG_LOAD dispatch"));
             List<String> order = new ArrayList<>();
-            for (var i : stage.instructions) if (i instanceof FieldInsnNode f && f.owner.equals(CONFIG + "$Type")) order.add(f.name);
-            assertEquals(List.of("CLIENT", "COMMON"), order);
+            eagerConfigTypes(states, stage, order, new HashSet<>());
+            assertEquals(List.of("CLIENT", "COMMON"), order,
+                    "the CONFIG_LOAD stage loads CLIENT (through DistExecutor) before COMMON");
             List<String> transaction = new ArrayList<>();
             for (var i : open.instructions) if (i instanceof MethodInsnNode call && call.owner.equals(CONFIG)) transaction.add(call.name);
             assertTrue(transaction.indexOf("setConfigData") < transaction.indexOf("fireEvent"),
@@ -283,6 +291,33 @@ class KernelForgeConfigLoadTest {
         @Override public void close() throws Exception { loader.close(); ModCatalog.publish(previous); }
     }
 
+    private static boolean calls(MethodNode method, String owner, String name) {
+        for (var i : method.instructions) {
+            if (i instanceof MethodInsnNode call && call.owner.equals(owner) && call.name.equals(name)) return true;
+        }
+        return false;
+    }
+
+    /**
+     * The {@code ModConfig$Type} fields read by this method in instruction order, following each invokedynamic's
+     * LambdaMetafactory implementation handle into the same class. 1.21.1's CONFIG_LOAD stage reaches the CLIENT
+     * load through a supplier lambda, so the stage method's own field reads are not the whole eager order.
+     */
+    private static void eagerConfigTypes(ClassNode owner, MethodNode method, List<String> out, Set<String> visited) {
+        if (!visited.add(method.name + method.desc)) return;
+        for (var i : method.instructions) {
+            if (i instanceof FieldInsnNode f && f.owner.equals(CONFIG + "$Type")) out.add(f.name);
+            else if (i instanceof InvokeDynamicInsnNode indy && indy.bsmArgs.length > 1
+                    && indy.bsmArgs[1] instanceof Handle handle && handle.getOwner().equals(owner.name)) {
+                for (var target : owner.methods) {
+                    if (target.name.equals(handle.getName()) && target.desc.equals(handle.getDesc())) {
+                        eagerConfigTypes(owner, target, out, visited);
+                    }
+                }
+            }
+        }
+    }
+
     private static Path write(Path root, String name, String content) throws Exception {
         Path path = root.resolve(name); Files.createDirectories(path.getParent()); Files.writeString(path, content); return path;
     }
@@ -315,7 +350,7 @@ class KernelForgeConfigLoadTest {
                 public String failure = ""; public Runnable onLoading, beforeData;
                 public int attempts, loadingEvents, saves;
                 public ModConfig(String id, Type type, String file) {
-                    this.id=id; this.type=type; this.file=file; ConfigTracker.configSets().get(type).add(this);
+                    this.id=id; this.type=type; this.file=file; ConfigTracker.INSTANCE.configSets().get(type).add(this);
                 }
                 public String getModId() { return id; }
                 public String getFileName() { return file; }
@@ -330,10 +365,14 @@ class KernelForgeConfigLoadTest {
             import com.electronwill.nightconfig.toml.TomlParser;
             public final class ConfigTracker {
                 private static final Map<ModConfig.Type,Set<ModConfig>> configs = new EnumMap<>(ModConfig.Type.class);
+                public static final ConfigTracker INSTANCE = new ConfigTracker();
                 public static final List<String> calls = Collections.synchronizedList(new ArrayList<>());
                 static { for (var type:ModConfig.Type.values()) configs.put(type,Collections.synchronizedSet(new LinkedHashSet<>())); }
-                public static Map<ModConfig.Type,Set<ModConfig>> configSets() { return configs; }
-                public static void loadConfigs(ModConfig.Type type, Path directory) { throw new AssertionError("bulk opening is forbidden"); }
+                // PORT(1.21.1): Forge 52's ConfigTracker is a singleton (public static final INSTANCE) and
+                // configSets()/loadConfigs are instance methods; the 26.2 stub's static accessors do not exist
+                // (javap against forge-runtime.jar 52.1.16).
+                public Map<ModConfig.Type,Set<ModConfig>> configSets() { return configs; }
+                public void loadConfigs(ModConfig.Type type, Path directory) { throw new AssertionError("bulk opening is forbidden"); }
                 private static void openConfig(ModConfig config, Path directory) throws Exception {
                     config.attempts++; calls.add(config.getModId()+":"+config.getType());
                     if(config.beforeData!=null) config.beforeData.run();

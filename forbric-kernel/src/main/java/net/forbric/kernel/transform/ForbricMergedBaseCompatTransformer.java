@@ -215,9 +215,10 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 				"AbstractFurnaceBlockEntity's Direction switch NoSuchFieldErrors on the $SwitchMap the merge lost — furnaces cannot be interacted with"));
 		out.add(fixed("vetoUnjudgeableOverlayConditions", OVERLAY_ENTRY,
 				"a pack.mcmeta overlay gated by a condition no evaluator here can judge is mounted anyway"));
+		// PORT(1.21.1): only MinecraftForge's manager needs this. NeoForge 21.1's LootModifierManager carries its own
+		// prepare that reads loot_modifiers/global_loot_modifiers.json natively, so the synthesized-prepare half has
+		// no anchor on this generation; it stands down (synthesizeNeoForgePrepare finds the native method).
 		out.add(new Claim(claimId("hideTheLegacyLootModifierIndexFromTheDirectoryScan"), AnchorSet.of(
-				new AnchorSet.Anchor(LOOT_MODIFIER_MANAGER_NEO.replace('/', '.'), AnchorSet.Severity.REQUIRED,
-						"NeoForge's loot-modifier manager parse-fails MinecraftForge's legacy index file on every reload"),
 				new AnchorSet.Anchor(LOOT_MODIFIER_MANAGER_FORGE.replace('/', '.'), AnchorSet.Severity.REQUIRED,
 						"MinecraftForge's loot-modifier manager parse-fails its own index as a modifier on every reload"))));
 		out.add(fixed("letModdedFeatureFlagsRegister", FEATURE_FLAGS,
@@ -1771,7 +1772,8 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 		String owner = ForeignType.CLIENT_HOOKS.internal(Ecosystem.NEOFORGE);
 		String target = "net/forbric/kernel/runtime/KernelForgeClientInit";
 		String init = "(Lnet/minecraft/client/Minecraft;Lnet/minecraft/server/packs/resources/ReloadableResourceManager;)V";
-		String particles = "(Lnet/minecraft/client/particle/ParticleResources;)V";
+		// PORT(1.21.1): the carrier registers particle providers against ParticleEngine (26.2's ParticleResources).
+		String particles = "(Lnet/minecraft/client/particle/ParticleEngine;)V";
 		List<MethodInsnNode> matches = new java.util.ArrayList<>();
 		MethodNode constructor = null;
 		int initializers = 0, providers = 0;
@@ -1804,27 +1806,26 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 	static boolean restoreForgeGeometryReload(ClassNode node) {
 		if (!"net/minecraft/client/resources/model/ModelManager".equals(node.name)
 				|| "off".equalsIgnoreCase(System.getProperty("forbric.forgeClientInit", "on"))) return false;
-		String desc = "(Lnet/minecraft/server/packs/resources/PreparableReloadListener$SharedState;Ljava/util/concurrent/Executor;"
-				+ "Lnet/minecraft/server/packs/resources/PreparableReloadListener$PreparationBarrier;Ljava/util/concurrent/Executor;)Ljava/util/concurrent/CompletableFuture;";
+		// PORT(1.21.1): ModelManager.reload is vanilla's classic six-argument reload (26.2 passed a SharedState); its
+		// head already inits NeoForge's geometry loader, which is the seam this adds MinecraftForge's to.
+		String desc = "(Lnet/minecraft/server/packs/resources/PreparableReloadListener$PreparationBarrier;"
+				+ "Lnet/minecraft/server/packs/resources/ResourceManager;Lnet/minecraft/util/profiling/ProfilerFiller;"
+				+ "Lnet/minecraft/util/profiling/ProfilerFiller;Ljava/util/concurrent/Executor;Ljava/util/concurrent/Executor;)"
+				+ "Ljava/util/concurrent/CompletableFuture;";
 		MethodNode method = findMethod(node, "reload", desc);
 		if (method == null || (method.access & Opcodes.ACC_STATIC) != 0) return false;
+		boolean neoGeometry = false;
 		for (AbstractInsnNode instruction : method.instructions) {
-			if (instruction instanceof MethodInsnNode call
-					&& (("net/forbric/kernel/runtime/KernelForgeClientInit".equals(call.owner)
-							&& "initGeometryLoaders".equals(call.name))
-						|| ("net/minecraftforge/client/model/geometry/GeometryLoaderManager".equals(call.owner)
-							&& "init".equals(call.name)))) return false;
+			if (!(instruction instanceof MethodInsnNode call)) continue;
+			if ("net/forbric/kernel/runtime/KernelForgeClientInit".equals(call.owner)
+					&& "initGeometryLoaders".equals(call.name)) return false;
+			if ("net/minecraftforge/client/model/geometry/GeometryLoaderManager".equals(call.owner)
+					&& "init".equals(call.name)) return false;
+			if ("net/neoforged/neoforge/client/model/geometry/GeometryLoaderManager".equals(call.owner)
+					&& "init".equals(call.name)) neoGeometry = true;
 		}
-		AbstractInsnNode first = method.instructions.getFirst();
-		while (first != null && first.getOpcode() < 0) first = first.getNext();
-		if (!(first instanceof VarInsnNode load) || load.getOpcode() != Opcodes.ALOAD || load.var != 1) return false;
-		AbstractInsnNode next = first.getNext();
-		while (next != null && next.getOpcode() < 0) next = next.getNext();
-		if (!(next instanceof MethodInsnNode call) || call.getOpcode() != Opcodes.INVOKEVIRTUAL
-				|| !"net/minecraft/server/packs/resources/PreparableReloadListener$SharedState".equals(call.owner)
-				|| !"resourceManager".equals(call.name)
-				|| !"()Lnet/minecraft/server/packs/resources/ResourceManager;".equals(call.desc)) return false;
-		method.instructions.insertBefore(first, new MethodInsnNode(Opcodes.INVOKESTATIC,
+		if (!neoGeometry) return false;
+		method.instructions.insert(new MethodInsnNode(Opcodes.INVOKESTATIC,
 				"net/forbric/kernel/runtime/KernelForgeClientInit", "initGeometryLoaders", "()V", false));
 		ForbricLog.info("[Forbric/MergedBaseCompat] ModelManager initializes Forge geometry loaders on every resource reload");
 		return true;

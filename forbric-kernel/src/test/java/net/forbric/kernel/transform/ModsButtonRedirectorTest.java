@@ -52,9 +52,7 @@ import net.forbric.api.ForeignType;
  * and, on a real sixteen-jar Forbric pack, three of them.
  */
 class ModsButtonRedirectorTest {
-	private static final Path MERGED_BASE =
-			Path.of(System.getenv().getOrDefault("FORBRIC_OLD", System.getProperty("user.dir") + "/../forbric-loader"), "run", "merged-base",
-					"patched-mc-merged-26.2.jar").normalize();
+	private static final Path MERGED_BASE = net.forbric.kernel.TestFixtures.mergedBase();
 
 	/**
 	 * The Forge-family button does not live in one fixed class, and pinning it to one is the mistake the
@@ -250,7 +248,7 @@ class ModsButtonRedirectorTest {
 
 	@Test
 	void theTwoFamiliesAreNamedThroughForeignTypeAndDiffer() {
-		assertEquals("net/neoforged/neoforge/client/gui/modlist/ModListScreen", NEO);
+		assertEquals("net/neoforged/neoforge/client/gui/ModListScreen", NEO);
 		assertEquals("net/minecraftforge/client/gui/ModListScreen", FORGE);
 	}
 

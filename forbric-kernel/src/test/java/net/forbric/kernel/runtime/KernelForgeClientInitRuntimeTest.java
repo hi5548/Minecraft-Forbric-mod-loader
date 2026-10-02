@@ -59,16 +59,17 @@ class KernelForgeClientInitRuntimeTest {
 			fixture.installBridge();
 			assertEquals("LOWEST", fixture.value("priority"));
 			assertEquals(false, fixture.value("receiveCanceled"));
-			assertEquals("net.neoforged.neoforge.client.event.AddClientReloadListenersEvent",
+			assertEquals("net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent",
 					((Class<?>) fixture.value("eventType")).getName());
 			fixture.init();
 			assertEquals(List.of("forge:init", "forge:post", "scratch:close", "options:true", "neo:init",
-					"graph:add", "neo:update"), fixture.trace());
+					"graph:add"), fixture.trace());
 			assertEquals(1, fixture.count("forgeCalls"));
 			assertEquals(1, fixture.count("forgePosts"), "the already posted self-destructing event must not be posted again");
 			assertEquals(1, fixture.count("neoCalls"));
-			assertSame(listener, fixture.registered().getFirst());
-			assertSame(listener, fixture.realListeners().getFirst(), "Neo's list replacement must retain the capture");
+			// 1.21.1's NeoForge event registers straight into the manager it carries, so the capture is visible
+			// there without a separate sorted-graph sync.
+			assertSame(listener, fixture.realListeners().getFirst(), "Neo's registration must retain the capture");
 			assertEquals(0, fixture.applies(listener));
 			fixture.reload();
 			assertEquals(1, fixture.applies(listener), "execute the listener that actually reached the published graph");
@@ -88,7 +89,6 @@ class KernelForgeClientInitRuntimeTest {
 			assertEquals(1, fixture.count("forgeCalls"));
 			assertEquals(1, fixture.count("optionLoads"));
 			assertEquals(1, fixture.count("neoCalls"));
-			assertTrue(fixture.registered().isEmpty());
 			assertTrue(fixture.realListeners().isEmpty());
 			assertNull(fixture.drain());
 		}
@@ -105,7 +105,7 @@ class KernelForgeClientInitRuntimeTest {
 			assertEquals(0, fixture.count("optionLoads"));
 			assertEquals(1, fixture.count("neoCalls"));
 			assertEquals(1, fixture.count("forgePosts"), "only the legacy bridge should post Forge registration");
-			assertEquals(List.of("neo:init", "forge:post", "graph:add", "scratch:close", "neo:update"), fixture.trace());
+			assertEquals(List.of("neo:init", "forge:post", "graph:add", "scratch:close"), fixture.trace());
 			assertSame(listener, fixture.realListeners().getFirst());
 			fixture.reload();
 			assertEquals(1, fixture.applies(listener));

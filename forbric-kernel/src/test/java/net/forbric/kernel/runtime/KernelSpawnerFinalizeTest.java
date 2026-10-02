@@ -41,11 +41,17 @@ class KernelSpawnerFinalizeTest {
 		}
 	}
 
+	/**
+	 * 1.21.1: a native event cancel skips initialization without vetoing world insertion, on either family.
+	 * NeoForge's hook honours {@code event.setCanceled}; so does MinecraftForge's — its
+	 * {@code ForgeEventFactory.onFinalizeSpawnSpawner} returns the event (it never returns null) and its own
+	 * {@code BaseSpawner.serverTick} caller skips the finalization by testing {@code event.isCanceled()}, and this
+	 * bridge now matches that (see {@code KernelSpawnerFinalize}'s PORT note).
+	 */
 	@Test void nativeEventCancellationSkipsInitializationWithoutVetoingWorldInsertion() throws Exception {
 		for (String side : List.of("neo", "forge")) {
 			try (SpawnerFinalizeFixture f = fixture(side)) {
-				if (side.equals("neo")) f.set("neo", (Consumer<Object>) event -> set(event, "setCanceled", true));
-				else f.set("forgeCanceled", true);
+				f.set(side, (Consumer<Object>) event -> set(event, "setCanceled", true));
 				f.tick();
 				assertEquals(0, f.count("finalizes")); assertEquals(1, f.count("insertAttempts")); assertEquals(1, f.count("inserted"));
 				assertEquals(side.equals("neo") ? 0 : 1, f.count("forgePosts"));
@@ -116,7 +122,8 @@ class KernelSpawnerFinalizeTest {
 		}
 	}
 
-	@Test void missingValueInputDoesNotFabricateAForgeEventAndReportsTheConfirmedLimitation() throws Exception {
+	/** 1.21.1 rebase: the carrier is the {@code CompoundTag} spawn tag ({@code SpawnData.getEntityToSpawn()}), not 26.2's ValueInput. */
+	@Test void missingSpawnTagDoesNotFabricateAForgeEventAndReportsTheConfirmedLimitation() throws Exception {
 		try (SpawnerFinalizeFixture f = fixture("missing")) {
 			f.set("input", null); f.tick();
 			assertEquals(0, f.count("forgePosts")); assertEquals(1, f.count("finalizes"), "the supported Neo path remains native");

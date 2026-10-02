@@ -57,24 +57,25 @@ class KernelHudBridgeTest {
 	private static final Path NEOFORGE_RUNTIME =
 			Path.of(System.getenv().getOrDefault("FORBRIC_OLD", System.getProperty("user.dir") + "/../forbric-loader"), "run", "neoforge-runtime",
 					"neoforge-runtime.jar").normalize();
-	private static final Path MERGED_BASE =
-			Path.of(System.getenv().getOrDefault("FORBRIC_OLD", System.getProperty("user.dir") + "/../forbric-loader"), "run", "merged-base",
-					"patched-mc-merged-26.2.jar").normalize();
+	private static final Path MERGED_BASE = net.forbric.kernel.TestFixtures.mergedBase();
 	private static final Path CLIENT_MODS =
 			Path.of(System.getProperty("user.dir"), "run", "client-kernel", "mods").normalize();
 
 	/**
-	 * Left out on purpose. Each would be a double render or a mis-pairing:
+	 * Left out on purpose, for 1.21.1's {@code VanillaGuiLayers}. Each would be a double render or has no Fabric
+	 * root to pair with:
 	 * <ul>
 	 *   <li>{@code subtitle_overlay} — Fabric's {@code subtitles} root is already dispatched by
 	 *       {@code SubtitleOverlayMixin} on the untouched vanilla {@code SubtitleOverlay}. Bridging it renders
 	 *       every {@code addLast} element twice.</li>
-	 *   <li>{@code after_camera_decorations} — a stratum separator, no elements.</li>
-	 *   <li>{@code contextual_info_bar} — Fabric's {@code INFO_BAR} pairs with the BACKGROUND layer instead.</li>
+	 *   <li>{@code debug_overlay}, {@code experience_bar}, {@code jump_meter}, {@code saving_indicator} — layers
+	 *       this era's {@code VanillaGuiLayers} carries that the 26.2 mapping table predates. They are left
+	 *       unmapped (no bridge root claimed for them); mapping one is a deliberate act that must come back through
+	 *       this list, as its test message says.</li>
 	 * </ul>
 	 */
 	private static final Set<String> DELIBERATELY_UNMAPPED =
-			Set.of("after_camera_decorations", "contextual_info_bar", "subtitle_overlay");
+			Set.of("debug_overlay", "experience_bar", "jump_meter", "saving_indicator", "subtitle_overlay");
 
 	@Test
 	void everyEntryIsANamespacedVanillaLayerId() {
@@ -152,17 +153,18 @@ class KernelHudBridgeTest {
 	void hudMixinsResolvedAnchorsAreStillInDeadCode() throws Exception {
 		assumeTrue(Files.isRegularFile(MERGED_BASE), "staged merged base absent");
 
-		// HudMixin resolves 7 of its anchors, all inside Hud.extractHotbarAndDecorations. That method is orphaned on
-		// this base — nothing calls it — which is the entire reason the bridge cannot double-render against them.
-		byte[] hud = readFromJar(MERGED_BASE, "net/minecraft/client/gui/Hud.class");
+		// HudMixin resolves its anchors inside Gui.renderHotbarAndDecorations (26.2 spelled the class Hud and the
+		// method extractHotbarAndDecorations). That method is orphaned on this base — nothing calls it — which is
+		// the entire reason the bridge cannot double-render against them.
+		byte[] hud = readFromJar(MERGED_BASE, "net/minecraft/client/gui/Gui.class");
 		ClassNode node = new ClassNode();
 		new ClassReader(hud).accept(node, 0);
 
 		for (MethodNode method : node.methods) {
 			for (AbstractInsnNode insn : method.instructions) {
-				if (insn instanceof MethodInsnNode call && "extractHotbarAndDecorations".equals(call.name)) {
-					throw new AssertionError("Hud.extractHotbarAndDecorations is called again (from " + method.name
-							+ ") — HudMixin's 7 resolved anchors are live, so hotbar, vehicle_health, "
+				if (insn instanceof MethodInsnNode call && "renderHotbarAndDecorations".equals(call.name)) {
+					throw new AssertionError("Gui.renderHotbarAndDecorations is called again (from " + method.name
+							+ ") — HudMixin's resolved anchors are live, so hotbar, vehicle_health, "
 							+ "contextual_info_bar_background, experience_level, selected_item_name and "
 							+ "spectator_tooltip would now render twice. Re-check the bridge table before shipping.");
 				}
@@ -174,13 +176,14 @@ class KernelHudBridgeTest {
 	void rootsHudMixinDispatchesInLiveCodeAreLeftToIt() throws Exception {
 		assumeTrue(Files.isRegularFile(MERGED_BASE), "staged merged base absent");
 		ClassNode hud = new ClassNode();
-		new ClassReader(readFromJar(MERGED_BASE, "net/minecraft/client/gui/Hud.class")).accept(hud, 0);
+		new ClassReader(readFromJar(MERGED_BASE, "net/minecraft/client/gui/Gui.class")).accept(hud, 0);
 		assertEquals(Set.of(), KernelHudBridge.liveRoots(hud), "the base before Mixin dispatches no Fabric root");
 
-		// What Mixin leaves after the renamed-body retarget: a merged handler reading HEALTH_BAR called from NeoForge's
-		// player_health layer body, and one reading HOTBAR bound in orphaned vanilla code nothing calls.
-		boundHandler(hud, "extractHealthLevel", "wrapOperation$forbricTest$health", "HEALTH_BAR");
-		boundHandler(hud, "extractHotbarAndDecorations", "wrapOperation$forbricTest$hotbar", "HOTBAR");
+		// What Mixin leaves after the renamed-body retarget: a merged handler reading HEALTH_BAR called from a
+		// REGISTERED layer body (maybeRenderVehicleHealth is registered with a handle in Gui's constructor), and one
+		// reading HOTBAR bound in orphaned vanilla code nothing calls (renderHotbarAndDecorations).
+		boundHandler(hud, "maybeRenderVehicleHealth", "wrapOperation$forbricTest$health", "HEALTH_BAR");
+		boundHandler(hud, "renderHotbarAndDecorations", "wrapOperation$forbricTest$hotbar", "HOTBAR");
 		assertEquals(Set.of("HEALTH_BAR"), KernelHudBridge.liveRoots(hud),
 				"only the root dispatched from a registered layer is the mixin's; the orphaned one stays the bridge's");
 	}

@@ -403,13 +403,12 @@ public final class KernelBoot {
 		if (LoaderProbePolicy.enabled()) chain.register(TransformPhase.COREMOD, loaderProbes);
 
 		// A NeoForge mod that reaches the Mixin weaver the way NeoForge lets it -- casting the context loader to FML's
-		// TransformingClassLoader and wrapping FMLMixinClassProcessor.transformer -- is handed a view of that object
-		// graph at the cast, and ModuleClassLoader is let initialise without java.lang.invoke opened so the view can
-		// exist. LibJF's ASM layer paid for it ("Could not initialize LibJF ASM"). See FmlContextLoaderRewriter.
+		// TransformingClassLoader and wrapping FMLMixinClassProcessor.transformer -- is handed the kernel's own
+		// loader; on 1.21.1 there is no ClassProcessor graph to fabricate (KernelFmlTransformerView.contextLoader
+		// returns the real loader). LibJF's ASM layer paid for the 26.2 view; see FmlContextLoaderRewriter.
 		if (net.forbric.kernel.mixin.MixinWeaverSlot.enabled()) {
 			chain.register(TransformPhase.COREMOD, new net.forbric.kernel.transform.FmlContextLoaderRewriter(
 					loader::familyOfClass));
-			chain.register(TransformPhase.COREMOD, new net.forbric.kernel.transform.ModuleClassLoaderInitInjector());
 		} else {
 			ForbricLog.warn("[Forbric/FmlView] -D%s=off -- a NeoForge mod that reaches the Mixin weaver through FML's "
 					+ "TransformingClassLoader (LibJF's ASM layer) fails its cast and applies none of its class patches",
@@ -448,7 +447,8 @@ public final class KernelBoot {
 			catch (java.io.IOException unavailable) { return false; }
 		}));
 		if (transferInterop) {
-			chain.register(TransformPhase.COREMOD, new net.forbric.kernel.transform.TransferTransactionHooks());
+			// PORT(1.21.1): the 26.2 Transaction hooks are retired — NeoForge 21.1 has no
+			// net.neoforged.neoforge.transfer.transaction engine to pair with Fabric's (PairedTransactions says so).
 			chain.register(TransformPhase.COREMOD, new net.forbric.kernel.transform.TransferCapabilityFallback());
 		}
 		// Hoppers ask Fabric's item storage lookup where NeoForge's hopper found nothing, with or without the bridge.
@@ -538,10 +538,10 @@ public final class KernelBoot {
 		chain.register(TransformPhase.COREMOD, new net.forbric.kernel.transform.ForgeSpawnPlacementsInjector());
 		chain.register(TransformPhase.COREMOD, new net.forbric.kernel.transform.ForgeWorldModifierInjector());
 
-		// Client only: hand the kernel the live PackRepository at the vanilla-woven
-		// ClientModLoader.setupModResourcePacks call inside Minecraft.<init>, so it can serve the ecosystem jars'
-		// assets. (Registered unconditionally — the transformer only matches the two ClientModLoader classes, which a
-		// dedicated server never loads.)
+		// Client only: hand the kernel the live PackRepository at the head of the carrier's own
+		// ClientModLoader.begin(Minecraft, PackRepository, ReloadableResourceManager), called from Minecraft.<init>
+		// before the first resource reload, so it can serve the ecosystem jars' assets. (Registered unconditionally —
+		// the transformer only matches the two ClientModLoader classes, which a dedicated server never loads.)
 		chain.register(TransformPhase.COREMOD, new ClientPackHookInjector());
 
 		// NeoForge's packet splitter is a second encoder in the same pipeline as PacketEncoder, and Fabric binds
@@ -567,7 +567,9 @@ public final class KernelBoot {
 		// of fabric-api's mixin targets silently stopped them doing.
 		chain.register(TransformPhase.COREMOD, new RegistryAliasParityInjector());
 		chain.register(TransformPhase.COREMOD, new net.forbric.kernel.transform.SoundRegistryIdentityInjector());
-		chain.register(TransformPhase.COREMOD, new net.forbric.kernel.transform.ServerReloadListenerNamesInjector());
+		// PORT(1.21.1): ServerReloadListenerNamesInjector is retired — NeoForge 21.1 has no
+		// AddServerReloadListenersEvent / VanillaServerListeners, and vanilla orders server reload listeners by
+		// identity, not by name (KernelServerReloadNames records the same).
 		chain.register(TransformPhase.COREMOD, new net.forbric.kernel.transform.CreateWorkerWaitInjector());
 		if (loader.getResource("com/zurrtum/create/mixin/LivingEntityMixin.class") != null) {
 			chain.register(TransformPhase.COREMOD, new net.forbric.kernel.transform.CreateBreathingInjector());
@@ -716,15 +718,15 @@ public final class KernelBoot {
 		chain.register(TransformPhase.COREMOD, new net.forbric.kernel.transform.ForgeBrewingRecipesInjector());
 		// The merged game builds its fuels from NeoForge's data map; Fabric's fuel events run on that builder too.
 		chain.register(TransformPhase.COREMOD, new net.forbric.kernel.transform.FabricFuelValuesInjector());
-		// NeoForge's "Missing FluidModel" check runs inside the bake Fabric wraps, before Fabric adds its fluid models.
-		chain.register(TransformPhase.COREMOD, new net.forbric.kernel.transform.FabricFluidModelsInjector());
+		// PORT(1.21.1): FabricFluidModelsInjector is retired — NeoForge 21.1 has no ClientHooks.gatherFluidModels and
+		// no "Missing FluidModel" check to correct (the merged base carries neither).
 		// The merged composter reads only NeoForge's compostables data map; on a miss it asks vanilla's map too (what a
 		// Fabric mod added after bootstrap), through vanilla-shaped calls a Fabric wrap such as BCLib's binds to.
 		chain.register(TransformPhase.COREMOD, new net.forbric.kernel.transform.CompostablesFallbackInjector());
 		// The merged Zombie converts through MinecraftForge's lambdas; NeoForge's conversion Post is posted there too.
 		chain.register(TransformPhase.COREMOD, new net.forbric.kernel.transform.NeoConversionPostInjector());
-		// NeoForge's tooltip registration event goes to each mod on its own, not through ModLoader's aborting fan-out.
-		chain.register(TransformPhase.COREMOD, new net.forbric.kernel.transform.NeoTooltipAppendersInjector());
+		// PORT(1.21.1): NeoTooltipAppendersInjector is retired — NeoForge 21.1 has no ItemTooltipHandler,
+		// TooltipAppender or RegisterTooltipAppendersEvent (KernelNeoTooltips is the matching no-op).
 		// NeoForge's coremods never run on the merged base; NativeCoremodParity does their rewrites after Mixin. These
 		// are the parts that must come before it: the flower pot's constructor, lookup and addPlant; the biome modifier
 		// pass starting from the biome's current climate, and the biome's getters yielding to a later replacement.
@@ -1122,10 +1124,10 @@ public final class KernelBoot {
 					"kernel owns client mod loading (registration in onClientModLoading)"));
 			neuter.add(new MethodBodyNeuter.Target(owner, "completeModLoading", "()Z",
 					"kernel owns client mod loading"));
-			// setupModResourcePacks is NOT neutered: ClientPackHookInjector redirects its body to
-			// KernelLifecycle.onClientResourcePacks, so the genuine loader's resource integration still never runs, but
-			// the kernel gets the live PackRepository at the one correctly-timed point (Minecraft.<init>, pre-reload)
-			// and serves the ecosystem jars' assets itself. Neutering it threw that handle away.
+			// begin is NOT neutered: ClientPackHookInjector PREPENDS KernelLifecycle.onClientResourcePacks to its
+			// body, so the kernel gets the live PackRepository at the one correctly-timed point (Minecraft.<init>,
+			// pre-reload) while the carrier's own body still posts AddPackFindersEvent; the kernel then serves the
+			// ecosystem jars' assets itself. Neutering it threw that handle away.
 		}
 	}
 

@@ -41,18 +41,20 @@ import net.forbric.kernel.util.ForbricLog;
  * vanilla's own conditionals, so a suppressed layer suppresses the elements attached to it. Wrapping further out
  * would draw Fabric elements over a HUD vanilla had decided to hide.
  *
- * <p>Only the two {@code GuiLayer}-taking overloads are touched. The {@code Consumer} overload delegates to the
- * three-arg one, so it is covered for free; {@code add(GuiLayerManager, BooleanSupplier)} re-adds a sub-manager's
- * already-wrapped layers through the same overload, which is why {@code wrap} checks for its own generated type
- * before wrapping again. NeoForge mods registering through {@code RegisterGuiLayersEvent} manipulate the layer
- * list directly and never reach {@code add}, so their layers are correctly left alone — a NeoForge layer has no
- * business dispatching Fabric roots.
+ * <p>Only the layer-taking {@code add} overload is touched (1.21.1 has one; 26.2 had two). The
+ * {@code add(GuiLayerManager, BooleanSupplier)} overload re-adds a sub-manager's already-wrapped layers through the
+ * same overload, which is why {@code wrap} checks for its own generated type before wrapping again. NeoForge mods
+ * registering through {@code RegisterGuiLayersEvent} manipulate the layer list directly and never reach {@code add},
+ * so their layers are correctly left alone — a NeoForge layer has no business dispatching Fabric roots.
  */
 public final class HudElementBridgeInjector implements ClassTransformer {
 	private static final String TARGET = "net.neoforged.neoforge.client.gui.GuiLayerManager";
 	private static final String METHOD = "add";
-	private static final String LAYER = "Lnet/neoforged/neoforge/client/gui/GuiLayer;";
-	private static final String IDENTIFIER = "Lnet/minecraft/resources/Identifier;";
+	// PORT(1.21.1): the layer type is vanilla's LayeredDraw$Layer (26.2 had NeoForge's own GuiLayer), the id is a
+	// ResourceLocation (26.2's Identifier), and the two GuiLayer-taking overloads of 26.2 collapsed to the one
+	// add(ResourceLocation, LayeredDraw$Layer) — verified with javap against the staged neoforge-runtime.jar.
+	private static final String LAYER = "Lnet/minecraft/client/gui/LayeredDraw$Layer;";
+	private static final String IDENTIFIER = "Lnet/minecraft/resources/ResourceLocation;";
 
 	private static final String HOOK_OWNER = "net/forbric/kernel/boot/KernelHudBridge";
 	private static final String HOOK_NAME = "wrap";

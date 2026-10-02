@@ -76,7 +76,10 @@ import net.forbric.kernel.util.Reflect;
  * had for NeoForge's own internal subscribers.
  */
 public final class KernelEventSubscribers {
-	private static final String SUBSCRIBE_FORGE = "Lnet/minecraftforge/eventbus/api/listener/SubscribeEvent;";
+	// PORT(1.21.1): EventBus 6's SubscribeEvent lives at eventbus.api.SubscribeEvent; the .listener. sub-package
+	// only exists in 26.2's EventBus 7. The wrong descriptor made every Forge @SubscribeEvent method invisible to
+	// this scanner (subscribedEvents empty, dead-event audit silent).
+	private static final String SUBSCRIBE_FORGE = "Lnet/minecraftforge/eventbus/api/SubscribeEvent;";
 	private static final String SUBSCRIBE_NEO = "Lnet/neoforged/bus/api/SubscribeEvent;";
 	private static final String EBS_FORGE = "Lnet/minecraftforge/fml/common/Mod$EventBusSubscriber;";
 	private static final String EBS_NEO = "Lnet/neoforged/fml/common/EventBusSubscriber;";
@@ -431,7 +434,7 @@ public final class KernelEventSubscribers {
 						Class.forName("net.neoforged.bus.api.SubscribeEvent", false, cl),
 						Class.forName("net.neoforged.bus.api.Event", false, cl),
 						Class.forName(ForeignType.MOD_BUS_EVENT.binary(Ecosystem.NEOFORGE), false, cl),
-						Class.forName("net.neoforged.bus.api.IEventBus", false, cl).getMethod("register", Object.class));
+						Class.forName(ForeignType.EVENT_BUS.binary(Ecosystem.NEOFORGE), false, cl).getMethod("register", Object.class));
 			} catch (Throwable t) {
 				ForbricLog.debug("[Forbric/EBS] NeoForge bus API absent");
 				return null;
@@ -642,9 +645,12 @@ public final class KernelEventSubscribers {
 			}, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
 
 			if (family[0] == null) return null;
-			// Absent bus() is Bus.BOTH — Forge's own default, and the one that routes per event type.
+			// Absent bus(): Forge 52's @EventBusSubscriber defaults bus() to FORGE, NeoForge's annotation has no
+			// such attribute (BOTH/placeholder). PORT(1.21.1): the 26.2 default was BOTH; keep NeoForge at BOTH.
+			String effectiveBus = bus[0] != null ? bus[0]
+					: (family[0] == Ecosystem.FORGE ? "FORGE" : "BOTH");
 			return new Subscriber(name[0].replace('/', '.'), family[0], dists, modId[0],
-					bus[0] == null ? "BOTH" : bus[0], java.util.Set.copyOf(events));
+					effectiveBus, java.util.Set.copyOf(events));
 		} catch (Throwable t) {
 			return null;
 		}

@@ -242,9 +242,13 @@ class KernelLoadReportTest {
 		String report = java.nio.file.Files.readString(text);
 		// The reader troubleshooting alpha is the reader these notes are for; beta is named, and not called broken.
 		assertTrue(report.contains("one of its deferred setup tasks threw"), report);
-		assertTrue(report.contains("not confirmed") && report.contains("1/2 anchors resolve")
-				&& report.contains("mixin:beta.mixins.json:beta.mixin.BetaMixin"), report);
-		assertEquals(1, report.lines().filter(line -> line.contains("partly did not run")).count(), report);
+		// The wording is pinned through the package-private renderer rather than the file: the file renders in the
+		// system language, so asserting an English literal against it fails on any non-English machine.
+		String english = KernelLoadReport.render(false, ModCatalog.failures(),
+				net.forbric.api.CompatibilityFindings.unattributed(), net.forbric.api.CompatibilityFindings.suspected());
+		assertTrue(english.contains("not confirmed") && english.contains("1/2 anchors resolve")
+				&& english.contains("mixin:beta.mixins.json:beta.mixin.BetaMixin"), english);
+		assertEquals(1, english.lines().filter(line -> line.contains("partly did not run")).count(), english);
 		assertTrue(said.contains("1 mod(s) did not finish loading: alpha"), said);
 	}
 

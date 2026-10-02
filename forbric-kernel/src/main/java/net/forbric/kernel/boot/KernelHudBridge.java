@@ -213,8 +213,12 @@ public final class KernelHudBridge {
 	/**
 	 * The {@code VanillaHudElements} fields read by a method reachable from what the game calls: the layers
 	 * {@code registerVanillaLayers} registers (method handles) and {@code extractRenderState}, following the class's
-	 * own calls and handles. A HudMixin handler bound in orphaned vanilla code — {@code extractHotbarAndDecorations},
+	 * own calls and handles. A HudMixin handler bound in orphaned vanilla code — {@code renderHotbarAndDecorations},
 	 * which nothing calls on this base — is not reachable and owns nothing.
+	 *
+	 * <p>PORT(1.21.1): the era's {@code Gui} registers its layers with method handles in the CONSTRUCTOR
+	 * ({@code GuiLayerManager.add(id, invokedynamic render:...)}), not in a {@code registerVanillaLayers}; so
+	 * {@code <init>} is a seed too, and it is what reaches methods such as {@code maybeRenderPlayerHealth}.
 	 */
 	static Set<String> liveRoots(ClassNode hud) {
 		Map<String, MethodNode> byKey = new HashMap<>();
@@ -222,7 +226,8 @@ public final class KernelHudBridge {
 		Deque<MethodNode> work = new ArrayDeque<>();
 		Set<MethodNode> seen = new HashSet<>();
 		for (MethodNode method : hud.methods) {
-			if (method.name.equals("registerVanillaLayers") || method.name.equals("extractRenderState")) {
+			if (method.name.equals("registerVanillaLayers") || method.name.equals("extractRenderState")
+					|| method.name.equals("<init>")) {
 				if (seen.add(method)) work.add(method);
 			}
 		}

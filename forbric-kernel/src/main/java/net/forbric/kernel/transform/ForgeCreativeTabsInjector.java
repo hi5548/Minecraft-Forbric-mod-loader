@@ -20,8 +20,11 @@ import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.InsnList;
+import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.VarInsnNode;
 
 import net.forbric.api.Ecosystem;
 import net.forbric.api.GameEventBridge;
@@ -36,7 +39,19 @@ public final class ForgeCreativeTabsInjector implements ClassTransformer {
 	static final String METHOD = "buildContents";
 	static final String METHOD_DESC = "(Lnet/minecraft/world/item/CreativeModeTab$ItemDisplayParameters;)V";
 	static final String HOOK = "onCreativeModeTabBuildContents";
+	/**
+	 * What the kernel's {@code KernelForgeCreativeTabs.buildContents} takes, and what 26.2's carriers declared.
+	 *
+	 * <p>PORT(1.21.1): the carriers inserted the tab's {@code ResourceKey} as a second argument, so the merged
+	 * base's own call is {@code CARRIER_DESC} (five arguments). The kernel method still takes the 26.2 four — it
+	 * resolves the key itself from the registry — so the injector drops the key before delegating.
+	 */
 	static final String HOOK_DESC = "(Lnet/minecraft/world/item/CreativeModeTab;"
+			+ "Lnet/minecraft/world/item/CreativeModeTab$DisplayItemsGenerator;"
+			+ "Lnet/minecraft/world/item/CreativeModeTab$ItemDisplayParameters;"
+			+ "Lnet/minecraft/world/item/CreativeModeTab$Output;)V";
+	static final String CARRIER_DESC = "(Lnet/minecraft/world/item/CreativeModeTab;"
+			+ "Lnet/minecraft/resources/ResourceKey;"
 			+ "Lnet/minecraft/world/item/CreativeModeTab$DisplayItemsGenerator;"
 			+ "Lnet/minecraft/world/item/CreativeModeTab$ItemDisplayParameters;"
 			+ "Lnet/minecraft/world/item/CreativeModeTab$Output;)V";
@@ -85,16 +100,30 @@ public final class ForgeCreativeTabsInjector implements ClassTransformer {
 		if (declarations != 1 || calls != 1 || caller != target
 				|| (target.access & (Opcodes.ACC_STATIC | Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)) != 0
 				|| hook.getOpcode() != Opcodes.INVOKESTATIC || hook.itf
-				|| !NEO.equals(hook.owner) || !HOOK_DESC.equals(hook.desc)) return classBytes;
+				|| !NEO.equals(hook.owner) || !CARRIER_DESC.equals(hook.desc)) return classBytes;
 
-		// Four references in, void out on both sides: no instructions, locals, frames or exception ranges change.
-		hook.owner = RUNTIME;
-		hook.name = METHOD;
+		// [tab, key, generator, parameters, output] -> [tab, generator, parameters, output], then the kernel call.
+		// The key is the one argument the kernel re-resolves from the registry, so it is dropped, not replaced. The
+		// three scratch locals sit above the method's own slots, are live only across these straight-line
+		// instructions, and no branch or frame sits between them.
+		int scratch = target.maxLocals;
+		InsnList replacement = new InsnList();
+		replacement.add(new VarInsnNode(Opcodes.ASTORE, scratch + 2));       // output
+		replacement.add(new VarInsnNode(Opcodes.ASTORE, scratch + 1));       // item display parameters
+		replacement.add(new VarInsnNode(Opcodes.ASTORE, scratch));           // generator
+		replacement.add(new InsnNode(Opcodes.POP));                          // the ResourceKey the kernel re-derives
+		replacement.add(new VarInsnNode(Opcodes.ALOAD, scratch));            // generator
+		replacement.add(new VarInsnNode(Opcodes.ALOAD, scratch + 1));        // item display parameters
+		replacement.add(new VarInsnNode(Opcodes.ALOAD, scratch + 2));        // output
+		replacement.add(new MethodInsnNode(Opcodes.INVOKESTATIC, RUNTIME, METHOD, HOOK_DESC, false));
+		target.instructions.insertBefore(hook, replacement);
+		target.instructions.remove(hook);
+		target.maxLocals = scratch + 3;
 		EventBridges.installed(GameEventBridge.CREATIVE_TAB_CONTENTS);
 		ClassWriter writer = new ClassWriter(0);
 		node.accept(writer);
 		ForbricLog.info("[Forbric/CreativeTabs] creative-tab contents now run NeoForge and MinecraftForge's "
-				+ "registration events through the same output");
+				+ "registration events through the same output (the carrier's ResourceKey is re-derived by the kernel)");
 		return writer.toByteArray();
 	}
 }

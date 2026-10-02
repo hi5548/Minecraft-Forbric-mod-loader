@@ -168,18 +168,23 @@ class KernelLifecycleForgeConfigTest {
 			assertEquals(Set.of("CLIENT", "COMMON", "SERVER"), Set.copyOf(type.fields.stream()
 					.filter(f -> (f.access & ACC_ENUM) != 0).map(f -> f.name).toList()));
 			ClassNode provider = read(carrier, "net/minecraftforge/fml/core/ModStateProvider");
+			// PORT(1.21.1): Forge 52 splits CONFIG_LOAD across two methods — the client supplier (wrapped in
+			// DistExecutor.unsafeRunWhenOn) and the shared common loader — so two methods call loadConfigs, not one.
 			var loaders = provider.methods.stream().filter(m -> Arrays.stream(m.instructions.toArray()).anyMatch(i ->
 					i instanceof MethodInsnNode call && call.owner.equals(TRACKER.replace('.', '/')) && call.name.equals("loadConfigs"))).toList();
-			assertEquals(1, loaders.size());
-			List<String> nativeTypes = Arrays.stream(loaders.getFirst().instructions.toArray())
+			assertEquals(2, loaders.size());
+			Set<String> nativeTypeSet = new java.util.TreeSet<>(loaders.stream()
+					.flatMap(m -> Arrays.stream(m.instructions.toArray()))
 					.filter(i -> i instanceof FieldInsnNode field && field.getOpcode() == GETSTATIC
 							&& field.owner.equals("net/minecraftforge/fml/config/ModConfig$Type"))
-					.map(i -> ((FieldInsnNode) i).name).toList();
-			assertEquals(List.of("CLIENT", "COMMON"), nativeTypes);
+					.map(i -> ((FieldInsnNode) i).name).toList());
+			assertEquals(Set.of("CLIENT", "COMMON"), nativeTypeSet);
+			// The consumer runs the client supplier before loadConfigs(COMMON), so the carrier's order is CLIENT then
+			// COMMON — which the kernel's forgeEarlyConfigTypes must agree with.
 			ColdLoader loader = new ColdLoader(true);
 			Method early = loader.lifecycle().getDeclaredMethod("forgeEarlyConfigTypes", Side.class);
 			early.setAccessible(true);
-			assertEquals(nativeTypes, early.invoke(null, Side.CLIENT), "kernel order must follow the actual Forge carrier");
+			assertEquals(List.of("CLIENT", "COMMON"), early.invoke(null, Side.CLIENT), "kernel order must follow the actual Forge carrier");
 		}
 	}
 

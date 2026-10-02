@@ -8,7 +8,6 @@ import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.function.Consumer;
-import java.util.function.Predicate;
 import java.util.jar.JarFile;
 import net.forbric.kernel.transform.EventChainAuditInjector;
 import org.junit.jupiter.api.AfterEach;
@@ -20,15 +19,16 @@ import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 
 /**
- * The audit on the REAL buses: NeoForge's EventBus and MinecraftForge's bus records from the staged runtime jars,
- * rewritten by {@link EventChainAuditInjector}, with a NeoForge listener standing in for a kernel bridge.
+ * The audit on the REAL buses: NeoForge's {@code net.neoforged.bus.EventBus} and MinecraftForge's EventBus 6
+ * {@code net.minecraftforge.eventbus.EventBus} from the staged runtime jars, rewritten by
+ * {@link EventChainAuditInjector}, with a NeoForge listener standing in for a kernel bridge.
  */
 @ResourceLock("system-properties")
 class EventChainAuditTest {
 	private static final String NEO_PROBE = "probe.NeoProbe", FORGE_PROBE = "probe.ForgeProbe", MOD_CODE = "probe.ModCode";
 	private Object neoBus, forgeBus;
 	private Class<?> neoProbe, forgeProbe;
-	private Method post, fire, setCanceled;
+	private Method post, fire, setCanceled, cancelForge;
 
 	@BeforeEach void buses() throws Exception {
 		System.setProperty(EventChainAudit.PROPERTY, "unused-in-tests.json");
@@ -42,10 +42,14 @@ class EventChainAuditTest {
 		neoProbe = loader.loadClass(NEO_PROBE); forgeProbe = loader.loadClass(FORGE_PROBE);
 		neoBus = loader.loadClass("net.neoforged.bus.api.BusBuilder").getMethod("builder").invoke(null);
 		neoBus = neoBus.getClass().getMethod("build").invoke(neoBus);
-		Class<?> cancellableBus = loader.loadClass("net.minecraftforge.eventbus.api.bus.CancellableEventBus");
-		forgeBus = cancellableBus.getMethod("create", Class.class).invoke(null, forgeProbe);
-		post = cancellableBus.getMethod("post", loader.loadClass("net.minecraftforge.eventbus.internal.Event"));
-		fire = cancellableBus.getMethod("fire", loader.loadClass("net.minecraftforge.eventbus.internal.Event"));
+		// EventBus 6: one IEventBus per family, built by that family's BusBuilder.
+		Class<?> forgeEventApi = loader.loadClass("net.minecraftforge.eventbus.api.Event");
+		Class<?> forgeBusApi = loader.loadClass("net.minecraftforge.eventbus.api.IEventBus");
+		forgeBus = loader.loadClass("net.minecraftforge.eventbus.api.BusBuilder").getMethod("builder").invoke(null);
+		forgeBus = forgeBus.getClass().getMethod("build").invoke(forgeBus);
+		post = forgeBusApi.getMethod("post", forgeEventApi);
+		fire = forgeBusApi.getMethod("fire", forgeEventApi);
+		cancelForge = forgeEventApi.getMethod("setCanceled", boolean.class);
 		setCanceled = loader.loadClass("net.neoforged.bus.api.ICancellableEvent").getMethod("setCanceled", boolean.class);
 	}
 
@@ -99,8 +103,7 @@ class EventChainAuditTest {
 	}
 
 	@Test void aThrowingForwardIsAnInnerFailureAndStillPropagates() throws Exception {
-		Predicate<Object> thrower = event -> { throw new IllegalStateException("listener failed"); };
-		forgeBus.getClass().getMethod("addListener", Predicate.class).invoke(forgeBus, thrower);
+		addForge(event -> { throw new IllegalStateException("listener failed"); });
 		bridge(1, true, false);
 		assertThrows(Exception.class, this::postNeo);
 		assertEquals(1, pair().innerFailures.sum());
@@ -131,8 +134,15 @@ class EventChainAuditTest {
 	}
 
 	private void forgeListener(boolean cancel) throws Exception {
-		Predicate<Object> listener = event -> cancel;
-		forgeBus.getClass().getMethod("addListener", Predicate.class).invoke(forgeBus, listener);
+		addForge(cancel ? event -> invoke(cancelForge, event, true) : event -> { });
+	}
+
+	/** Registers a MinecraftForge listener on the real bus: EventBus 6 takes Consumers, not EventBus 7 Predicates. */
+	private void addForge(Consumer<Object> listener) throws Exception {
+		Class<?> priority = forgeBus.getClass().getClassLoader().loadClass("net.minecraftforge.eventbus.api.EventPriority");
+		Object lowest = priority.getField("LOWEST").get(null);
+		forgeBus.getClass().getMethod("addListener", priority, boolean.class, Class.class, Consumer.class)
+				.invoke(forgeBus, lowest, false, forgeProbe, listener);
 	}
 
 	/** A NeoForge listener shaped like the kernel's bridges: post MinecraftForge's event, carry its cancel back. */
@@ -170,7 +180,7 @@ class EventChainAuditTest {
 		} catch (IllegalAccessException e) { throw new IllegalStateException(e); }
 	}
 
-	/** Child-first over the two runtime jars, with the three bus classes rewritten and the two probe events generated. */
+	/** Child-first over the two runtime jars, with both real bus classes rewritten and the two probe events generated. */
 	private static final class AuditedBuses extends ClassLoader {
 		private final List<JarFile> jars = new ArrayList<>();
 		private final Map<String, byte[]> generated = new HashMap<>();
@@ -178,9 +188,9 @@ class EventChainAuditTest {
 			super(EventChainAuditTest.class.getClassLoader());
 			// Multi-release: log4j-api keeps its Java 9+ StackLocator under META-INF/versions.
 			for (Path path : jarPaths) jars.add(new JarFile(path.toFile(), true, java.util.zip.ZipFile.OPEN_READ, Runtime.version()));
-			generated.put(NEO_PROBE, event("probe/NeoProbe", "net/neoforged/bus/api/Event", "net/neoforged/bus/api/ICancellableEvent"));
-			generated.put(FORGE_PROBE, event("probe/ForgeProbe", "net/minecraftforge/eventbus/api/event/MutableEvent",
-					"net/minecraftforge/eventbus/api/event/characteristic/Cancellable"));
+			generated.put(NEO_PROBE, interfaceEvent("probe/NeoProbe", "net/neoforged/bus/api/Event", "net/neoforged/bus/api/ICancellableEvent"));
+			// EventBus 6 marks a cancellable event with the @Cancelable ANNOTATION, not a marker interface.
+			generated.put(FORGE_PROBE, cancellableEvent("probe/ForgeProbe", "net/minecraftforge/eventbus/api/Event"));
 			generated.put(MOD_CODE, modCode());
 		}
 		@Override protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
@@ -190,9 +200,8 @@ class EventChainAuditTest {
 				byte[] bytes = generated.get(name);
 				if (bytes == null) bytes = fromJars(name);
 				if (bytes == null) return super.loadClass(name, resolve);
-				if (name.equals("net.neoforged.bus.EventBus")) bytes = EventChainAuditInjector.rewrite(bytes, true, false);
-				if (name.equals("net.minecraftforge.eventbus.internal.CancellableEventBusImpl")) bytes = EventChainAuditInjector.rewrite(bytes, false, true);
-				if (name.equals("net.minecraftforge.eventbus.internal.EventBusImpl")) bytes = EventChainAuditInjector.rewrite(bytes, false, false);
+				if (name.equals("net.neoforged.bus.EventBus")) bytes = EventChainAuditInjector.rewrite(bytes, true);
+				if (name.equals("net.minecraftforge.eventbus.EventBus")) bytes = EventChainAuditInjector.rewrite(bytes, false);
 				return defineClass(name, bytes, 0, bytes.length);
 			}
 		}
@@ -211,19 +220,31 @@ class EventChainAuditTest {
 			writer.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "probe/ModCode", null, "java/lang/Object", null);
 			MethodVisitor post = writer.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "post", "(Ljava/lang/Object;Ljava/lang/Object;)V", null, null);
 			post.visitCode();
-			post.visitVarInsn(Opcodes.ALOAD, 0); post.visitTypeInsn(Opcodes.CHECKCAST, "net/minecraftforge/eventbus/api/bus/CancellableEventBus");
-			post.visitVarInsn(Opcodes.ALOAD, 1); post.visitTypeInsn(Opcodes.CHECKCAST, "net/minecraftforge/eventbus/internal/Event");
-			post.visitMethodInsn(Opcodes.INVOKEINTERFACE, "net/minecraftforge/eventbus/api/bus/CancellableEventBus", "post", "(Lnet/minecraftforge/eventbus/internal/Event;)Z", true);
+			post.visitVarInsn(Opcodes.ALOAD, 0); post.visitTypeInsn(Opcodes.CHECKCAST, "net/minecraftforge/eventbus/api/IEventBus");
+			post.visitVarInsn(Opcodes.ALOAD, 1); post.visitTypeInsn(Opcodes.CHECKCAST, "net/minecraftforge/eventbus/api/Event");
+			post.visitMethodInsn(Opcodes.INVOKEINTERFACE, "net/minecraftforge/eventbus/api/IEventBus", "post", "(Lnet/minecraftforge/eventbus/api/Event;)Z", true);
 			post.visitInsn(Opcodes.POP); post.visitInsn(Opcodes.RETURN); post.visitMaxs(2, 2); post.visitEnd(); writer.visitEnd();
 			return writer.toByteArray();
 		}
-		private static byte[] event(String name, String superName, String marker) {
+		/** An event extending {@code superName} and implementing {@code marker}. */
+		private static byte[] interfaceEvent(String name, String superName, String marker) {
 			ClassWriter writer = new ClassWriter(0);
 			writer.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, name, null, superName, new String[] {marker});
+			init(writer, superName);
+			return writer.toByteArray();
+		}
+		/** An EventBus 6 cancellable event: extends {@code Event} and carries the runtime @Cancelable annotation. */
+		private static byte[] cancellableEvent(String name, String superName) {
+			ClassWriter writer = new ClassWriter(0);
+			writer.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, name, null, superName, null);
+			writer.visitAnnotation("Lnet/minecraftforge/eventbus/api/Cancelable;", true).visitEnd();
+			init(writer, superName);
+			return writer.toByteArray();
+		}
+		private static void init(ClassWriter writer, String superName) {
 			MethodVisitor init = writer.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null);
 			init.visitCode(); init.visitVarInsn(Opcodes.ALOAD, 0); init.visitMethodInsn(Opcodes.INVOKESPECIAL, superName, "<init>", "()V", false);
 			init.visitInsn(Opcodes.RETURN); init.visitMaxs(1, 1); init.visitEnd(); writer.visitEnd();
-			return writer.toByteArray();
 		}
 	}
 }

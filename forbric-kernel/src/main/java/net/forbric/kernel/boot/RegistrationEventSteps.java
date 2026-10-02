@@ -40,10 +40,10 @@ import net.forbric.kernel.util.ForbricLog;
 /**
  * NeoForge's {@code RegistrationEvents.init()}, run one step at a time.
  *
- * <p>That method is seven no-argument static calls — cauldron fluid content, cauldron interactions,
+ * <p>That method is a straight run of no-argument static calls — cauldron fluid content,
  * {@code CapabilityHooks.init} (posts {@code RegisterCapabilitiesEvent}), forced chunks,
  * {@code RegistryManager.initDataMaps} (posts {@code RegisterDataMapTypesEvent}), data component modifiers and POI
- * extension. The kernel called it whole, so the first step that threw ended it: on the sweep pack's client one data
+ * extension (six on NeoForge 21.1; 26.2 had a seventh, "cauldron interactions"). The kernel called it whole, so the first step that threw ended it: on the sweep pack's client one data
  * map listener died on a poisoned {@code DataPackRegistriesHooks}, and with it went every data map type (NeoForge's
  * eleven built-ins included), {@code ModifyDefaultComponentsEvent}, {@code ExtendPoiTypesEvent} and — because the
  * kernel's transfer bridge sat after the call in the same {@code try} — the cross-ecosystem item/fluid/energy

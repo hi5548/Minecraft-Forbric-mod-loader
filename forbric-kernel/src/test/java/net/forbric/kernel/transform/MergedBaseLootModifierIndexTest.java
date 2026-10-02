@@ -49,25 +49,18 @@ class MergedBaseLootModifierIndexTest {
 	private static final Path FORGE_RT = RUN.resolve("forge-runtime/forge-runtime.jar");
 	private static final Path NEO_RT = RUN.resolve("neoforge-runtime/neoforge-runtime.jar");
 
+	/**
+	 * PORT(1.21.1): NeoForge 21.1's manager already carries its own {@code prepare} that reads
+	 * {@code loot_modifiers/global_loot_modifiers.json} natively, where 26.2 had none and the kernel synthesized one.
+	 * The synthesized half therefore stands down — the transformer must return the class byte-identical.
+	 */
 	@Test
-	void neoForgesManagerGetsAPrepareThatScansThroughTheHidingView() throws Exception {
+	void neoForgesManagerAlreadyHandlesTheIndexAndStandDown() throws Exception {
 		byte[] original = bytesOf(NEO_RT, ForbricMergedBaseCompatTransformer.LOOT_MODIFIER_MANAGER_NEO);
-		byte[] out = transform(ForbricMergedBaseCompatTransformer.LOOT_MODIFIER_MANAGER_NEO, original);
-		assertNotSame(original, out);
-		ClassNode node = parse(out);
-		MethodNode prepare = find(node, ForbricMergedBaseCompatTransformer.PREPARE, ForbricMergedBaseCompatTransformer.PREPARE_DESC);
-		assertNotNull(prepare, "a prepare(RM,PF)Map was synthesized");
-		List<String> real = new ArrayList<>();
-		for (AbstractInsnNode insn = prepare.instructions.getFirst(); insn != null; insn = insn.getNext()) {
-			if (insn.getOpcode() < 0) continue;
-			if (insn instanceof VarInsnNode v) real.add("ALOAD " + v.var);
-			else if (insn instanceof MethodInsnNode c) real.add((c.getOpcode() == Opcodes.INVOKESTATIC ? "INVOKESTATIC " : "INVOKESPECIAL ") + c.owner + "." + c.name);
-			else real.add(Integer.toString(insn.getOpcode()));
-		}
-		assertEquals(List.of("ALOAD 0", "ALOAD 1", "INVOKESTATIC " + ForbricMergedBaseCompatTransformer.KERNEL_LOOT_MODIFIERS + ".withoutTheLegacyIndex",
-				"ALOAD 2", "INVOKESPECIAL " + ForbricMergedBaseCompatTransformer.SIMPLE_JSON_LISTENER + ".prepare", Integer.toString(Opcodes.ARETURN)), real);
-		for (MethodNode m : node.methods) new Analyzer<>(new BasicVerifier()).analyze(node.name, m);
-		assertSame(out, transform(ForbricMergedBaseCompatTransformer.LOOT_MODIFIER_MANAGER_NEO, out), "second pass");
+		assertNotNull(find(parse(original), ForbricMergedBaseCompatTransformer.PREPARE, ForbricMergedBaseCompatTransformer.PREPARE_DESC),
+				"NeoForge's manager has its own prepare on this generation");
+		assertSame(original, transform(ForbricMergedBaseCompatTransformer.LOOT_MODIFIER_MANAGER_NEO, original),
+				"nothing to synthesize — the native prepare owns the index");
 	}
 
 	@Test

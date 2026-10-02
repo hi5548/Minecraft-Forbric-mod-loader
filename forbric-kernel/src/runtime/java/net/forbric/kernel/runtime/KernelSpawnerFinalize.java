@@ -90,7 +90,12 @@ public final class KernelSpawnerFinalize {
 		} finally {
 			if (neoSpawnVeto) mob.setSpawnCancelled(true);
 		}
-		if (forge == null) {
+		// PORT(1.21.1): Forge 52's carrier hook never returns null — it builds its event and hands it to fire(),
+		// which pops MinecraftForge.EVENT_BUS.post's boolean — and its own BaseSpawner.serverTick caller skips the
+		// finalization by testing event.isCanceled() (javap on forge-runtime.jar 52.1.16 and
+		// patched-mc-forge-1.21.1.jar, offset 624). Testing only for null would silently ignore every cancelling
+		// MinecraftForge listener; check the event's cancel flag, as the native caller does.
+		if (forge == null || forge.isCanceled()) {
 			neo.setCanceled(true); // skip finalization; do not upgrade this to a veto of world insertion
 			return neo;
 		}

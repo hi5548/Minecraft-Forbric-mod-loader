@@ -49,7 +49,7 @@ final class KernelForgeClientInitFixture implements AutoCloseable {
 	}
 
 	void particles() throws Exception {
-		Class<?> particles = type("net.minecraft.client.particle.ParticleResources");
+		Class<?> particles = type("net.minecraft.client.particle.ParticleEngine");
 		call(type("net.forbric.kernel.runtime.KernelForgeClientInit").getMethod("onRegisterParticleProviders", particles),
 				null, particles.getConstructor().newInstance());
 	}
@@ -91,11 +91,6 @@ final class KernelForgeClientInitFixture implements AutoCloseable {
 	@SuppressWarnings("unchecked")
 	List<String> warnings() throws Exception {
 		return (List<String>) value("warnings");
-	}
-
-	List<?> registered() throws Exception {
-		Object event = value("event");
-		return new ArrayList<>(((Map<?, ?>) call(event.getClass().getMethod("getRegistry"), event)).values());
 	}
 
 	List<?> realListeners() throws Exception {
@@ -158,7 +153,7 @@ final class KernelForgeClientInitFixture implements AutoCloseable {
 				import java.util.function.Consumer;
 				import net.minecraft.server.packs.resources.*;
 				import net.neoforged.bus.api.*;
-				import net.neoforged.neoforge.client.event.AddClientReloadListenersEvent;
+				import net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent;
 				public final class ClientProbe {
 				  public static final List<String> trace = new ArrayList<>(), warnings = new ArrayList<>();
 				  public static final List<PreparableReloadListener> listeners = new ArrayList<>(List.of(new Listener()));
@@ -166,7 +161,6 @@ final class KernelForgeClientInitFixture implements AutoCloseable {
 				  public static int forgeCalls, forgePosts, neoCalls, optionLoads, geometryCalls;
 				  public static RuntimeException forgeFailure, neoFailureBefore, neoFailureAfter, graphFailure;
 				  public static ReloadableResourceManager scratch;
-				  public static AddClientReloadListenersEvent event;
 				  public static String priority;
 				  public static boolean receiveCanceled;
 				  public static Class<?> eventType;
@@ -177,13 +171,13 @@ final class KernelForgeClientInitFixture implements AutoCloseable {
 				    }
 				  }
 				  public static final class SpyBus implements IEventBus {
-				    private Consumer<AddClientReloadListenersEvent> listener;
+				    private Consumer<RegisterClientReloadListenersEvent> listener;
 				    @SuppressWarnings("unchecked")
 				    public <T extends Event> void addListener(EventPriority p, boolean canceled, Class<T> eventClass, Consumer<T> callback) {
 				      priority = p.name(); receiveCanceled = canceled; eventType = eventClass;
 				      listener = event -> callback.accept((T) event);
 				    }
-				    public void dispatch(AddClientReloadListenersEvent event) { if (listener != null) listener.accept(event); }
+				    public void dispatch(RegisterClientReloadListenersEvent event) { if (listener != null) listener.accept(event); }
 				  }
 				}
 				"""),
@@ -199,7 +193,7 @@ final class KernelForgeClientInitFixture implements AutoCloseable {
 				package net.minecraft.client;
 				public class Minecraft { public final Options options = new Options(); }
 				"""),
-			Map.entry("net.minecraft.client.particle.ParticleResources", "package net.minecraft.client.particle; public class ParticleResources {}"),
+			Map.entry("net.minecraft.client.particle.ParticleEngine", "package net.minecraft.client.particle; public class ParticleEngine {}"),
 			Map.entry("net.minecraft.server.packs.PackType", "package net.minecraft.server.packs; public enum PackType { CLIENT_RESOURCES }"),
 			Map.entry("net.minecraft.server.packs.resources.PreparableReloadListener", """
 				package net.minecraft.server.packs.resources;
@@ -214,44 +208,46 @@ final class KernelForgeClientInitFixture implements AutoCloseable {
 				package net.minecraft.server.packs.resources;
 				import java.util.*;
 				import net.minecraft.server.packs.PackType;
-				import net.neoforged.neoforge.event.SortedReloadListenerEvent;
 				public class ReloadableResourceManager implements AutoCloseable {
 				  private List<PreparableReloadListener> listeners = new ArrayList<>();
 				  public boolean closed;
 				  public ReloadableResourceManager(PackType type) {}
 				  public List<PreparableReloadListener> getListeners() { return listeners; }
 				  public void registerReloadListener(PreparableReloadListener listener) { listeners.add(listener); }
-				  public void updateListenersFrom(SortedReloadListenerEvent event) {
-				    listeners = new ArrayList<>(event.getRegistry().values()); fixture.ClientProbe.trace.add("neo:update");
-				  }
 				  public void reloadAll() { for (var listener : listeners) listener.reload(null, Runnable::run, null, Runnable::run).join(); }
 				  public void close() { closed = true; fixture.ClientProbe.trace.add("scratch:close"); }
 				}
 				"""),
-			Map.entry("net.minecraft.resources.Identifier", """
-				package net.minecraft.resources;
-				public record Identifier(String namespace, String path) {
-				  public static Identifier fromNamespaceAndPath(String namespace, String path) { return new Identifier(namespace, path); }
-				}
+			Map.entry("net.minecraftforge.eventbus.api.Event", "package net.minecraftforge.eventbus.api; public class Event {}"),
+			Map.entry("net.minecraftforge.eventbus.api.IEventBus", """
+				package net.minecraftforge.eventbus.api;
+				public interface IEventBus { boolean post(Event event); }
 				"""),
-			Map.entry("net.minecraftforge.eventbus.internal.Event", "package net.minecraftforge.eventbus.internal; public interface Event {}"),
-			Map.entry("net.minecraftforge.eventbus.api.bus.EventBus", """
-				package net.minecraftforge.eventbus.api.bus;
-				public interface EventBus<T extends net.minecraftforge.eventbus.internal.Event> { boolean post(T event); }
+			Map.entry("net.minecraftforge.common.MinecraftForge", """
+				package net.minecraftforge.common;
+				import fixture.ClientProbe;
+				import net.minecraftforge.client.event.RegisterClientReloadListenersEvent;
+				public final class MinecraftForge {
+				  private static boolean dispatched;
+				  // Spy stand-in for Forge's game bus: its one mod handler publishes the reload listeners the event carries.
+				  public static final net.minecraftforge.eventbus.api.IEventBus EVENT_BUS = event -> {
+				    ClientProbe.forgePosts++; ClientProbe.trace.add("forge:post");
+				    RegisterClientReloadListenersEvent registration = (RegisterClientReloadListenersEvent) event;
+				    ClientProbe.scratch = registration.resources;
+				    if (!dispatched) {
+				      dispatched = true;
+				      for (var listener : ClientProbe.listeners) registration.registerReloadListener(listener);
+				    }
+				    return false;
+				  };
+				  private MinecraftForge() {}
+				}
 				"""),
 			Map.entry("net.minecraftforge.client.event.RegisterClientReloadListenersEvent", """
 				package net.minecraftforge.client.event;
 				import net.minecraft.server.packs.resources.*;
-				import net.minecraftforge.eventbus.api.bus.EventBus;
-				import fixture.ClientProbe;
-				public final class RegisterClientReloadListenersEvent implements net.minecraftforge.eventbus.internal.Event {
-				  private final ReloadableResourceManager resources;
-				  private static boolean dispatched;
-				  public static final EventBus<RegisterClientReloadListenersEvent> BUS = event -> {
-				    ClientProbe.forgePosts++; ClientProbe.trace.add("forge:post"); ClientProbe.scratch = event.resources;
-				    if (!dispatched) { for (var listener : ClientProbe.listeners) event.registerReloadListener(listener); dispatched = true; }
-				    return false;
-				  };
+				public class RegisterClientReloadListenersEvent extends net.minecraftforge.eventbus.api.Event {
+				  public final ReloadableResourceManager resources;
 				  public RegisterClientReloadListenersEvent(ReloadableResourceManager resources) { this.resources = resources; }
 				  public void registerReloadListener(PreparableReloadListener listener) { resources.registerReloadListener(listener); }
 				}
@@ -260,9 +256,10 @@ final class KernelForgeClientInitFixture implements AutoCloseable {
 				package net.minecraftforge.client;
 				import fixture.ClientProbe;
 				import net.minecraft.client.Minecraft;
-				import net.minecraft.client.particle.ParticleResources;
+				import net.minecraft.client.particle.ParticleEngine;
 				import net.minecraft.server.packs.resources.ReloadableResourceManager;
 				import net.minecraftforge.client.event.RegisterClientReloadListenersEvent;
+				import net.minecraftforge.common.MinecraftForge;
 				public final class ForgeHooksClient {
 				  private static boolean initialized;
 				  public static void initClientHooks(Minecraft mc, ReloadableResourceManager manager) {
@@ -270,9 +267,9 @@ final class KernelForgeClientInitFixture implements AutoCloseable {
 				    if (initialized) throw new IllegalStateException("Client hooks initialized more than once");
 				    initialized = true;
 				    if (ClientProbe.forgeFailure != null) throw ClientProbe.forgeFailure;
-				    RegisterClientReloadListenersEvent.BUS.post(new RegisterClientReloadListenersEvent(manager));
+				    MinecraftForge.EVENT_BUS.post(new RegisterClientReloadListenersEvent(manager));
 				  }
-				  public static void onRegisterParticleProviders(ParticleResources particles) { ClientProbe.trace.add("forge:particles"); }
+				  public static void onRegisterParticleProviders(ParticleEngine particles) { ClientProbe.trace.add("forge:particles"); }
 				}
 				"""),
 			Map.entry("net.minecraftforge.client.model.geometry.GeometryLoaderManager", """
@@ -290,45 +287,35 @@ final class KernelForgeClientInitFixture implements AutoCloseable {
 				  <T extends Event> void addListener(EventPriority priority, boolean receiveCanceled, Class<T> eventType, Consumer<T> consumer);
 				}
 				"""),
-			Map.entry("net.neoforged.neoforge.event.SortedReloadListenerEvent", """
-				package net.neoforged.neoforge.event;
-				import java.util.*;
-				import fixture.ClientProbe;
-				import net.minecraft.resources.Identifier;
-				import net.minecraft.server.packs.resources.PreparableReloadListener;
-				public class SortedReloadListenerEvent extends net.neoforged.bus.api.Event {
-				  private final Map<Identifier, PreparableReloadListener> registry = new LinkedHashMap<>();
-				  public void addListener(Identifier id, PreparableReloadListener listener) {
-				    if (ClientProbe.graphFailure != null) throw ClientProbe.graphFailure;
-				    if (registry.containsKey(id) || registry.containsValue(listener)) throw new IllegalArgumentException("duplicate listener");
-				    registry.put(id, listener); ClientProbe.trace.add("graph:add");
-				  }
-				  public Map<Identifier, PreparableReloadListener> getRegistry() { return Collections.unmodifiableMap(registry); }
-				}
-				"""),
-			Map.entry("net.neoforged.neoforge.client.event.AddClientReloadListenersEvent", """
+			Map.entry("net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent", """
 				package net.neoforged.neoforge.client.event;
-				public class AddClientReloadListenersEvent extends net.neoforged.neoforge.event.SortedReloadListenerEvent {
-				  public AddClientReloadListenersEvent(net.minecraft.server.packs.resources.ReloadableResourceManager manager) {}
+				import fixture.ClientProbe;
+				import net.minecraft.server.packs.resources.*;
+				public class RegisterClientReloadListenersEvent extends net.neoforged.bus.api.Event {
+				  private final ReloadableResourceManager resourceManager;
+				  public RegisterClientReloadListenersEvent(ReloadableResourceManager resourceManager) { this.resourceManager = resourceManager; }
+				  public void registerReloadListener(PreparableReloadListener listener) {
+				    if (ClientProbe.graphFailure != null) throw ClientProbe.graphFailure;
+				    resourceManager.registerReloadListener(listener);
+				    ClientProbe.trace.add("graph:add");
+				  }
 				}
 				"""),
 			Map.entry("net.neoforged.neoforge.client.ClientHooks", """
 				package net.neoforged.neoforge.client;
 				import fixture.ClientProbe;
 				import net.minecraft.client.Minecraft;
-				import net.minecraft.client.particle.ParticleResources;
+				import net.minecraft.client.particle.ParticleEngine;
 				import net.minecraft.server.packs.resources.ReloadableResourceManager;
-				import net.neoforged.neoforge.client.event.AddClientReloadListenersEvent;
+				import net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent;
 				public final class ClientHooks {
 				  public static void initClientHooks(Minecraft mc, ReloadableResourceManager manager) {
 				    ClientProbe.neoCalls++; ClientProbe.trace.add("neo:init");
 				    if (ClientProbe.neoFailureBefore != null) throw ClientProbe.neoFailureBefore;
-				    ClientProbe.event = new AddClientReloadListenersEvent(manager);
-				    ClientProbe.bus.dispatch(ClientProbe.event);
+				    ClientProbe.bus.dispatch(new RegisterClientReloadListenersEvent(manager));
 				    if (ClientProbe.neoFailureAfter != null) throw ClientProbe.neoFailureAfter;
-				    manager.updateListenersFrom(ClientProbe.event);
 				  }
-				  public static void onRegisterParticleProviders(ParticleResources particles) { ClientProbe.trace.add("neo:particles"); }
+				  public static void onRegisterParticleProviders(ParticleEngine particles) { ClientProbe.trace.add("neo:particles"); }
 				}
 				"""),
 			Map.entry("net.forbric.kernel.util.ForbricLog", """

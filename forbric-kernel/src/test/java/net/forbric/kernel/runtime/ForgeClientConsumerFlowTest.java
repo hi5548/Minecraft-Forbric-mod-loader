@@ -78,18 +78,20 @@ class ForgeClientConsumerFlowTest {
     }
 
     @Test
-    void tooltipFallsBackAndOnlyRecognizesTheRealForgeManagersUnknownSentinel() throws Exception {
+    void tooltipFallsBackWhenTheRealForgeManagerHasNoFactoryForTheComponent() throws Exception {
         try (Api api = api()) {
             Object forge = new Object();
             assertSame(forge, api.tooltip(() -> null, () -> forge));
             ColdForgeTooltip carrier = new ColdForgeTooltip();
             Object component = carrier.component();
-            IllegalArgumentException unknown = assertThrows(IllegalArgumentException.class, () -> carrier.create(component));
-            assertEquals("Unknown TooltipComponent", unknown.getMessage());
-            assertEquals("net.minecraftforge.client.gui.ClientTooltipComponentManager", unknown.getStackTrace()[0].getClassName());
+            // 26.2's Forge manager threw an IllegalArgumentException("Unknown TooltipComponent") that
+            // ForgeClientConsumerFlow.tooltip recognized by message + throw site. 1.21.1's real manager returns
+            // null for a component with no factory — verified against the staged carrier — so that sentinel has
+            // no counterpart and the fallback simply passes the null through.
+            assertNull(carrier.create(component), "1.21.1's Forge manager answers an unknown component with null");
             assertNull(api.tooltip(() -> null, () -> carrier.create(component)));
             carrier.factory(component, ignored -> null);
-            assertNull(api.tooltip(() -> null, () -> carrier.create(component)), "Forge also treats a factory's null as unknown");
+            assertNull(api.tooltip(() -> null, () -> carrier.create(component)), "a factory's null is also a miss");
             Object output = carrier.output();
             carrier.factory(component, ignored -> output);
             assertSame(output, api.tooltip(() -> null, () -> carrier.create(component)));
@@ -196,19 +198,22 @@ class ForgeClientConsumerFlowTest {
         } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
     }
 
-    /** Defines the carrier's exact class bytes. Minecraft interfaces and the unused init-event linkage are inert stubs. */
+    /** Defines the carrier's exact class bytes. Minecraft interfaces and the initialization-event linkage are inert stubs. */
     private static final class ColdForgeTooltip extends ClassLoader {
         private final Class<?> tooltip;
         private final Class<?> clientTooltip;
+        private final Class<?> immutableMap;
         private final Class<?> manager;
         private final Method create;
         ColdForgeTooltip() throws Exception {
             super(ClassLoader.getPlatformClassLoader());
             tooltip = defineInterface("net.minecraft.world.inventory.tooltip.TooltipComponent");
             clientTooltip = defineInterface("net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipComponent");
-            defineInterface("net.minecraftforge.eventbus.internal.Event");
-            defineInterface("net.minecraftforge.eventbus.api.bus.EventBus");
-            defineUnusedInitializationEvent();
+            // 1.21.1's Forge event is a net.minecraftforge.eventbus.api.Event; the manager's init() names the
+            // initialization event and the bus's post() takes that base type. Both must resolve for reflection.
+            defineEventBase();
+            defineInitializationEvent();
+            immutableMap = defineImmutableMap();
             Path jar = Path.of(System.getenv().getOrDefault("FORBRIC_OLD", "../forbric-loader"), "run/forge-runtime/forge-runtime.jar");
             assumeTrue(Files.isRegularFile(jar), "staged Forge carrier absent");
             String binary = "net.minecraftforge.client.gui.ClientTooltipComponentManager";
@@ -223,22 +228,49 @@ class ForgeClientConsumerFlowTest {
         Object output() { return Proxy.newProxyInstance(this, new Class<?>[] {clientTooltip}, (proxy, method, args) -> null); }
         Object create(Object input) { return invoke(create, input); }
         void factory(Object input, Function<Object, Object> factory) throws Exception { setFactories(Map.of(input.getClass(), factory)); }
+        @SuppressWarnings({"unchecked", "rawtypes"})
         private void setFactories(Map<?, ?> value) throws Exception {
-            var field = manager.getDeclaredField("FACTORIES"); field.setAccessible(true); field.set(null, value);
+            // The real field is typed com.google.common.collect.ImmutableMap, which is not on the test classpath;
+            // the stand-in below has that binary name so the assignment resolves.
+            Map holder = (Map) immutableMap.getConstructor().newInstance();
+            holder.putAll(value);
+            var field = manager.getDeclaredField("FACTORIES"); field.setAccessible(true); field.set(null, holder);
         }
-        private void defineUnusedInitializationEvent() {
-            String name = "net/minecraftforge/client/event/RegisterClientTooltipComponentFactoriesEvent";
+        private void defineEventBase() {
+            String name = "net/minecraftforge/eventbus/api/Event";
             ClassWriter writer = new ClassWriter(0);
-            writer.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, name, null, "java/lang/Object",
-                    new String[] {"net/minecraftforge/eventbus/internal/Event"});
-            writer.visitField(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "BUS", "Lnet/minecraftforge/eventbus/api/bus/EventBus;", null, null).visitEnd();
-            var constructor = writer.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "(Ljava/util/Map;)V", null, null);
+            writer.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, name.replace('.', '/'), null, "java/lang/Object", null);
+            var constructor = writer.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null);
             constructor.visitCode(); constructor.visitVarInsn(Opcodes.ALOAD, 0);
             constructor.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false);
+            constructor.visitInsn(Opcodes.RETURN); constructor.visitMaxs(1, 1); constructor.visitEnd();
+            writer.visitEnd();
+            byte[] bytes = writer.toByteArray();
+            defineClass(name.replace('/', '.'), bytes, 0, bytes.length);
+        }
+        private void defineInitializationEvent() {
+            String name = "net/minecraftforge/client/event/RegisterClientTooltipComponentFactoriesEvent";
+            ClassWriter writer = new ClassWriter(0);
+            writer.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, name, null, "net/minecraftforge/eventbus/api/Event", null);
+            var constructor = writer.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "(Ljava/util/Map;)V", null, null);
+            constructor.visitCode(); constructor.visitVarInsn(Opcodes.ALOAD, 0);
+            constructor.visitMethodInsn(Opcodes.INVOKESPECIAL, "net/minecraftforge/eventbus/api/Event", "<init>", "()V", false);
             constructor.visitInsn(Opcodes.RETURN); constructor.visitMaxs(1, 2); constructor.visitEnd();
             writer.visitEnd();
             byte[] bytes = writer.toByteArray();
             defineClass(name.replace('/', '.'), bytes, 0, bytes.length);
+        }
+        private Class<?> defineImmutableMap() {
+            String name = "com/google/common/collect/ImmutableMap";
+            ClassWriter writer = new ClassWriter(0);
+            writer.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, name, null, "java/util/HashMap", null);
+            var constructor = writer.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null);
+            constructor.visitCode(); constructor.visitVarInsn(Opcodes.ALOAD, 0);
+            constructor.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/util/HashMap", "<init>", "()V", false);
+            constructor.visitInsn(Opcodes.RETURN); constructor.visitMaxs(1, 1); constructor.visitEnd();
+            writer.visitEnd();
+            byte[] bytes = writer.toByteArray();
+            return defineClass(name.replace('/', '.'), bytes, 0, bytes.length);
         }
         private Class<?> defineInterface(String binary) {
             ClassWriter writer = new ClassWriter(0);

@@ -23,7 +23,9 @@ class KernelForgeReloadTest {
 	@Test
 	void neoForgesHookRunsFirstAndUnconditionally() throws Exception {
 		String s = source();
-		int neo = s.indexOf("EventHooks.onResourceReload(resources, registries, retained)");
+		// PORT(1.21.1): NeoForge 21.1's EventHooks.onResourceReload is 2-argument (resources, RegistryAccess);
+		// 26.2's third listener-key argument is gone. Verified with javap against neoforge-runtime.jar (21.1.252).
+		int neo = s.indexOf("EventHooks.onResourceReload(resources, registries)");
 		int off = s.indexOf("System.getProperty(PROPERTY");
 		int forge = s.indexOf("ForgeEventFactory.onResourceReload(");
 		assertTrue(neo >= 0 && off >= 0 && forge >= 0);
@@ -50,7 +52,8 @@ class KernelForgeReloadTest {
 		String s = source();
 		assertFalse(s.contains("static final boolean"), "the switch must be read per call, never cached");
 		assertTrue(s.contains("\"off\".equalsIgnoreCase(System.getProperty(PROPERTY, \"on\"))"));
-		assertTrue(s.contains("resources.getRegistryLookup(), neo)"),
-				"Forge's event takes the HolderLookup.Provider the resources were built with, not the RegistryAccess");
+		assertTrue(s.contains("resources.getRegistryLookup(), registries)"),
+				"Forge's event takes the HolderLookup.Provider the resources were built with, then the RegistryAccess "
+						+ "— the lookup is paired with registries, not with neo");
 	}
 }

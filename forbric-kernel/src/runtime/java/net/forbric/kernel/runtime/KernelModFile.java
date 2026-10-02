@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.function.Supplier;
 
 import cpw.mods.jarhandling.SecureJar;
+import net.forbric.kernel.boot.ForgeSecureJarStandIn;
 import net.forbric.kernel.discovery.ModFileScanner;
 import net.forbric.kernel.util.ForbricLog;
 import net.neoforged.neoforgespi.language.IModInfo;
@@ -48,14 +49,14 @@ import net.neoforged.neoforgespi.locating.ModFileDiscoveryAttributes;
  *
  * <p>PORT(1.21.1): 26.2's {@code net.neoforged.fml.jarcontents.JarContents} does not exist on 1.21.1; the file's
  * contents are a {@code cpw.mods.jarhandling.SecureJar} and the interface accessor is {@link #getSecureJar()}
- * (26.2 named it {@code getContents()}). This class builds the jar's real {@code SecureJar} on the same lazy
- * contract the 26.2 field had.
+ * (26.2 named it {@code getContents()}). The jar's {@code SecureJar} is built through
+ * {@link ForgeSecureJarStandIn}, the same stand-in the seeded Forge/NeoForge {@code ModFile}s get, because the
+ * carrier's own {@code SecureJar.from(Path...)} cannot initialise off ModLauncher (see {@link #secureJarOf}).
  *
- * <p>PORT(1.21.1): {@code JarContents.empty(path)} has no 1.21.1 counterpart. {@code SecureJar.from(Path...)}
- * refuses to build from anything that is not an existing path ("Invalid paths argument, contained no existing
- * paths"), and there is no public empty factory, so a presence alias — a mod id the kernel publishes with no jar
- * behind it — gets a null {@link #getSecureJar()} where 26.2 got an empty container. Every consumer that walks the
- * file list must tolerate that null; a mod that reads files out of its OWN jar is unaffected, because it has one.
+ * <p>PORT(1.21.1): {@code JarContents.empty(path)} has no 1.21.1 counterpart: there is no public empty
+ * {@code SecureJar} factory, so a presence alias — a mod id the kernel publishes with no jar behind it — gets a
+ * null {@link #getSecureJar()} where 26.2 got an empty container. Every consumer that walks the file list must
+ * tolerate that null; a mod that reads files out of its OWN jar is unaffected, because it has one.
  *
  * <p>PORT(1.21.1): the interface also gained {@link #findResource(String...)} (vanilla 1.21.1's shape, mirroring
  * {@code net.neoforged.fml.loading.moddiscovery.ModFile}) and {@link #setSecurityStatus(SecureJar.Status)}; it lost
@@ -98,7 +99,15 @@ public final class KernelModFile implements IModFile {
 
 	private static SecureJar secureJarOf(Path jar) {
 		try {
-			return SecureJar.from(jar);
+			// PORT(1.21.1): SecureJar.from(Path...) cannot initialise off ModLauncher — cpw.mods.jarhandling.impl.Jar's
+			// <clinit> demands ModLauncher's UnionFileSystemProvider among the JDK's installed providers, and the
+			// kernel replaces ModLauncher, so it throws once and then hands back NoClassDefFoundError forever. A real
+			// file therefore gets the same stand-in the seeded Forge/NeoForge ModFiles get
+			// (PassiveSeeder.fillForgeModFileJar): ForgeSecureJarStandIn answers the interface over a plain zip file
+			// system, so findResource() resolves the file's own entries. Verified against the staged
+			// neoforge/forge-runtime jars; without it getSecureJar() was null even for a real jar, contradicting the
+			// contract the class doc states.
+			return (SecureJar) ForgeSecureJarStandIn.create(SecureJar.class, jar);
 		} catch (Throwable t) {
 			ForbricLog.debug("[Forbric/Container] no SecureJar for %s: %s", jar.getFileName(),
 					String.valueOf(t));

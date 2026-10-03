@@ -508,6 +508,97 @@ class GuestInjectorPrunerTest {
 		return writer.toByteArray();
 	}
 
+	/**
+	 * The arm-8 batch: fabric-item-api-v1's EnchantRandomlyLootFunctionMixin ({@code canEnchant} gone) and
+	 * RecipeMixin ({@code Item.hasCraftingRemainingItem}/{@code getCraftingRemainingItem} moved to the ItemStack
+	 * pair), and fabric-events-interaction-v0's ServerPlayerInteractionManagerMixin ({@code Block.destroy} gone
+	 * from destroyBlock; {@code breakBlock}'s LVT capture). Each has a surviving sibling; every loss is recorded
+	 * CONFIRMED, required=false. Synthetic bytes.
+	 */
+	@Test
+	void theArm8MemberMoveInjectorsArePrunedAndTheirSiblingsStay() {
+		checkDeadInjectors(GuestInjectorPruner.ENCHANT_RANDOMLY_MIXIN,
+				"net.minecraft.world.level.storage.loot.functions.EnchantRandomlyFunction", "keepMe",
+				new String[][] { { "callAllowEnchantingEvent",
+						"(Lnet/minecraft/world/item/enchantment/Enchantment;Lnet/minecraft/world/item/ItemStack;Z"
+								+ "Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/core/Holder;)Z",
+						"Lorg/spongepowered/asm/mixin/injection/Redirect;", "lambda$run$4", "INVOKE",
+						"Lnet/minecraft/world/item/enchantment/Enchantment;canEnchant(Lnet/minecraft/world/item/ItemStack;)Z" } },
+				"AllowEnchanting");
+
+		checkDeadInjectors(GuestInjectorPruner.RECIPE_MIXIN, "net.minecraft.world.item.crafting.Recipe", "keepMe",
+				new String[][] {
+						{ "hasStackRemainder", "(Lnet/minecraft/world/item/Item;)Z",
+								"Lorg/spongepowered/asm/mixin/injection/Redirect;",
+								"Lnet/minecraft/world/item/crafting/Recipe;getRemainingItems", "INVOKE",
+								"Lnet/minecraft/world/item/Item;hasCraftingRemainingItem()Z" },
+						{ "replaceGetRecipeRemainder",
+								"(Lnet/minecraft/world/item/Item;)Lnet/minecraft/world/item/Item;",
+								"Lorg/spongepowered/asm/mixin/injection/Redirect;",
+								"Lnet/minecraft/world/item/crafting/Recipe;getRemainingItems", "INVOKE",
+								"Lnet/minecraft/world/item/Item;getCraftingRemainingItem()Lnet/minecraft/world/item/Item;" } },
+				"crafting-remainder");
+
+		checkDeadInjectors(GuestInjectorPruner.PLAYER_INTERACTION_MIXIN,
+				"net.minecraft.server.level.ServerPlayerGameMode", "keepMe",
+				new String[][] {
+						{ "breakBlock", "(Lnet/minecraft/core/BlockPos;"
+								+ "Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;"
+								+ "Lnet/minecraft/world/level/block/entity/BlockEntity;"
+								+ "Lnet/minecraft/world/level/block/Block;Lnet/minecraft/world/level/block/state/BlockState;)V",
+								"Lorg/spongepowered/asm/mixin/injection/Inject;",
+								"Lnet/minecraft/server/level/ServerPlayerGameMode;destroyBlock", "INVOKE",
+								"Lnet/minecraft/world/level/block/Block;playerWillDestroy(Lnet/minecraft/world/level/Level;"
+										+ "Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;"
+										+ "Lnet/minecraft/world/entity/player/Player;)Lnet/minecraft/world/level/block/state/BlockState;" },
+						{ "onBlockBroken", "(Lnet/minecraft/core/BlockPos;"
+								+ "Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;"
+								+ "Lnet/minecraft/world/level/block/entity/BlockEntity;"
+								+ "Lnet/minecraft/world/level/block/Block;Lnet/minecraft/world/level/block/state/BlockState;Z)V",
+								"Lorg/spongepowered/asm/mixin/injection/Inject;",
+								"Lnet/minecraft/server/level/ServerPlayerGameMode;destroyBlock", "INVOKE",
+								"Lnet/minecraft/world/level/block/Block;destroy(Lnet/minecraft/world/level/LevelAccessor;"
+										+ "Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;)V" } },
+				"PlayerBlockBreakEvents");
+	}
+
+	/** Each row is {@code {name, desc, annotation, selector, atValue, atTarget}}; {@code survivor} is a sibling that stays. */
+	private static void checkDeadInjectors(String mixin, String target, String survivor, String[][] dead,
+			String detailNeedle) {
+		net.forbric.api.CompatibilityFindings.reset();
+		byte[] pruned = new GuestInjectorPruner().transform(mixin, deadInjectorMixin(mixin, target, survivor, dead), null);
+		ClassNode after = read(pruned);
+		assertNotNull(method(after, survivor), survivor + " (the working sibling) stays in " + mixin);
+		String config = GuestInjectorPruner.CONFIGS.get(mixin);
+		for (String[] row : dead) {
+			assertEquals(null, methodByDesc(after, row[0], row[1]), row[0] + " must be pruned from " + mixin);
+			var finding = net.forbric.api.CompatibilityFindings.all().stream()
+					.filter(f -> f.id().startsWith("mixin-injector:" + config + ":" + mixin + "#" + row[0] + "(")).findFirst()
+					.orElseThrow(() -> new AssertionError("no finding for pruned " + row[0] + " in " + mixin));
+			assertEquals(net.forbric.api.CompatibilityFinding.Confidence.CONFIRMED, finding.confidence(), row[0]);
+			assertFalse(finding.required(), row[0]);
+			assertTrue(finding.detail().contains(detailNeedle), finding.detail());
+		}
+		assertTrue(net.forbric.api.CompatibilityFindings.confirmedRequired().isEmpty());
+	}
+
+	private static byte[] deadInjectorMixin(String mixinClass, String target, String survivor, String[][] dead) {
+		ClassWriter writer = new ClassWriter(0);
+		writer.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, mixinClass, null, "java/lang/Object", null);
+		org.objectweb.asm.AnnotationVisitor mixin = writer.visitAnnotation("Lorg/spongepowered/asm/mixin/Mixin;", true);
+		org.objectweb.asm.AnnotationVisitor targets = mixin.visitArray("targets");
+		targets.visit(null, target);
+		targets.visitEnd();
+		mixin.visitEnd();
+		for (String[] row : dead) {
+			injector(writer, row[0], row[1], row[2], row[3], row[4], row[5]);
+		}
+		injector(writer, survivor, "(Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V",
+				"Lorg/spongepowered/asm/mixin/injection/Inject;", dead[0][3], "TAIL", dead[0][5]);
+		writer.visitEnd();
+		return writer.toByteArray();
+	}
+
 	@Test
 	void aSecondPassChangesNothingFurther() throws Exception {
 		GuestInjectorPruner pruner = new GuestInjectorPruner();

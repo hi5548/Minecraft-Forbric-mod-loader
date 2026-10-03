@@ -117,6 +117,15 @@ import net.forbric.kernel.util.ForbricLog;
  * match that call — so it cannot be retargeted, only stood down, with the loss recorded. The mixin's
  * {@code fuelTimeMapHook} and its other anchors stay.
  *
+ * <p>Three more from the same family, all member moves or a call site the merge moved, each with a surviving
+ * anchor: fabric-item-api-v1's {@code EnchantRandomlyLootFunctionMixin#callAllowEnchantingEvent} ({@code canEnchant}
+ * → {@code ItemStack.supportsEnchantment}, like the anvil one) and {@code RecipeMixin#hasStackRemainder} /
+ * {@code #replaceGetRecipeRemainder} ({@code Item.hasCraftingRemainingItem}/{@code getCraftingRemainingItem} →
+ * the {@code ItemStack} pair, like the brewing stand); and fabric-events-interaction-v0's
+ * {@code ServerPlayerInteractionManagerMixin}, whose {@code onBlockBroken} anchor {@code Block.destroy} is no
+ * longer called in {@code ServerPlayerGameMode.destroyBlock}, and whose {@code breakBlock} anchor IS present but
+ * the {@code @Inject} captures locals the merged LVT no longer has ("incompatible changes at opcode 89").
+ *
  * <p><b>A lambda-selector retarget is NOT local — measured 2026-10-03, reverted.</b> A transformer that rewrote a
  * guest mixin's selectors onto the lambda the merged base declares cleared {@code SerializableRegistriesMixin}'s
  * finding, and the same subject then reported eleven more CONFIRMED {@code mixin-injector} losses plus a balm
@@ -144,6 +153,10 @@ public final class GuestInjectorPruner implements ClassTransformer {
 	static final String INGREDIENT_MIXIN = "net.fabricmc.fabric.mixin.recipe.ingredient.IngredientMixin";
 	static final String FURNACE_CONTENT_MIXIN =
 			"net.fabricmc.fabric.mixin.content.registry.AbstractFurnaceBlockEntityMixin";
+	static final String ENCHANT_RANDOMLY_MIXIN = "net.fabricmc.fabric.mixin.item.EnchantRandomlyLootFunctionMixin";
+	static final String RECIPE_MIXIN = "net.fabricmc.fabric.mixin.item.RecipeMixin";
+	static final String PLAYER_INTERACTION_MIXIN =
+			"net.fabricmc.fabric.mixin.event.interaction.ServerPlayerInteractionManagerMixin";
 	private static final String SHARED_INDEX = "Lcom/llamalad7/mixinextras/sugar/ref/LocalIntRef;";
 
 	/**
@@ -203,7 +216,27 @@ public final class GuestInjectorPruner implements ClassTransformer {
 					new Prune("canUseAsFuelRedirect", "()Ljava/util/Map;",
 							"Lnet/minecraft/world/level/block/entity/AbstractFurnaceBlockEntity;isFuel"),
 					new Prune("getFuelTimeRedirect", "()Ljava/util/Map;",
-							"Lnet/minecraft/world/level/block/entity/AbstractFurnaceBlockEntity;getBurnDuration")));
+							"Lnet/minecraft/world/level/block/entity/AbstractFurnaceBlockEntity;getBurnDuration")),
+			ENCHANT_RANDOMLY_MIXIN, List.of(new Prune("callAllowEnchantingEvent",
+					"(Lnet/minecraft/world/item/enchantment/Enchantment;Lnet/minecraft/world/item/ItemStack;Z"
+							+ "Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/core/Holder;)Z",
+					"lambda$run$")),
+			RECIPE_MIXIN, List.of(
+					new Prune("hasStackRemainder", "(Lnet/minecraft/world/item/Item;)Z",
+							"Lnet/minecraft/world/item/crafting/Recipe;getRemainingItems"),
+					new Prune("replaceGetRecipeRemainder", "(Lnet/minecraft/world/item/Item;)"
+							+ "Lnet/minecraft/world/item/Item;", "Lnet/minecraft/world/item/crafting/Recipe;getRemainingItems")),
+			PLAYER_INTERACTION_MIXIN, List.of(
+					new Prune("breakBlock", "(Lnet/minecraft/core/BlockPos;"
+							+ "Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;"
+							+ "Lnet/minecraft/world/level/block/entity/BlockEntity;Lnet/minecraft/world/level/block/Block;"
+							+ "Lnet/minecraft/world/level/block/state/BlockState;)V",
+							"Lnet/minecraft/server/level/ServerPlayerGameMode;destroyBlock"),
+					new Prune("onBlockBroken", "(Lnet/minecraft/core/BlockPos;"
+							+ "Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;"
+							+ "Lnet/minecraft/world/level/block/entity/BlockEntity;Lnet/minecraft/world/level/block/Block;"
+							+ "Lnet/minecraft/world/level/block/state/BlockState;Z)V",
+							"Lnet/minecraft/server/level/ServerPlayerGameMode;destroyBlock")));
 
 	/** The mixin config each entry is declared in, which names the owning mod on the finding. */
 	static final Map<String, String> CONFIGS = Map.of(MODEL_MANAGER_MIXIN, "fabric-model-loading-api-v1.mixins.json",
@@ -212,7 +245,10 @@ public final class GuestInjectorPruner implements ClassTransformer {
 			BREWING_STAND_MIXIN, "fabric-item-api-v1.mixins.json",
 			ANVIL_HANDLER_MIXIN, "fabric-item-api-v1.mixins.json",
 			INGREDIENT_MIXIN, "fabric-recipe-api-v1.mixins.json",
-			FURNACE_CONTENT_MIXIN, "fabric-content-registries-v0.mixins.json");
+			FURNACE_CONTENT_MIXIN, "fabric-content-registries-v0.mixins.json",
+			ENCHANT_RANDOMLY_MIXIN, "fabric-item-api-v1.mixins.json",
+			RECIPE_MIXIN, "fabric-item-api-v1.mixins.json",
+			PLAYER_INTERACTION_MIXIN, "fabric-events-interaction-v0.mixins.json");
 
 	/** Whether an entry applies on this boot, beyond the pruner's own switch. */
 	private static final Map<String, BooleanSupplier> ACTIVE = Map.of(MODEL_MANAGER_MIXIN, () -> true,
@@ -221,7 +257,10 @@ public final class GuestInjectorPruner implements ClassTransformer {
 			BREWING_STAND_MIXIN, () -> true,
 			ANVIL_HANDLER_MIXIN, () -> true,
 			INGREDIENT_MIXIN, () -> true,
-			FURNACE_CONTENT_MIXIN, () -> true);
+			FURNACE_CONTENT_MIXIN, () -> true,
+			ENCHANT_RANDOMLY_MIXIN, () -> true,
+			RECIPE_MIXIN, () -> true,
+			PLAYER_INTERACTION_MIXIN, () -> true);
 
 	/** What is lost when an entry's class loads and is not pruned. */
 	private static final Map<String, String> COSTS = Map.of(MODEL_MANAGER_MIXIN,
@@ -240,7 +279,15 @@ public final class GuestInjectorPruner implements ClassTransformer {
 					+ "with Either.map, not StreamCodec.map) and is reported as a required loss, so a STRICT launch halts on it",
 			FURNACE_CONTENT_MIXIN, "the two redirects stay in the mixin, cannot attach (the merged isFuel/getBurnDuration "
 					+ "call ForgeHooks.getBurnTime, not getFuel) and are reported as required CONFIRMED losses, so a "
-					+ "STRICT launch halts on them");
+					+ "STRICT launch halts on them",
+			ENCHANT_RANDOMLY_MIXIN, "the redirect stays in the mixin, cannot attach (the merged function calls "
+					+ "ItemStack.supportsEnchantment, not Enchantment.canEnchant) and is reported as a required loss, "
+					+ "so a STRICT launch halts on it",
+			RECIPE_MIXIN, "the two redirects stay in the mixin, cannot attach (the merged Recipe.getRemainingItems "
+					+ "calls ItemStack.hasCraftingRemainingItem/getCraftingRemainingItem, not the Item overloads) and are "
+					+ "reported as required losses, so a STRICT launch halts on them",
+			PLAYER_INTERACTION_MIXIN, "breakBlock is lost to the local-variable table and onBlockBroken to a removed "
+					+ "Block.destroy call site; both are reported as required losses, so a STRICT launch halts on them");
 
 	/** Why an entry's injectors cannot stay, for the log line. */
 	private static final Map<String, String> REASONS = Map.of(MODEL_MANAGER_MIXIN,
@@ -262,7 +309,14 @@ public final class GuestInjectorPruner implements ClassTransformer {
 					+ "modifier binds nowhere",
 			FURNACE_CONTENT_MIXIN, "the merged isFuel (+2) and getBurnDuration (+19) call ForgeHooks.getBurnTime, not "
 					+ "getFuel; a @Redirect handler returning the fuel Map cannot match a call returning an int, so the "
-					+ "two cannot be retargeted onto the ForgeHooks call site");
+					+ "two cannot be retargeted onto the ForgeHooks call site",
+			ENCHANT_RANDOMLY_MIXIN, "the merged EnchantRandomlyFunction.lambda$run$4 no longer calls "
+					+ "Enchantment.canEnchant(ItemStack); NeoForge moved the check to ItemStack.supportsEnchantment(Holder)",
+			RECIPE_MIXIN, "the merged Recipe.getRemainingItems calls ItemStack.hasCraftingRemainingItem() and "
+					+ "getCraftingRemainingItem() (the owner moved Item->ItemStack, so the Item-parameter handlers cannot match)",
+			PLAYER_INTERACTION_MIXIN, "onBlockBroken's @At(INVOKE) Block.destroy is no longer made inside "
+					+ "ServerPlayerGameMode.destroyBlock, and breakBlock's @Inject captures locals its LVT no longer has "
+					+ "(incompatible changes at opcode 89); the anchor is present but the capture is not");
 
 	/** What happens to an entry's mixin when a reshaped fabric-api leaves it untouched. */
 	private static final Map<String, String> DRIFT = Map.of(MODEL_MANAGER_MIXIN, "it will read PARTIAL and apply half — the state that made every block "
@@ -275,7 +329,10 @@ public final class GuestInjectorPruner implements ClassTransformer {
 			ANVIL_HANDLER_MIXIN, "the redirect soft-skips with Mixin's own warning, exactly as it did before this entry",
 			INGREDIENT_MIXIN, "the value modifier soft-skips with Mixin's own warning, exactly as it did before this entry",
 			FURNACE_CONTENT_MIXIN, "the two redirects soft-skip with Mixin's own warnings, exactly as they did before "
-					+ "this entry, and the mixin's other three anchors still bind");
+					+ "this entry, and the mixin's other three anchors still bind",
+			ENCHANT_RANDOMLY_MIXIN, "the redirect soft-skips with Mixin's own warning, exactly as it did before this entry",
+			RECIPE_MIXIN, "the two redirects soft-skip with Mixin's own warnings, exactly as they did before this entry",
+			PLAYER_INTERACTION_MIXIN, "both soft-skip with Mixin's own warnings, exactly as they did before this entry");
 
 	/** The finding a removed injector records, or none when a kernel repair does its job. */
 	private static final Map<String, String> LOSSES = Map.of(MODEL_MANAGER_MIXIN,
@@ -297,7 +354,13 @@ public final class GuestInjectorPruner implements ClassTransformer {
 					+ "still binds",
 			FURNACE_CONTENT_MIXIN, "the kernel removed this injector: fabric-content-registries-v0's furnace fuel map is no "
 					+ "longer consulted by isFuel/getBurnDuration (the merged base routes both through "
-					+ "ForgeHooks.getBurnTime); the mixin's fuelTimeMapHook and its other anchors still bind");
+					+ "ForgeHooks.getBurnTime); the mixin's fuelTimeMapHook and its other anchors still bind",
+			ENCHANT_RANDOMLY_MIXIN, "the kernel removed this injector: fabric-item-api's AllowEnchanting event no longer "
+					+ "fires from EnchantRandomlyFunction (the merged base checks ItemStack.supportsEnchantment)",
+			RECIPE_MIXIN, "the kernel removed these injectors: fabric-item-api's crafting-remainder substitution no longer "
+					+ "applies in Recipe.getRemainingItems (the merged base calls ItemStack's own methods)",
+			PLAYER_INTERACTION_MIXIN, "the kernel removed these injectors: fabric-events-interaction's "
+					+ "PlayerBlockBreakEvents BEFORE/AFTER no longer fire from ServerPlayerGameMode.destroyBlock");
 
 	/**
 	 * The finding an entry's removed injectors record on this boot, or null when something does their job:

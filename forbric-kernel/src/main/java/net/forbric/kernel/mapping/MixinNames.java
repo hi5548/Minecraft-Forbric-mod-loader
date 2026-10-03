@@ -119,11 +119,16 @@ public final class MixinNames {
 			if (!mixinTargets.isEmpty()) targets.put(node.name, mixinTargets);
 		}
 
+		// The refmap, by mixin class, is what Mixin itself uses to turn a selector it cannot read in the running
+		// namespace into one it can; the kernel's own fit check reads the selector as written, so the selector has
+		// to BE the runtime one. See translateSelectors.
+		Map<String, Map<String, String>> refmaps = refmapTables(entries);
+
 		boolean changed = false;
 		for (Map.Entry<String, byte[]> entry : new ArrayList<>(entries.entrySet())) {
 			String name = entry.getKey();
 			if (name.endsWith(".class")) {
-				byte[] rewritten = translateSelectors(entry.getValue(), spine, targets);
+				byte[] rewritten = translateSelectors(entry.getValue(), spine, targets, refmaps);
 				if (rewritten != null) {
 					entries.put(name, rewritten);
 					changed = true;
@@ -155,21 +160,23 @@ public final class MixinNames {
 	// --- annotation selector strings -------------------------------------------------------------------------
 
 	/** The class with its selector strings translated, or null when nothing changed. */
-	private static byte[] translateSelectors(byte[] bytes, ForbricMappings spine, Map<String, List<String>> targets) {
+	private static byte[] translateSelectors(byte[] bytes, ForbricMappings spine, Map<String, List<String>> targets,
+			Map<String, Map<String, String>> refmaps) {
 		ClassNode node = new ClassNode();
 		new ClassReader(bytes).accept(node, ClassReader.SKIP_FRAMES);
 		List<String> mixinTargets = targets.getOrDefault(node.name, List.of());
+		Map<String, String> refmap = refmaps.getOrDefault(node.name, Map.of());
 		boolean[] touched = {false};
 
-		walk(node.visibleAnnotations, mixinTargets, spine, touched);
-		walk(node.invisibleAnnotations, mixinTargets, spine, touched);
+		walk(node.visibleAnnotations, mixinTargets, spine, refmap, touched);
+		walk(node.invisibleAnnotations, mixinTargets, spine, refmap, touched);
 		for (FieldNode field : node.fields) {
-			walk(field.visibleAnnotations, mixinTargets, spine, touched);
-			walk(field.invisibleAnnotations, mixinTargets, spine, touched);
+			walk(field.visibleAnnotations, mixinTargets, spine, refmap, touched);
+			walk(field.invisibleAnnotations, mixinTargets, spine, refmap, touched);
 		}
 		for (MethodNode method : node.methods) {
-			walk(method.visibleAnnotations, mixinTargets, spine, touched);
-			walk(method.invisibleAnnotations, mixinTargets, spine, touched);
+			walk(method.visibleAnnotations, mixinTargets, spine, refmap, touched);
+			walk(method.invisibleAnnotations, mixinTargets, spine, refmap, touched);
 		}
 		if (!touched[0]) return null;
 
@@ -179,7 +186,7 @@ public final class MixinNames {
 	}
 
 	private static void walk(List<AnnotationNode> annotations, List<String> mixinTargets, ForbricMappings spine,
-			boolean[] touched) {
+			Map<String, String> refmap, boolean[] touched) {
 		if (annotations == null) return;
 		for (AnnotationNode annotation : annotations) {
 			Set<String> keys = SELECTOR_KEYS.get(annotation.desc);
@@ -191,7 +198,7 @@ public final class MixinNames {
 
 				// Nested annotations and arrays always get walked: @Inject(at = @At(…)) is the common shape.
 				if (value instanceof AnnotationNode nested) {
-					walk(List.of(nested), mixinTargets, spine, touched);
+					walk(List.of(nested), mixinTargets, spine, refmap, touched);
 					continue;
 				}
 				if (value instanceof List<?> items) {
@@ -199,10 +206,10 @@ public final class MixinNames {
 					boolean listTouched = false;
 					for (Object item : items) {
 						if (item instanceof AnnotationNode nested) {
-							walk(List.of(nested), mixinTargets, spine, touched);
+							walk(List.of(nested), mixinTargets, spine, refmap, touched);
 							translatedList.add(nested);
 						} else if (keys != null && keys.contains(key) && item instanceof String text) {
-							String translated = translateSelector(spine, mixinTargets, text);
+							String translated = selector(spine, mixinTargets, refmap, text);
 							listTouched |= !translated.equals(text);
 							translatedList.add(translated);
 						} else {
@@ -217,11 +224,77 @@ public final class MixinNames {
 				}
 				if (keys == null || !keys.contains(key) || !(value instanceof String text)) continue;
 
-				String translated = translateSelector(spine, mixinTargets, text);
+				String translated = selector(spine, mixinTargets, refmap, text);
 				if (!translated.equals(text)) {
 					annotation.values.set(i + 1, translated);
 					touched[0] = true;
 				}
+			}
+		}
+	}
+
+	/**
+	 * A selector string as the runtime namespace spells it.
+	 *
+	 * <p>The mod's refmap is consulted FIRST, because that is Mixin's own rule and the only one that can read a
+	 * selector the mod wrote in its development namespace. A Fabric mod writes {@code @Inject(method = "getBiomes")}
+	 * — a Yarn name that is in NEITHER the intermediary nor the Mojmap column, so no remapper and no spine lookup
+	 * can translate it, while its refmap says exactly what it is:
+	 * {@code "getBiomes": "Lnet/minecraft/class_1966;method_28443()Ljava/util/Set;"}. Mixin resolves it through that
+	 * refmap and applies; the kernel's own fit check ({@code MixinFit}) reads the selector as written and reports
+	 * "no anchor resolves (@Inject target BiomeSource.getBiomes)", so it AUTO-SUPPRESSES the mixin as a required
+	 * loss and a STRICT launch stops — even though {@code BiomeSource.possibleBiomes()} is right there in the merged
+	 * base. Measured on the 1.21.1 fabric-api pack: 12 such auto-suppressions on every subject in the bucket on the
+	 * normal (remapped) path. Substituting the refmap's answer makes the selector the runtime one for every reader,
+	 * Mixin included — its refmap lookup for the new string misses and its declared-name path finds the member.
+	 */
+	private static String selector(ForbricMappings spine, List<String> mixinTargets, Map<String, String> refmap,
+			String value) {
+		String resolved = refmap.getOrDefault(value, value);
+		return translateSelector(spine, mixinTargets, resolved);
+	}
+
+	/**
+	 * The refmap tables of every refmap in the jar, keyed by mixin class: {@code mixinClass → selector as written →
+	 * the member reference it means}. Both sections are read for the same reason {@link #translateRefmap} rewrites
+	 * both — {@code mappings} is the per-mixin table and {@code data}'s namespace tables are the flattened lookup
+	 * Mixin keeps beside it.
+	 */
+	private static Map<String, Map<String, String>> refmapTables(Map<String, byte[]> entries) {
+		Map<String, Map<String, String>> tables = new HashMap<>();
+		for (Map.Entry<String, byte[]> entry : entries.entrySet()) {
+			if (entry.getKey().endsWith(".json")) collectRefmap(entry.getValue(), tables);
+		}
+		return tables;
+	}
+
+	private static void collectRefmap(byte[] bytes, Map<String, Map<String, String>> tables) {
+		Config root;
+		try {
+			root = JsonFormat.minimalInstance().createParser()
+					.parse(new StringReader(new String(bytes, StandardCharsets.UTF_8)));
+		} catch (RuntimeException notJson) {
+			return;
+		}
+
+		collectRefmapSection(root.get("mappings"), tables);
+		Object data = root.get("data");
+		if (data instanceof UnmodifiableConfig sections) {
+			for (UnmodifiableConfig.Entry section : new ArrayList<>(sections.entrySet())) {
+				collectRefmapSection(section.getValue(), tables);
+			}
+		}
+	}
+
+	private static void collectRefmapSection(Object section, Map<String, Map<String, String>> tables) {
+		if (!(section instanceof UnmodifiableConfig byMixin)) return;
+
+		for (UnmodifiableConfig.Entry mixin : new ArrayList<>(byMixin.entrySet())) {
+			if (!(mixin.getValue() instanceof Config refs)) continue;
+			Map<String, String> table = tables.computeIfAbsent(mixin.getKey(), key -> new LinkedHashMap<>());
+
+			for (UnmodifiableConfig.Entry ref : new ArrayList<>(refs.entrySet())) {
+				if (ref.getValue() instanceof String value) table.putIfAbsent(ref.getKey(), value);
 			}
 		}
 	}

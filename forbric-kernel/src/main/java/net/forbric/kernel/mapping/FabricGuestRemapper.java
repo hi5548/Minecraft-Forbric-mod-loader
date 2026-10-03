@@ -72,6 +72,18 @@ import net.forbric.kernel.util.ForbricLog;
  * narrows the problem to: 11 declarations in the reference pack, all of them shadowed game members.
  */
 public final class FabricGuestRemapper {
+	/**
+	 * Bumped whenever this stage's OUTPUT changes for the same mapping data and the same input jar.
+	 *
+	 * <p>The rest of the key is content-addressed — the two mapping files and the guest jar's SHA-256 — which is
+	 * right for an input change and wrong for a CODE change: a kernel upgrade then silently reuses jars produced by
+	 * the previous stage. Measured 2026-10-03: a warm shared remap cache carried fabric-api modules whose refmap
+	 * values and selector strings predated {@link MixinNames}' refmap-aware pass at all, so a run reported the old
+	 * selector-resolution losses while the new stage was never given the jar. Bumping this constant is the one-line
+	 * answer, and it costs one re-remap of the tree per cache directory.
+	 */
+	private static final String REMAP_VERSION = "1.21.1-3-refmap-selectors";
+
 	private FabricGuestRemapper() {
 	}
 
@@ -92,8 +104,9 @@ public final class FabricGuestRemapper {
 		ForbricMappings spine = mappings.mappings();
 		ForbricCache cache = new ForbricCache(cacheDir);
 		// The mapping data's own hash is part of every key: restaging a different intermediary build for the same
-		// game version must invalidate every cached output, not silently reuse jars remapped with the old one.
-		String mappingsKey = ForbricCache.key(mappings.intermediary(), mappings.mojmap());
+		// game version must invalidate every cached output, not silently reuse jars remapped with the old one. The
+		// stage's own version rides along for the other half of the same problem — see REMAP_VERSION.
+		String mappingsKey = ForbricCache.key(REMAP_VERSION, mappings.intermediary(), mappings.mojmap());
 		List<Path> sourceClasspath = sourceNamespaceClasspath(gameClasspath, spine, cacheDir, mappingsKey);
 		IMappingProvider provider = ForgeModRemapper.provider(spine, ForbricMappings.INTERMEDIARY,
 				ForbricMappings.NAMED);

@@ -80,6 +80,23 @@ class KernelMappingResolverMappingsTest {
 				"field_1700", "L" + MINECRAFT_INTERMEDIARY + ";"));
 	}
 
+	/**
+	 * The same lookups in the notation the Fabric API documents — dotted, the way {@code Class.getName()} spells a
+	 * class. A resolver that only understands internal names answers a dotted query with its own input, which is
+	 * how a mod asking for a class inside GENERATED code names the intermediary one instead.
+	 */
+	@Test
+	void translatesTheDottedSpellingTheFabricApiUses() {
+		KernelMappingResolver resolver = resolver();
+
+		assertEquals("net.minecraft.client.Minecraft",
+				resolver.mapClassName(ForbricMappings.INTERMEDIARY, "net.minecraft.class_310"));
+		assertEquals("net.minecraft.class_310",
+				resolver.unmapClassName(ForbricMappings.INTERMEDIARY, "net.minecraft.client.Minecraft"));
+		assertEquals("run", resolver.mapMethodName(ForbricMappings.INTERMEDIARY, "net.minecraft.class_310",
+				"method_1514", "()V"));
+	}
+
 	@Test
 	void aNamespaceOrNameItCannotTranslateComesBackUnchanged() {
 		KernelMappingResolver resolver = resolver();

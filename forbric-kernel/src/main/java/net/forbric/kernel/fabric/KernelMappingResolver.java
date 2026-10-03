@@ -95,26 +95,56 @@ public final class KernelMappingResolver implements MappingResolver {
 	@Override
 	public String mapClassName(String namespace, String className) {
 		ForbricMappings mappings = spine();
-		return mappings == null ? className : mappings.mapClass(namespace, ForbricMappings.NAMED, className);
+		return mappings == null ? className
+				: notation(className, mappings.mapClass(namespace, ForbricMappings.NAMED, internal(className)));
 	}
 
 	@Override
 	public String unmapClassName(String targetNamespace, String className) {
 		ForbricMappings mappings = spine();
-		return mappings == null ? className : mappings.mapClass(ForbricMappings.NAMED, targetNamespace, className);
+		return mappings == null ? className
+				: notation(className, mappings.mapClass(ForbricMappings.NAMED, targetNamespace, internal(className)));
 	}
 
 	@Override
 	public String mapFieldName(String namespace, String owner, String name, String descriptor) {
 		ForbricMappings mappings = spine();
 		return mappings == null ? name
-				: mappings.mapField(namespace, ForbricMappings.NAMED, owner, name, descriptor);
+				: mappings.mapField(namespace, ForbricMappings.NAMED, internal(owner), name, descriptor);
 	}
 
 	@Override
 	public String mapMethodName(String namespace, String owner, String name, String descriptor) {
 		ForbricMappings mappings = spine();
 		return mappings == null ? name
-				: mappings.mapMethod(namespace, ForbricMappings.NAMED, owner, name, descriptor);
+				: mappings.mapMethod(namespace, ForbricMappings.NAMED, internal(owner), name, descriptor);
+	}
+
+	/**
+	 * The spine indexes class names the way a class file spells them — SLASHED. Callers do not agree: the kernel's
+	 * own code and older consumers pass internal names, while the Fabric API is spelled the way
+	 * {@code Class.getName()} is (DOTTED, {@code $} for nested), so a mod that uses the API as documented passes
+	 * dots. A dotted name never reaches the index, the lookup misses, and the resolver answers its input
+	 * unchanged — which reads as "the mapping does not know this class".
+	 *
+	 * <p>Measured on cardinal-components-base 6.1.3, the one consumer that has to ask rather than guess: its
+	 * {@code CcaAsmHelper} names {@code ResourceLocation} inside a GENERATED class, so it calls
+	 * {@code mapClassName("intermediary", "net.minecraft.class_2960")} and turns dots into slashes itself. With the
+	 * dotted name missing the index, every generated component type referenced {@code net/minecraft/class_2960}
+	 * and the first component lookup died with {@code NoClassDefFoundError: net/minecraft/class_2960} out of
+	 * {@code Class.getDeclaredConstructors0} (bonfires-ex, fabric).
+	 *
+	 * <p>So the notation is the CALLER's: the query is normalized for the lookup and the answer comes back in the
+	 * notation the question was asked in, exactly as the caller will go on to use it.
+	 */
+	private static String internal(String name) {
+		return name == null ? null : name.replace('.', '/');
+	}
+
+	/** The converted answer, in the notation of {@code query} — see {@link #internal}. */
+	private static String notation(String query, String mapped) {
+		if (mapped == null || query == null) return mapped;
+		boolean dotted = query.indexOf('/') < 0 && query.indexOf('.') >= 0;
+		return dotted ? mapped.replace('/', '.') : mapped;
 	}
 }

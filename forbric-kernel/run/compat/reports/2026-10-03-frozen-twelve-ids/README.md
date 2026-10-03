@@ -1,0 +1,47 @@
+# 冻结的 12 条 CONFIRMED-required id:逐条对合并基底的读法、已落地处置、以及剩下的六条各自缺什么
+
+`harness/confirmed_ids.py`(166 主体)给 12 条,形状两类(8 × `mixin-injector:`、4 × `mixin:`),分布在 8 个主体上。
+本文件是**读法 + 处置**的记录;每条的原因都在真字节上核过(guest jar 的安装态 + 合并基底 `javap`)。
+
+## 已落地(三个提交,零损失或已记代价)
+
+| id | 原因(逐字节) | 处置 | 提交 |
+|---|---|---|---|
+| 5 connector `boot.ServerMainMixin#earlyInit` | **内核自伤**:`LifecycleHookInjector` 把 `Main.main` 里的 `ServerModLoader.load()V` 改写成内核钩子,普查随后报它"丢失" | 改道者自己登记替换行 ⇒ `MixinRetarget` 把锚点搬到钩子上(同一程序点) | `c91b5dbe` |
+| 8 shadowguard `$protectFireTarget`(连带 7、12) | 合并把 `FireBlock.checkBurnOut` **加宽**了(多一个 `Direction`),`Expected (…,I,Direction,CallbackInfo)V but found (…,I,CallbackInfo)V`;未绑定的必需注入器**中止整个 mixin** | 剪掉该 handler,另两条(`tick` 的 `@Inject(HEAD)` 与 `ServerLevel.setBlock` 的 `@Redirect`)照常应用 | `f54f5b10` |
+| 1 architectury `onBreak`、3 `checkPhantomSpawn` | 锚点能绑,**本地捕获**失配:`LVT in …ServerPlayerGameMode::destroyBlock(…)Z has incompatible changes at opcode 39`(另一处 `PhantomSpawner::tick(…)I` at 267) | 剪掉两处 handler(捕获不是选择器,无处可搬) | `f54f5b10` |
+
+代价已写进每个条目的注释:shadowguard 的 fire-target 保护、architectury 的方块破坏事件与幻翼生成事件在这些主体上不再触发;
+connector 那条**无代价**(handler 仍运行在装载窗口之前)。
+
+## 剩下的六条:原因已定,各自缺的最后一步
+
+| id | 主体的现状 | 原因 | 下一步(具体) |
+|---|---|---|---|
+| 9 cobblecoop `BattlePositionsCompatibilityMixin` | 内核 auto-suppress 后仍计 CONFIRMED-required | 已定:锚点所在的 `com/cobblemon/mod/common/battles/ActiveBattlePokemon.class` 在闭包里的 **Cobblemon 1.8.1** 中存在,但**不含** `battlePositions$getSlotIndex`(该版本没有这个成员),而 handler 是 `@Inject(method="battlePositions$getSlotIndex", require=0, remap=false)`——**可选**注入器 ⇒ Mixin 原生行为是"施加该 mixin、跳过这条注入",本无损失 | `MixinFit` 已经有软失配通道(`softMisses`,`anyHardResolved = resolved > 0 \|\| bound > 0 \|\| unresolved.size() == softMisses`,第 226/262/276 行)。要在真实 mixin 上跑一次普查,确认 `require=0` 是否真的进到 `anchor.soft`——若进了,UNFIT 与 required 都不该成立(判定/报告修正,零损失);若没进,修那条通路 |
+| 2 fabric-screen-handler `ServerPlayerEntityMixin#fabric_replaceMenuProvider` | `missing: @At(INVOKE) ServerPlayer.openMenu in openMenu` | 合并后的 `ServerPlayer.openMenu(MenuProvider)` 里**没有**对 `openMenu` 的自调用(NeoForge 把两参重载并进了一参:javap 的调用表里只有 `closeContainer/nextContainerCounter/MenuProvider.createMenu/ClientboundOpenScreenPacket` 等) | 锚点不可表达(不是名字问题,是调用点本身没了)⇒ 剪/钉 + 记代价(Fabric 的 modded-menu 支持在该主体上失效) |
+| 4 bonfires `getOrDefaultRedirect` | `missing: @At(INVOKE) ItemStack.getOrDefault in forEachModifier` | 合并的 `ItemStack` **不声明** `getOrDefault`;`getOrDefault` 在 `DataComponentHolder` 里(两处类文件都含该名字,但 `ItemStack` 的方法表里没有) | 先判"成员搬到接口"是否可由 `MixinNames`/继承成员通路表达(调用点的主人写法);可表达则重定位,否则剪/钉 |
+| 6 OPAC `MixinOptionalExperienceOrb#onScanForEntities` | `missing: @At(INVOKE_ASSIGN) Level.getNearestPlayer in ExperienceOrb.scanForEntities` | 合并的 `scanForEntities` 走的是 NeoForge 的 `XpOrbTargetingEvent` + `Level.getEntities(EntityTypeTest,AABB,Predicate)`,`getNearestPlayer` 那条调用没了 | 查 `MergedBaseCalleeSwaps#SUBSTITUTED` 是否已有对应行;无行且语义不可等同 ⇒ 剪/钉 + 记代价 |
+| 10/11 polymer `PacketCodecsEntriesMixin`/`PacketCodecsRegistryMixin` | 目标类是 `ByteBufCodecs$22`/`$23`(匿名类编号) | 合并里的匿名类**重新编号**:内核证据逐字 `ByteBufCodecs$22 is not the class vanilla compiled at that name (vanilla's body now lives at …$16 or $18 or $4 or $5 or $6)` | `MixinAnonymousRetarget.home(...)` 只在候选**唯一**时移动;此处候选 3–5 个 ⇒ 用 handler 自己的 `@Inject` 目标描述符(`$22`→`encode(ByteBuf,Object)V`、`$23`→`encode(RegistryFriendlyByteBuf,Object)V`)在候选中挑出唯一匹配者 ⇒ 可重定位、零损失(并且同一机制会一并清掉同族的 `PacketCodecsRegistryEntry{List,}Mixin`) |
+
+**id 9 的判据(可验伪)**:`MixinFit.evaluate` 里 `anyHardResolved = resolved > 0 || bound > 0 || unresolved.size() == softMisses`(第 276 行),
+`if (anchor.soft) softMisses++`(第 262 行)。若 `require=0` 真的进了 `anchor.soft`,则该 mixin 应得 FIT(或至多 PARTIAL),
+而它现在被 auto-suppress 成 UNFIT——**说明"必需要求"这条链没有把 `require=0` 读进来**,于是被算成冻结清单里的一条 required。
+修法方向(未落地,留给下一轮):让 finding 的 `required` 与 `require=0` 一致(全是可选注入器的 mixin 不构成 required 损失),
+再加一条真实字节的用例钉住;零代价、零功能损失。
+
+## 复现命令(全部 headless,无游戏 JVM)
+
+```bash
+# 主体 jar 关在各自 run 目录里(语料已按用户指示清空;mods/ 与 .forbric-kernel/candidates/ 仍在本地产物中)
+R=w7/reports/2026-10-03-full-corpus/per-mod/run
+# 安装态(名字层处理后)的 guest 类:
+java -cp <kernel-classes>:<deps> IdProbe mixin "$(readlink $R/088-shadowguard__fabric/.forbric-kernel/remap)"/*hadow*.jar \
+     org/krripe/shadowguard/mixin/FireBlockMixin
+# 合并基底里锚点是否存在:
+java -cp ... IdProbe base p0/stage-1.21.1/merged-base/patched-mc-merged-1.21.1.jar net/minecraft/server/Main main
+# 冻结清单本身:
+python3 w7/harness/confirmed_ids.py
+```
+
+判据:重跑 `confirmed_ids.py` 返回零。

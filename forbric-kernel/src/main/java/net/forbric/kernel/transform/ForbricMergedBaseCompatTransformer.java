@@ -94,7 +94,7 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 	}
 
 	/** The repairs {@link #transform} runs, in its order; a test pins the two lists against each other. */
-	static final List<String> REPAIRS = List.of("repairLambdaBootstrapHandles", "addBlockStateModelConflictResolvers", "addBlockStateAppearanceResolver", "addMissingForgeFluidTypeBridge", "addMissingForgeKeyMappingLookupInitializer", "addMissingForgeKnownRegistriesInitializer", "addMissingIngredientInvalidationCounterInitializer", "routeKeyMappingClickToPopulatedLookup", "giveKeyMappingItsMinecraftForgeFace", "routeFabricParticleFactoriesThroughTheLiveMap", "giveFeaturesPerStepItsVanillaDescriptorBack", "letDungeonsGenerateWithoutTheDataMap", "restoreDoublePrecisionToTheRandomSources", "convertRadiansWithVanillasFoldedConstant", "saveTheHeightmapsVanillaSaves", "guardNeoForgesWorldModifierPass", "letForeignResourceConditionsThrough", "letForeignResourceConditionsThroughMinecraftForge", "letFabricResourceConditionsDecide", "translateAGuestsPrivateSkipMarker", "serveDefaultAttributesBothEcosystems", "restoreForgeClientInit", "restoreForgeGeometryReload", "nameTheReloadListenersNeoForgeRefusesToName", "dropInterfaceDefaultShadowingOverrides", "tolerateEmptyCreativeTabStacks", "routePlaceItemHookToNeoForge", "bridgeOrphanedPipRenderers", "keepForgeOutboundProtocolCurrent", "surviveTheMissingForgeModelDataManager", "dropTheWindowTitlesLoaderBrand", "keepTheSaveOffTheTeardownsFailurePath", "postNeoForgesItemTooltipEvent", "askNeoForgeWhatAnItemsAttributesAre", "readTheSpawnReasonThatIsActuallyWritten", "giveTheUnwrittenLoggerAValue", "addTheMissingCapabilityLifecycleStubs", "addTheMissingNbtBuilderFactory", "postMinecraftForgesReloadListenerEvent", "giveMinecraftForgesReloadEventItsConditionContext", "letMinecraftForgeIngredientTypesDecode", "letMinecraftForgeFluidsChooseTheirModel", "giveMinecraftForgesParticleLookupItsFirstVariant", "dropStubsThatBypassARealSuperclassMethod", "inlineTheSwitchMapTheMergeLost", "vetoUnjudgeableOverlayConditions", "hideTheLegacyLootModifierIndexFromTheDirectoryScan", "letModdedFeatureFlagsRegister", "dropTheKeyModifierSuffixBeforeParsingAKeyName", "letTheAtlasLowerItsMipLevelLikeVanilla", "wrapTheStreamsVanillaWraps", "returnFromANestedBootstrapBeforeItsTail", "letBothEcosystemsSetBurnTime", "letMinecraftForgeSeeSpawnerMobs", "letMinecraftForgeAddPackFinders", "giveForgeEventsTheConstructorTheEventBusWants", "readASelfDependencyAsACycle");
+	static final List<String> REPAIRS = List.of("repairLambdaBootstrapHandles", "addBlockStateModelConflictResolvers", "addBlockStateAppearanceResolver", "addMissingForgeFluidTypeBridge", "addMissingForgeKeyMappingLookupInitializer", "addMissingForgeKnownRegistriesInitializer", "addMissingIngredientInvalidationCounterInitializer", "routeKeyMappingClickToPopulatedLookup", "giveKeyMappingItsMinecraftForgeFace", "routeFabricParticleFactoriesThroughTheLiveMap", "giveFeaturesPerStepItsVanillaDescriptorBack", "letDungeonsGenerateWithoutTheDataMap", "restoreDoublePrecisionToTheRandomSources", "convertRadiansWithVanillasFoldedConstant", "saveTheHeightmapsVanillaSaves", "guardNeoForgesWorldModifierPass", "letForeignResourceConditionsThrough", "letForeignResourceConditionsThroughMinecraftForge", "letFabricResourceConditionsDecide", "translateAGuestsPrivateSkipMarker", "serveDefaultAttributesBothEcosystems", "restoreForgeClientInit", "restoreForgeGeometryReload", "nameTheReloadListenersNeoForgeRefusesToName", "dropInterfaceDefaultShadowingOverrides", "tolerateEmptyCreativeTabStacks", "routePlaceItemHookToNeoForge", "bridgeOrphanedPipRenderers", "keepForgeOutboundProtocolCurrent", "surviveTheMissingForgeModelDataManager", "dropTheWindowTitlesLoaderBrand", "keepTheSaveOffTheTeardownsFailurePath", "postNeoForgesItemTooltipEvent", "askNeoForgeWhatAnItemsAttributesAre", "readTheSpawnReasonThatIsActuallyWritten", "giveTheUnwrittenLoggerAValue", "addTheMissingCapabilityLifecycleStubs", "addTheMissingNbtBuilderFactory", "postMinecraftForgesReloadListenerEvent", "giveMinecraftForgesReloadEventItsConditionContext", "letMinecraftForgeIngredientTypesDecode", "letMinecraftForgeFluidsChooseTheirModel", "giveMinecraftForgesParticleLookupItsFirstVariant", "dropStubsThatBypassARealSuperclassMethod", "inlineTheSwitchMapTheMergeLost", "vetoUnjudgeableOverlayConditions", "hideTheLegacyLootModifierIndexFromTheDirectoryScan", "letModdedFeatureFlagsRegister", "dropTheKeyModifierSuffixBeforeParsingAKeyName", "letTheAtlasLowerItsMipLevelLikeVanilla", "wrapTheStreamsVanillaWraps", "returnFromANestedBootstrapBeforeItsTail", "letBothEcosystemsSetBurnTime", "letMinecraftForgeSeeSpawnerMobs", "letMinecraftForgeAddPackFinders", "giveForgeEventsTheConstructorTheEventBusWants", "readASelfDependencyAsACycle", "routeForeignEntityDataSerializersToNeoForge");
 
 	private static final String NEO_EVENT_HOOKS_BINARY = "net.neoforged.neoforge.event.EventHooks";
 
@@ -273,6 +273,11 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 						+ "tag that depends on itself (MinecraftForge's forge: convention tags declare one) and then "
 						+ "re-enters its own cycle check on it forever, because NeoForge's c: tags point at #forge:* "
 						+ "and the merged base is the only place the two meet"));
+		out.add(fixed("routeForeignEntityDataSerializersToNeoForge", ENTITY_DATA_SERIALIZERS,
+				"a foreign ecosystem's entity-data serializer registers nowhere and its entrypoint dies on "
+						+ "NeoForge's caller-identity guard — Cobblemon's Fabric entrypoint aborts in preInitialize, "
+						+ "so 0 of its 43 custom registries load and 86 worldgen/processor_list files fail to parse "
+						+ "behind the missing STRUCTURE_PROCESSOR entries"));
 		return List.copyOf(out);
 	}
 
@@ -368,6 +373,7 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 		changed |= claim(reporter, "letMinecraftForgeAddPackFinders", letMinecraftForgeAddPackFinders(node));
 			changed |= claim(reporter, "giveForgeEventsTheConstructorTheEventBusWants", giveForgeEventsTheConstructorTheEventBusWants(node));
 			changed |= claim(reporter, "readASelfDependencyAsACycle", readASelfDependencyAsACycle(node));
+			changed |= claim(reporter, "routeForeignEntityDataSerializersToNeoForge", routeForeignEntityDataSerializersToNeoForge(node));
 			changed |= namedOldLoader && adoptInteropHooksTheBaseStillNamesAfterTheOldLoader(node);
 
 			byte[] result = classBytes;
@@ -548,6 +554,24 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 	/** The 1.21.1 seam: same argument types as MinecraftForge's, so the redirect moves no stack slot at all. */
 	private static final String KERNEL_BURN_TIME_DESC =
 			"(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/item/crafting/RecipeType;)I";
+
+	/**
+	 * NeoForge turns the vanilla {@code EntityDataSerializers.registerSerializer} into a caller-identity guard
+	 * ({@code StackWalker.getCallerClass()} must be the class itself) and throws for everyone else. A
+	 * Fabric-ecosystem guest cannot comply — it is written against the vanilla call and cannot name
+	 * {@code NeoForgeRegistries.ENTITY_DATA_SERIALIZERS} — so its entrypoint dies before any of its registrations
+	 * run. The repair routes the guard's refuse block into the kernel, which registers on the guest's behalf.
+	 */
+	private static final String ENTITY_DATA_SERIALIZERS =
+			"net/minecraft/network/syncher/EntityDataSerializers";
+	private static final String ENTITY_DATA_SERIALIZER_DESC =
+			"Lnet/minecraft/network/syncher/EntityDataSerializer;";
+	private static final String REGISTER_SERIALIZER = "registerSerializer";
+	private static final String REGISTER_SERIALIZER_DESC = "(" + ENTITY_DATA_SERIALIZER_DESC + ")V";
+	private static final String KERNEL_ENTITY_DATA_SERIALIZERS =
+			"net/forbric/kernel/runtime/KernelEntityDataSerializers";
+	private static final String UNSUPPORTED_OPERATION_EXCEPTION = "java/lang/UnsupportedOperationException";
+
 	private static final String MONSTER_ROOM_FEATURE = "net/minecraft/world/level/levelgen/feature/MonsterRoomFeature";
 	private static final String MONSTER_ROOM_HOOKS = "net/neoforged/neoforge/common/MonsterRoomHooks";
 	private static final String RANDOM_MONSTER_ROOM_MOB =
@@ -4741,6 +4765,139 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 				+ "(%d call site(s)) — the merge kept only NeoForge's, so MinecraftForge mods were never asked "
 				+ "for pack finders", node.name, redirected);
 		return true;
+	}
+
+	/**
+	 * Routes a foreign ecosystem's {@code EntityDataSerializers.registerSerializer} into NeoForge's registry
+	 * instead of letting NeoForge's caller-identity guard throw the guest's entrypoint down.
+	 *
+	 * <p><b>The merged-base fact (javap, {@code patched-mc-merged-1.21.1.jar}).</b>
+	 * {@code registerSerializer(EntityDataSerializer)} is NeoForge-patched into a guard: offsets 0–11 compare
+	 * {@code STACK_WALKER.getCallerClass()} against {@code EntityDataSerializers.class} and {@code ifne} past
+	 * offsets 14–33, which log and {@code athrow} an {@code UnsupportedOperationException} naming
+	 * {@code NeoForgeRegistries.ENTITY_DATA_SERIALIZERS}. Only the class's own {@code <clinit>} satisfies the
+	 * test; every mod caller is refused. The guard's destination is right and its audience is wrong: a
+	 * Fabric-ecosystem guest is compiled against the vanilla overload and cannot name a NeoForge registry, so
+	 * Cobblemon's Fabric entrypoint dies in {@code preInitialize} — before ANY of its registrations run, which is
+	 * the single cause of its 0/43 custom-registry lines and the 86 {@code worldgen/processor_list} parse failures
+	 * that follow from the missing {@code STRUCTURE_PROCESSOR} entries.
+	 *
+	 * <p><b>The repair.</b> The refuse block (offsets 14–33) is replaced by
+	 * {@code aload_0; invokestatic KernelEntityDataSerializers.register(EntityDataSerializer)V; return}. The
+	 * {@code ifne} and the vanilla path it guards (offsets 34–57, {@code SERIALIZERS.add} plus the 256 cap) are
+	 * left byte-for-byte as they are, so the class's own {@code <clinit>} still takes the vanilla road. The
+	 * stack map frames the compiler emitted sit at 34 (the {@code ifne} target) and 57, both outside the edited
+	 * range; the replacement is straight-line, empty-to-empty, so every surviving frame still describes the same
+	 * state and no frame has to be recomputed. {@code KernelEntityDataSerializers} carries the id-determinism
+	 * argument — the vanilla overload has no name and NeoForge's registry derives the wire id from insertion
+	 * order, so the name is derived from the serializer's class rather than from a counter.
+	 *
+	 * <p>One target, or nothing is edited: a class without the guard (no {@code UnsupportedOperationException})
+	 * is left alone, which also makes a second pass a no-op. The block's start is found by walking back from the
+	 * {@code new} to the {@code ifne} rather than by offset, so a recompiled base with a different prefix still
+	 * matches; anything other than exactly one guard block, or a label inside it, stands down with a reason.
+	 */
+	private static boolean routeForeignEntityDataSerializersToNeoForge(ClassNode node) {
+		if (!ENTITY_DATA_SERIALIZERS.equals(node.name)) return false;
+		MethodNode method = findMethod(node, REGISTER_SERIALIZER, REGISTER_SERIALIZER_DESC);
+		if (method == null || method.instructions == null) return false;
+
+		TypeInsnNode created = null;
+		for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+			if (insn instanceof TypeInsnNode type && type.getOpcode() == Opcodes.NEW
+					&& UNSUPPORTED_OPERATION_EXCEPTION.equals(type.desc)) {
+				if (created != null) {
+					ForbricLog.warn("[Forbric/MergedBaseCompat] %s.%s refuses a foreign caller more than once — not "
+							+ "routing any of them, because which block is the guard is no longer decidable from the "
+							+ "shape", node.name, REGISTER_SERIALIZER);
+					return false;
+				}
+				created = type;
+			}
+		}
+		if (created == null) return false;                  // already routed, or a base without the guard
+
+		AbstractInsnNode blockStart = created;
+		while (blockStart.getPrevious() != null && !(blockStart.getPrevious() instanceof JumpInsnNode)) {
+			blockStart = blockStart.getPrevious();
+		}
+		AbstractInsnNode guard = blockStart.getPrevious();
+		if (!(guard instanceof JumpInsnNode branch) || branch.getOpcode() != Opcodes.IFNE) {
+			ForbricLog.warn("[Forbric/MergedBaseCompat] %s.%s's refuse block is not guarded by an IFNE — not "
+					+ "routing it, because the branch that keeps the class's own registrations on the vanilla path "
+					+ "is what makes the edit safe", node.name, REGISTER_SERIALIZER);
+			return false;
+		}
+
+		AbstractInsnNode throwInsn = null;
+		for (AbstractInsnNode insn = created; insn != null; insn = insn.getNext()) {
+			if (insn instanceof InsnNode insnNode && insnNode.getOpcode() == Opcodes.ATHROW) {
+				throwInsn = insn;
+				break;
+			}
+		}
+		if (throwInsn == null) return false;
+
+		// The range carries the LineNumberTable's own LabelNodes (one per line entry) — those are removed with
+		// the block. What must NOT be removed is a label something outside the range points at: the guard's
+		// IFNE target sits AFTER the throw, but a drifted base could put one inside, and only the jumps, the
+		// exception table and the local-variable table know the difference.
+		java.util.Set<LabelNode> inside = new java.util.HashSet<>();
+		for (AbstractInsnNode insn = blockStart; insn != null; insn = insn.getNext()) {
+			if (insn instanceof LabelNode label) inside.add(label);
+			if (insn == throwInsn) break;
+		}
+		String stranded = strandedReference(method, inside);
+		if (stranded != null) {
+			ForbricLog.warn("[Forbric/MergedBaseCompat] %s.%s's refuse block carries a label %s points at — not "
+					+ "routing it, because removing the block would strand that reference", node.name,
+					REGISTER_SERIALIZER, stranded);
+			return false;
+		}
+
+		InsnList replacement = new InsnList();
+		replacement.add(new VarInsnNode(Opcodes.ALOAD, 0));
+		replacement.add(new MethodInsnNode(Opcodes.INVOKESTATIC, KERNEL_ENTITY_DATA_SERIALIZERS,
+				"register", REGISTER_SERIALIZER_DESC, false));
+		replacement.add(new InsnNode(Opcodes.RETURN));
+		method.instructions.insertBefore(blockStart, replacement);
+		for (AbstractInsnNode insn = blockStart; insn != null; ) {
+			AbstractInsnNode next = insn.getNext();
+			method.instructions.remove(insn);
+			if (insn == throwInsn) break;
+			insn = next;
+		}
+
+		ForbricLog.info("[Forbric/MergedBaseCompat] EntityDataSerializers.registerSerializer routes a foreign "
+				+ "ecosystem's registration into NeoForge's synced registry — the merged base's guard refuses every "
+				+ "caller but the class itself, so a Fabric guest's entrypoint died before any of its registrations "
+				+ "ran (Cobblemon: 0/43 custom registries, and 86 worldgen/processor_list files unparseable behind it)");
+		return true;
+	}
+
+	/**
+	 * A description of the first thing that references one of {@code labels} from outside the block about to be
+	 * removed, or null when nothing does. Line-number labels do not count — they are removed with the block.
+	 */
+	private static String strandedReference(MethodNode method, java.util.Set<LabelNode> labels) {
+		for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+			if (insn instanceof JumpInsnNode jump && labels.contains(jump.label)) return "a jump in " + method.name;
+		}
+		if (method.tryCatchBlocks != null) {
+			for (TryCatchBlockNode block : method.tryCatchBlocks) {
+				if (labels.contains(block.start) || labels.contains(block.end) || labels.contains(block.handler)) {
+					return "the exception table of " + method.name;
+				}
+			}
+		}
+		if (method.localVariables != null) {
+			for (LocalVariableNode local : method.localVariables) {
+				if (labels.contains(local.start) || labels.contains(local.end)) {
+					return "local " + local.name + " in " + method.name;
+				}
+			}
+		}
+		return null;
 	}
 
 }

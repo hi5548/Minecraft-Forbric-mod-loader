@@ -82,7 +82,34 @@ the recurring moves a group fix could address are: `Enchantment.canEnchant` → 
   the subject's closure (`deps = [fabric-api]`), so its classes referencing cobblemon cannot load. A corpus/closure
   limit (same family as miguelfaction's missing `migueleconomy`), subject-side, not kernel.
 
-### Remaining CONFIRMED per subject (the load gate)
+### Arm 8 (`reports/2026-10-03-cluster1-verdicts-8`, kernel `61bd1c6d`) — the new depth
+
+`IllegalAccessError` is gone (all 10 subjects merge `official`, 18–19 tweakers), so the boot reaches the
+post-application audit and the blocker is again `compat-required-loss`. Every fabric subject sits at `cr=6/27`
+(7 subjects), balm `3/22`, kiwi `8/31`, cobblemon-auto-battle `0/22`
+(`boot-incompatible-class-change-error`).
+
+Required-CONFIRMED injector ids, universal vs singleton, all load-gating (the `mixin`-shape SUSPECTED tail is the
+hygiene block above and is not repeated):
+
+| id | subjects | type | evidence |
+|---|---|---|---|
+| `events-interaction ServerPlayerInteractionManagerMixin#breakBlock` | 8 | **LVT drift** | anchor present (`Block.playerWillDestroy` at `destroyBlock+116`), but the `@Inject` captures locals: `Injection warning: LVT in ServerPlayerGameMode::destroyBlock has incompatible changes at opcode 89 … @Inject::breakBlock` — the capture was already downgraded `CAPTURE_FAILHARD → CAPTURE_FAILSOFT`, so the injection is skipped |
+| `events-interaction ServerPlayerInteractionManagerMixin#onBlockBroken` | 8 | **anchor gone** | `@At(INVOKE) Block.destroy in ServerPlayerGameMode.destroyBlock` — the merged `destroyBlock` makes no `Block.destroy` call (`Block.destroy` survives elsewhere, not there); the `applies only partially — 8/9` line names it |
+| `item-api EnchantRandomlyLootFunctionMixin#callAllowEnchantingEvent` | 8 | **anchor gone** | same member move as the anvil stand-down: merged calls `ItemStack.supportsEnchantment`, not `Enchantment.canEnchant` |
+| `item-api RecipeMixin#hasStackRemainder` | 8 | **anchor gone** | `Item.hasCraftingRemainingItem` gone; merged `Recipe.getRemainingItems` uses `ItemStack.hasCraftingRemainingItem` (same family as BrewingStand) |
+| `item-api RecipeMixin#replaceGetRecipeRemainder` | 8 | **anchor gone** | same, `Item.getCraftingRemainingItem` |
+| `networking CustomPayloadPacketCodecMixin` (whole mixin) | 8 | **apply-time failure** | `InvalidInjectionException: @WrapOperation annotation on wrapGetCodec specifies a target class 'net/minecraft/network/protocol/common/custom/CustomPacketPayload$1', which is not supported`, on `CustomPacketPayload$1$forbricneo` — the interop-renamed twin the merge kept; MixinExtras rejects the anonymous-class target |
+| `balm FabricCropBlockMixin#randomTickPreGrow`, `#randomTickPostGrow`, `mixin` | 1 | apply-time failure | the known balm cluster (sugar `getGrowthSpeedCaptureLocals` → `VerifyError`) |
+| `kiwi Ingredient_ItemValueMixin#lychee$assignCodec`, `Ingredient_TagValueMixin#lychee$assignCodec` | 1 | **anchor gone** | `@ModifyExpressionValue` on `RecordCodecBuilder.create`; merged `<clinit>` calls `RecordCodecBuilder.mapCodec` |
+
+So the new depth is **not one shared cause**: four shapes — a member move (`canEnchant`, `hasCraftingRemainingItem`,
+`RecordCodecBuilder.create→mapCodec`), a `Block.destroy` call-site removal, a local-variable-table drift on a
+`@Inject` that captures locals, and one MixinExtras apply-time rejection on the `$forbricneo` twin. The member moves
+are the recurring family already named in the hygiene block.
+
+
+### The cleared load gate (historical)
 
 The last fabric blocker was `entity-events LivingEntityMixin#setOccupiedState`, resolved in two halves: `a48ae7fb`
 moved the renumbered lambda selector to the merged body, and `524454fc` made `FabricEntityMixinAnchors.bedOccupation`

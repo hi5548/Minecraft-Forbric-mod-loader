@@ -74,7 +74,7 @@ connector 那条**无代价**(handler 仍运行在装载窗口之前)。
 |---|---|---|
 | 1、3 | **启动**(better-teleport `PASS`/`world=true`/`cr=0`) | 首轮 5 个预判之一 |
 | 7、8、12 | **启动**(shadowguard `PASS`/`world=true`/`cr=0`) | 同上 |
-| 5 | **启动待定(三、四、五号假设均被启动否掉)** | `7eef89e4` 家族放宽 → 启动仍不动;`eaf80d0c` 未知生态假设 → **我预登记的标记行在启动上没有出现**,按事先写下的规则该假设**作废**(生态不是 null)。已排除:合并基底里触发调用只有一条(occurrences≠2)、驱动器读 raw 与 candidate 两份字节都能移、`substitutedCalls` 确实被调用且该 handler 无其它改写(锚点文本与前内核逐字符相同)。下一步:在替换决策处打印四个输入(row/ecosystem/occurrences/captures),由一次启动判读 |
+| 5 | **启动已定因:排序故障(发布晚于提问)** | `7eef89e4` 家族放宽 → 启动仍不动;`eaf80d0c` 未知生态假设 → **我预登记的标记行在启动上没有出现**,按事先写下的规则该假设**作废**(生态不是 null)。已排除:合并基底里触发调用只有一条(occurrences≠2)、驱动器读 raw 与 candidate 两份字节都能移、`substitutedCalls` 确实被调用且该 handler 无其它改写(锚点文本与前内核逐字符相同)。下一步:在替换决策处打印四个输入(row/ecosystem/occurrences/captures),由一次启动判读 |
 | 9 | **仅驱动器读数**(启动不可测) | `cobblecoop` 自身 `registry-load` 到不了世界;真字节上 `UNFIT`→`PARTIAL` 已证,类级 finding 是否消失未在启动上确认 |
 | 2、4、6、10、11 | **未定**(仅驱动器读数 + 代码阅读) | 转 FrozenIds2;每条的原因与下一步已在上表列明 |
 

@@ -344,6 +344,12 @@ not catch this defect. A hand-written frame-coverage check would be re-implement
 position: the frame/link check must be a JVM gate (the test JVM over staged jars, or the client arm), and the
 JVM-free assertions remain the instruction-shape ones.
 
+**A second data point, recorded beside this one (§16).** Not every class-file defect needs a game to catch: the
+dotted-owner `ClassFormatError` in §16 is caught by a cheap `defineClass(initialize=false)` over the transformed
+bytes — class-file format only, no `<clinit>`, no game classes. So the rule is not "a cheap gate never exists";
+it is "find the cheap gate that matches the defect". The frame defect above has no such gate because it needs the
+verifier's type analysis; the class-name/format defect has one because `defineClass` checks the format itself.
+
 Verified here: with `COMPUTE_FRAMES` the class defines, links and initialises cleanly; reverting the writer to
 `ClassWriter(0)` makes the new gate fail with the **same** `VerifyError: Expecting a stack map frame … @16:
 aload_1 … same_frame(@27)` the client arm hit. The gate reproduces the field failure exactly, so it is the check
@@ -591,7 +597,66 @@ java.lang.NullPointerException: Cannot invoke "net.neoforged.fml.loading.Languag
 ```
 
 That is the kernel's ModLauncher-shim territory (`ModLauncherClaimRewriter` exists for exactly this reference),
-reached only now that the join puts real packets on the wire; it is the next blocker, not diagnosed here. The row is
+reached only now that the join puts real packets on the wire. §17 reads it and finds it is **crash-report
+system-info noise**, not the blocker — the real one is the `ReportedException` quoted just above it.
+
+The row is
 `contended=TRUE` (212% CPU), so the 224 s wall is timing-suspect, but the failure is a thrown `ReportedException`
-with a null `Launcher.INSTANCE`, not a timeout. The campaign's client acceptance criterion stays met — the join line
-is present — and this section is the bounded step beyond it.
+(the level-event/particle NPE of §17), not a timeout. The campaign's client acceptance criterion stays met — the
+join line is present — and this section is the bounded step beyond it.
+
+## 17. Read: the `Launcher.INSTANCE` / `LanguageProviderLoader` NPEs are crash-report noise, not the blocker
+
+Bounded read of the two ModLauncher-facing NPEs W7Harness saw on the last pin. Bytecode, no JVM.
+
+**They are not the failure, and they are not a shim that needs repairing.** The frames are unambiguous — all
+three of them sit inside NeoForge's *crash-report system-info gathering*, reached because the real exception has
+already happened:
+
+```
+[Render thread/ERROR]: Failed to handle packet …ClientboundLevelEventPacket   ← the real failure (§ below)
+[Render thread/FATAL]: Preparing crash report …
+[Render thread/WARN]: Failed to get system info for ModLauncher
+  java.lang.NullPointerException: … "cpw.mods.modlauncher.Launcher.INSTANCE" is null
+    at net.neoforged.fml.loading.FMLLoader.getLauncherInfo(FMLLoader.java:180)
+    at net.neoforged.fml.CrashReportCallables$1.get(CrashReportCallables.java:46)
+    at net.minecraft.SystemReport.setDetail(SystemReport.java:70)
+    at net.neoforged.neoforge.logging.CrashReportExtender.extendSystemReport(CrashReportExtender.java:34)
+    at net.minecraft.CrashReport.getDetails(CrashReport.java:70)
+    … getFriendlyReport ← saveToFile ← ClientCommonPacketListenerImpl.storeDisconnectionReport ← onPacketError
+```
+
+and the same path for `Failed to get system info for ModLauncher services`
+(`FMLLoader.modLauncherModList` ← `ModLoader.computeModLauncherServiceList`) and
+`Failed to get system info for FML Language Providers` (`LanguageProviderLoader.applyForEach` ←
+`ModLoader.computeLanguageList` — `FMLLoader.getLanguageLoadingProvider()` is null). All three are **WARN**, the
+crash report is still written, and the disconnect is caused by the `ReportedException` that triggered the report,
+not by these. `Launcher.INSTANCE` is null **by design** — this kernel replaces ModLauncher, which
+`ModLauncherClaimRewriter`'s own javadoc records — and the kernel already answers the *Forge* FMLLoader's
+ModLauncher references (`[Forbric/Forge] answered 3 FMLLoader method(s) that reach for ModLauncher`). These are
+**NeoForge's** `net.neoforged.fml.loading.FMLLoader`, a different class, and the cost is a few missing lines in a
+crash report, not a failed run. **So there is nothing here that matches the merged-static-init convention, and no
+repair is landed for it; the chain is stated and the read stops.**
+
+**The blocker those NPEs were sitting under**, quoted from the same run and named here as the next read:
+
+```
+net.minecraft.ReportedException: Playing level event
+	at forbric/net.minecraft.client.multiplayer.ClientLevel.levelEvent(ClientLevel.java:691)
+	… LevelRenderer.levelEvent(LevelRenderer.java:3090) ← ClientLevel.addDestroyBlockEffect(ClientLevel.java:948)
+	← ParticleEngine.destroy(ParticleEngine.java:506) ← TerrainParticle.updateSprite(TerrainParticle.java:106)
+Caused by: java.lang.NullPointerException: Cannot invoke "net.minecraftforge.client.model.data.ModelDataManager.getAt(BlockPos)" because the return value of "net.minecraft.world.level.Level.getModelDataManager()" is null
+	at forbric/net.minecraft.client.renderer.block.BlockModelShaper.getTexture(BlockModelShaper.java:31)
+```
+
+The shape, read from the jars: `BlockModelShaper.getTexture` is **Forge's** (merged and forge-patched have it;
+neoforge-patched has no such method) and calls the Forge-typed
+`Level.getModelDataManager:()Lnet/minecraftforge/client/model/data/ModelDataManager;`. That accessor is a
+**default on `net.minecraftforge.common.extensions.IForgeBlockGetter` that returns `null`** (forge-runtime-interop),
+which Forge's own `Level`/`ClientLevel` override — but the merged `ClientLevel` only carries **NeoForge's**
+`getModelDataManager()`, of a *different return type* (`net.neoforged.neoforge.client.model.data.ModelDataManager`),
+which does not override the Forge default. So Forge's reader gets the null default. Same merge-shape family as §13
+and §15 — one family's reader with the other family's provider — but a different class of defect again, and out of
+this bounded read's scope; it is recorded, not diagnosed or repaired.
+
+The client acceptance criterion stays met: the join line is in this same run.

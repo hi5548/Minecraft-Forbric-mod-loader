@@ -73,7 +73,10 @@ import net.forbric.kernel.util.ForbricLog;
  */
 public final class FabricGuestRemapper {
 	/**
-	 * Bumped whenever this stage's OUTPUT changes for the same mapping data and the same input jar.
+	 * <p>Bumped whenever this stage's OUTPUT changes for the same mapping data and the same input jar. Now
+	 * {@code 1.21.1-9-inherited-member-refs} for {@link InheritedMemberRefs}: a guest class's reference to an
+	 * inherited game member through ANOTHER guest's class used to keep its intermediary name, so the same input jar
+	 * now remaps to different bytes and every warm cache has to re-derive rather than silently serve the old ones.
 	 *
 	 * <p>The rest of the key is content-addressed — the two mapping files and the guest jar's SHA-256 — which is
 	 * right for an input change and wrong for a CODE change: a kernel upgrade then silently reuses jars produced by
@@ -82,7 +85,7 @@ public final class FabricGuestRemapper {
 	 * selector-resolution losses while the new stage was never given the jar. Bumping this constant is the one-line
 	 * answer, and it costs one re-remap of the tree per cache directory.
 	 */
-	private static final String REMAP_VERSION = "1.21.1-8-accesswidener-inherited-member";
+	private static final String REMAP_VERSION = "1.21.1-9-inherited-member-refs";
 
 	private FabricGuestRemapper() {
 	}
@@ -126,6 +129,10 @@ public final class FabricGuestRemapper {
 				// namespace too: its selector strings, and the values of its refmap, are intermediary and must
 				// become named (see MixinNames — the extension translates neither).
 				MixinNames.translate(out, spine);
+				// And a member reference whose owner is another guest's class: the engine resolves those by
+				// walking the classpath, and a guest owner is not on it, so the name it cannot reach is rewritten
+				// here (see InheritedMemberRefs — the same shape as the refmap and the widener below).
+				InheritedMemberRefs.translate(out, spine);
 				// And the access widener is a namespace too: its directives name class_*/method_* the runtime
 				// class does not have, so a pass that never rewrites it widens nothing (see AccessWidenerRemapper).
 				net.forbric.kernel.access.AccessWidenerRemapper.remap(out, spine);

@@ -74,12 +74,16 @@ the recurring moves a group fix could address are: `Enchantment.canEnchant` → 
 * **`builders-enhancements` `mod=FAILED`** (new on the deeper boot, arm 7): `NoSuchMethodError:
   'BlockBehaviour$Properties FabricBlockSettings.method_9630(BlockBehaviour)'` at
   `com.zrollus.bd.block.ModBlocks.<clinit>`. `method_9630` is intermediary for
-  `BlockBehaviour$Properties.copyOf(BlockBehaviour)` (`class_4970$class_2251`), and the mod calls it with the
+  `BlockBehaviour$Properties.ofFullCopy(BlockBehaviour)` (`class_4970$class_2251`; this note first said `copyOf`),
+  and the mod calls it with the
   fabric-api subclass `FabricBlockSettings` as owner — a game member reached through a non-game owner the remap
   did not resolve. A remap gap in an ordinary mod class (the mixin path resolves inherited members; this one did
   not), not an anchor. Revealed, not caused, by the deeper boot. Re-verified against the raw jar in
   [`read-mod-failed-rows.md`](read-mod-failed-rows.md) §3.1, which shows the asymmetry directly: `ModBlocks.<clinit>`
   uses `class_4970$class_2251.method_9630` (resolved) and `FabricBlockSettings.method_9630` (survived) side by side.
+  **LANDED** as `InheritedMemberRefs` + a `REMAP_VERSION` bump —
+  [`../2026-10-03-inherited-member-refs/README.md`](../2026-10-03-inherited-member-refs/README.md); the remapped jar
+  now comes out with zero untranslated member references where it had six of this one.
 * **`cobblemon_skills_api` `mod=FAILED`**: `NoClassDefFoundError: net/puffish/skillsmod/api/reward/Reward` — the
   missing class is **Pufferfish's Skills'** (not cobblemon core, which this note said before), the subject's
   `fabric.mod.json` declares only `fabricloader`/`minecraft`/`fabric`, and no puffish/skills jar is in the corpus at

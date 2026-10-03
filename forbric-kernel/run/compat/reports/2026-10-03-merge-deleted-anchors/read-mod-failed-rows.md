@@ -93,15 +93,22 @@ ModBlocks.<clinit>:
    2315: invokestatic #967   …   (six call sites in all, four of them in <clinit>)
 ```
 
-`class_4970$class_2251` is `BlockBehaviour$Properties` and `method_9630` is its `copyOf(BlockBehaviour)`; the mod
-reaches that inherited member through fabric-api's `FabricBlockSettings` subclass as the call's owner, and the
-guest-jar remap resolved the game-owner form while leaving the subclass-owner form intermediary. This is the same
-shape `b1eb468f` fixed one layer over (`AccessWidenerRemapper`: `method_18377` registered on `class_1297` but
-written on `class_1309`, now falling back to `spine.mapMemberName(name)`). Candidate fixes, both already precedented
-in the kernel: put the guest jars on the remap's source classpath so the hierarchy walk can reach the superclass, or
-give the guest mapping provider the same member-table fallback R6-era code uses elsewhere
-(`MixinNames.java:473`, `MixinShadowMembers.java:196/214`, `AccessWidenerRemapper.java:107`). Either way it needs its
-own arm, and the mapping stage is another pass's current lane — **this read does not change that code.**
+`class_4970$class_2251` is `BlockBehaviour$Properties` and `method_9630` is its **`ofFullCopy(BlockBehaviour)`** (the
+merged base's own signature; this note first said `copyOf`, which the spine's answer corrects); the mod reaches that
+inherited member through fabric-api's `FabricBlockSettings` subclass as the call's owner, and the guest-jar remap
+resolved the game-owner form while leaving the subclass-owner form intermediary. This is the same family as
+`b1eb468f` one layer over (`AccessWidenerRemapper`: `method_18377` registered on `class_1297` but written on
+`class_1309`, resolved by falling back to `spine.mapMemberName(name)`).
+
+**LANDED** — and the fix had to be measured into place, so the two candidates named here are BOTH wrong as written:
+an extra `IMappingProvider` entry for the subclass owner is never consulted (tiny-remapper keys member mappings by the
+classes it has READ — verified: the provider was composed and the reference still came out intermediary), and putting
+the declaring jar on the classpath works for that reference but not for the family (the next one,
+`FabricDataOutput.method_45971`, then needs its own jar). What landed is the post-pass convention the other two
+namespaces already use: `InheritedMemberRefs.translate(jar, spine)` right after `MixinNames.translate`, renaming only
+references that are still intermediary, that no owner-scoped lookup resolves, and that the name table can answer —
+plus `REMAP_VERSION` → `1.21.1-9-inherited-member-refs`. See
+[`../2026-10-03-inherited-member-refs/README.md`](../2026-10-03-inherited-member-refs/README.md).
 
 ### 3.2 `cobblemon_skills_api` — real failure, **subject-side** (an undeclared dependency)
 

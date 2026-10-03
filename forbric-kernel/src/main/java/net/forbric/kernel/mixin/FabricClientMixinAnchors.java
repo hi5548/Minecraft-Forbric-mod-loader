@@ -86,7 +86,13 @@ public final class FabricClientMixinAnchors {
   if(handler==null||target==null||group(handler))return declined(mixin,"no handler "+"(onRemoveBlockEntity(Map,Object)Object), no "+owner+" node, or @Group");
   MethodNode host=find(target,"getBlockEntity",desc);if(host==null)return declined(mixin,"host getBlockEntity"+desc+" is not declared");
   AnnotationNode injector=MixinFit.injectorOf(handler);if(injector==null||!injector.desc.equals("Lorg/spongepowered/asm/mixin/injection/Redirect;"))return declined(mixin,"handler carries no @Redirect");
-  if(!MixinFit.stringList(MixinFit.value(injector,"method")).equals(List.of("getBlockEntity"+desc)))return declined(mixin,"@Redirect method= is "+MixinFit.value(injector,"method")+" not getBlockEntity"+desc);
+  // fabric-api 0.116.17 writes this selector OWNER-QUALIFIED (`L…LevelChunk;getBlockEntity(<desc>)…`) while the
+  // 26.2-generation module wrote it bare; the descriptor is identical, so both spellings name the same member and
+  // Mixin accepts both. Measured 2026-10-04 on a real boot: the bare-only test was the one guard that refused, and
+  // its DECLINED line printed the qualified form verbatim. Same class as MixinNames' refmap-spelling fixes.
+  String bare="getBlockEntity"+desc,qualified="L"+owner+";"+bare;
+  List<String> selectors=MixinFit.stringList(MixinFit.value(injector,"method"));
+  if(!selectors.equals(List.of(bare))&&!selectors.equals(List.of(qualified)))return declined(mixin,"@Redirect method= is "+MixinFit.value(injector,"method")+" not "+bare+" (nor its owner-qualified spelling)");
   Object slice=MixinFit.value(injector,"slice");
   if(!(slice instanceof AnnotationNode sliced)||!(MixinFit.value(sliced,"from") instanceof AnnotationNode from)
     ||!("L"+owner+";createBlockEntity(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/entity/BlockEntity;").equals(MixinFit.value(from,"target")))return declined(mixin,"@Slice(from=LevelChunk.createBlockEntity) absent or different");

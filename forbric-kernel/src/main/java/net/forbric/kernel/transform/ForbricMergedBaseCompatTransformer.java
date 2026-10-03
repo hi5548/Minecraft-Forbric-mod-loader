@@ -93,7 +93,7 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 	}
 
 	/** The repairs {@link #transform} runs, in its order; a test pins the two lists against each other. */
-	static final List<String> REPAIRS = List.of("repairLambdaBootstrapHandles", "addBlockStateModelConflictResolvers", "addBlockStateAppearanceResolver", "addMissingForgeFluidTypeBridge", "addMissingForgeKeyMappingLookupInitializer", "addMissingForgeKnownRegistriesInitializer", "routeKeyMappingClickToPopulatedLookup", "giveKeyMappingItsMinecraftForgeFace", "routeFabricParticleFactoriesThroughTheLiveMap", "giveFeaturesPerStepItsVanillaDescriptorBack", "letDungeonsGenerateWithoutTheDataMap", "restoreDoublePrecisionToTheRandomSources", "convertRadiansWithVanillasFoldedConstant", "saveTheHeightmapsVanillaSaves", "guardNeoForgesWorldModifierPass", "letForeignResourceConditionsThrough", "letForeignResourceConditionsThroughMinecraftForge", "letFabricResourceConditionsDecide", "translateAGuestsPrivateSkipMarker", "serveDefaultAttributesBothEcosystems", "restoreForgeClientInit", "restoreForgeGeometryReload", "nameTheReloadListenersNeoForgeRefusesToName", "dropInterfaceDefaultShadowingOverrides", "tolerateEmptyCreativeTabStacks", "routePlaceItemHookToNeoForge", "bridgeOrphanedPipRenderers", "keepForgeOutboundProtocolCurrent", "surviveTheMissingForgeModelDataManager", "dropTheWindowTitlesLoaderBrand", "keepTheSaveOffTheTeardownsFailurePath", "postNeoForgesItemTooltipEvent", "askNeoForgeWhatAnItemsAttributesAre", "readTheSpawnReasonThatIsActuallyWritten", "giveTheUnwrittenLoggerAValue", "addTheMissingCapabilityLifecycleStubs", "addTheMissingNbtBuilderFactory", "postMinecraftForgesReloadListenerEvent", "giveMinecraftForgesReloadEventItsConditionContext", "letMinecraftForgeIngredientTypesDecode", "letMinecraftForgeFluidsChooseTheirModel", "giveMinecraftForgesParticleLookupItsFirstVariant", "dropStubsThatBypassARealSuperclassMethod", "inlineTheSwitchMapTheMergeLost", "vetoUnjudgeableOverlayConditions", "hideTheLegacyLootModifierIndexFromTheDirectoryScan", "letModdedFeatureFlagsRegister", "dropTheKeyModifierSuffixBeforeParsingAKeyName", "letTheAtlasLowerItsMipLevelLikeVanilla", "wrapTheStreamsVanillaWraps", "returnFromANestedBootstrapBeforeItsTail", "letBothEcosystemsSetBurnTime", "letMinecraftForgeSeeSpawnerMobs", "letMinecraftForgeAddPackFinders", "giveConcreteForgeEventsTheConstructorTheEventBusWants");
+	static final List<String> REPAIRS = List.of("repairLambdaBootstrapHandles", "addBlockStateModelConflictResolvers", "addBlockStateAppearanceResolver", "addMissingForgeFluidTypeBridge", "addMissingForgeKeyMappingLookupInitializer", "addMissingForgeKnownRegistriesInitializer", "addMissingIngredientInvalidationCounterInitializer", "routeKeyMappingClickToPopulatedLookup", "giveKeyMappingItsMinecraftForgeFace", "routeFabricParticleFactoriesThroughTheLiveMap", "giveFeaturesPerStepItsVanillaDescriptorBack", "letDungeonsGenerateWithoutTheDataMap", "restoreDoublePrecisionToTheRandomSources", "convertRadiansWithVanillasFoldedConstant", "saveTheHeightmapsVanillaSaves", "guardNeoForgesWorldModifierPass", "letForeignResourceConditionsThrough", "letForeignResourceConditionsThroughMinecraftForge", "letFabricResourceConditionsDecide", "translateAGuestsPrivateSkipMarker", "serveDefaultAttributesBothEcosystems", "restoreForgeClientInit", "restoreForgeGeometryReload", "nameTheReloadListenersNeoForgeRefusesToName", "dropInterfaceDefaultShadowingOverrides", "tolerateEmptyCreativeTabStacks", "routePlaceItemHookToNeoForge", "bridgeOrphanedPipRenderers", "keepForgeOutboundProtocolCurrent", "surviveTheMissingForgeModelDataManager", "dropTheWindowTitlesLoaderBrand", "keepTheSaveOffTheTeardownsFailurePath", "postNeoForgesItemTooltipEvent", "askNeoForgeWhatAnItemsAttributesAre", "readTheSpawnReasonThatIsActuallyWritten", "giveTheUnwrittenLoggerAValue", "addTheMissingCapabilityLifecycleStubs", "addTheMissingNbtBuilderFactory", "postMinecraftForgesReloadListenerEvent", "giveMinecraftForgesReloadEventItsConditionContext", "letMinecraftForgeIngredientTypesDecode", "letMinecraftForgeFluidsChooseTheirModel", "giveMinecraftForgesParticleLookupItsFirstVariant", "dropStubsThatBypassARealSuperclassMethod", "inlineTheSwitchMapTheMergeLost", "vetoUnjudgeableOverlayConditions", "hideTheLegacyLootModifierIndexFromTheDirectoryScan", "letModdedFeatureFlagsRegister", "dropTheKeyModifierSuffixBeforeParsingAKeyName", "letTheAtlasLowerItsMipLevelLikeVanilla", "wrapTheStreamsVanillaWraps", "returnFromANestedBootstrapBeforeItsTail", "letBothEcosystemsSetBurnTime", "letMinecraftForgeSeeSpawnerMobs", "letMinecraftForgeAddPackFinders", "giveForgeEventsTheConstructorTheEventBusWants");
 
 	private static final String NEO_EVENT_HOOKS_BINARY = "net.neoforged.neoforge.event.EventHooks";
 
@@ -121,6 +121,9 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 		out.add(fixed("addMissingForgeKnownRegistriesInitializer", MAPPED_REGISTRY,
 				"MinecraftForge's MappedRegistry.KNOWN is never initialised — the first registry registration NPEs "
 						+ "(SoundEvents during Bootstrap.bootStrap) and the server never reaches the main menu"));
+		out.add(fixed("addMissingIngredientInvalidationCounterInitializer", INGREDIENT,
+				"the world never opens: Ingredient.invalidateAll NPEs on the counter the merge dropped, so a "
+						+ "quick-played world load dies at TagsUpdated and the client stays on the title screen"));
 		out.add(fixed("routeKeyMappingClickToPopulatedLookup", KEY_MAPPING,
 				"key presses are looked up in the lookup registration never populated — MinecraftForge mods' keys never fire"));
 		out.add(fixed("giveKeyMappingItsMinecraftForgeFace", KEY_MAPPING,
@@ -257,7 +260,7 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 		out.add(scanned("letMinecraftForgeAddPackFinders",
 				"AddPackFindersEvent is never posted, so a MinecraftForge mod's own data pack is never offered "
 						+ "to any repository"));
-		out.add(scanned("giveConcreteForgeEventsTheConstructorTheEventBusWants",
+		out.add(scanned("giveForgeEventsTheConstructorTheEventBusWants",
 				"a concrete MinecraftForge Event class Forge ships without a no-arg constructor (EntityEvent, "
 						+ "ServerLifecycleEvent, LevelEvent, ChunkEvent) makes EventBus 6 throw \"Error computing "
 						+ "listener list\" on the first post through its hierarchy — mob finalization during spawn-area "
@@ -304,6 +307,7 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 			changed |= claim(reporter, "addMissingForgeFluidTypeBridge", addMissingForgeFluidTypeBridge(node));
 			changed |= claim(reporter, "addMissingForgeKeyMappingLookupInitializer", addMissingForgeKeyMappingLookupInitializer(node));
 			changed |= claim(reporter, "addMissingForgeKnownRegistriesInitializer", addMissingForgeKnownRegistriesInitializer(node));
+			changed |= claim(reporter, "addMissingIngredientInvalidationCounterInitializer", addMissingIngredientInvalidationCounterInitializer(node));
 			changed |= claim(reporter, "routeKeyMappingClickToPopulatedLookup", routeKeyMappingClickToPopulatedLookup(node));
 			changed |= claim(reporter, "giveKeyMappingItsMinecraftForgeFace", giveKeyMappingItsMinecraftForgeFace(node));
 			changed |= claim(reporter, "routeFabricParticleFactoriesThroughTheLiveMap", routeFabricParticleFactoriesThroughTheLiveMap(node));
@@ -354,7 +358,7 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 		changed |= claim(reporter, "letBothEcosystemsSetBurnTime", letBothEcosystemsSetBurnTime(node));
 		changed |= claim(reporter, "letMinecraftForgeSeeSpawnerMobs", letMinecraftForgeSeeSpawnerMobs(node));
 		changed |= claim(reporter, "letMinecraftForgeAddPackFinders", letMinecraftForgeAddPackFinders(node));
-			changed |= claim(reporter, "giveConcreteForgeEventsTheConstructorTheEventBusWants", giveConcreteForgeEventsTheConstructorTheEventBusWants(node));
+			changed |= claim(reporter, "giveForgeEventsTheConstructorTheEventBusWants", giveForgeEventsTheConstructorTheEventBusWants(node));
 			changed |= namedOldLoader && adoptInteropHooksTheBaseStillNamesAfterTheOldLoader(node);
 
 			byte[] result = classBytes;
@@ -432,6 +436,9 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 	private static final String KEY_MAPPING = "net/minecraft/client/KeyMapping";
 	/** 1.21.1's registry base. MinecraftForge adds {@code KNOWN}/{@code markKnown}/{@code getKnownRegistries}. */
 	private static final String MAPPED_REGISTRY = "net/minecraft/core/MappedRegistry";
+	/** 1.21.1's ingredient base. MinecraftForge invalidates every cached Ingredient on a tags update. */
+	private static final String INGREDIENT = "net/minecraft/world/item/crafting/Ingredient";
+	private static final String COUNTER_TYPE = "java/util/concurrent/atomic/AtomicInteger";
 	private static final String MF_CONTEXT = "Lnet/minecraftforge/client/settings/IKeyConflictContext;";
 	private static final String NEO_CONTEXT = "Lnet/neoforged/neoforge/client/settings/IKeyConflictContext;";
 	private static final String MF_MODIFIER = "Lnet/minecraftforge/client/settings/KeyModifier;";
@@ -1271,6 +1278,62 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 		clinit.maxStack = Math.max(clinit.maxStack, 2);
 		ForbricLog.warn("[Forbric/MergedBaseCompat] initialized Forge KeyMapping lookup on merged client base");
 		return true;
+	}
+
+	/**
+	 * Gives {@code Ingredient.INVALIDATION_COUNTER} the counter its own {@code <clinit>} would have built.
+	 *
+	 * <p>PORT(1.21.1): the same dropped class-initializer as {@link #addMissingForgeKnownRegistriesInitializer} —
+	 * the merge kept a {@code <clinit>} that never assigns this field, while the field survives because
+	 * MinecraftForge reads it. Measured on the 1.21.1 client, it is what stops a world from opening:
+	 *
+	 * <pre>
+	 * java.lang.NullPointerException: Cannot invoke "java.util.concurrent.atomic.AtomicInteger.incrementAndGet()"
+	 *     because "net.minecraft.world.item.crafting.Ingredient.INVALIDATION_COUNTER" is null
+	 *   at net.minecraft.world.item.crafting.Ingredient.invalidateAll(Ingredient.java:34)
+	 *   at net.minecraftforge.common.ForgeMod.tagsUpdated(ForgeMod.java:438)
+	 *   at net.minecraftforge.event.ForgeEventFactory.onTagsUpdated
+	 *   at net.forbric.kernel.runtime.KernelGameWorldEvents.installTagsUpdated
+	 *   at net.minecraft.server.ReloadableServerResources.updateRegistryTags
+	 *   at net.minecraft.client.gui.screens.worldselection.WorldOpenFlows.loadWorldDataBlocking
+	 *   at net.minecraft.client.quickplay.QuickPlay.joinSingleplayerWorld
+	 * </pre>
+	 *
+	 * <p>Every quick-played world load died there and left the client on the title screen, with only
+	 * "TagsUpdatedEvent forward failed" in the log. The assignment is re-added before every {@code RETURN} of
+	 * {@code <clinit>}, exactly as the KNOWN repair does it: {@code INVALIDATION_COUNTER} is
+	 * {@code private static final}, and a PUTSTATIC to a final field is legal only inside the declaring class's own
+	 * {@code <clinit>}. A base that already assigns it is left untouched, so this is a no-op wherever the merge kept
+	 * the initializer.
+	 */
+	private static boolean addMissingIngredientInvalidationCounterInitializer(ClassNode node) {
+		String counterDesc = "Ljava/util/concurrent/atomic/AtomicInteger;";
+		if (!INGREDIENT.equals(node.name)
+				|| !hasField(node, "INVALIDATION_COUNTER", counterDesc)
+				|| initializesStaticField(node, "INVALIDATION_COUNTER", counterDesc)) {
+			return false;
+		}
+
+		MethodNode clinit = findMethod(node, "<clinit>", "()V");
+		if (clinit == null) return false;
+
+		boolean inserted = false;
+		for (AbstractInsnNode insn = clinit.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+			if (insn.getOpcode() != Opcodes.RETURN) continue;
+			clinit.instructions.insertBefore(insn, new TypeInsnNode(Opcodes.NEW, COUNTER_TYPE));
+			clinit.instructions.insertBefore(insn, new InsnNode(Opcodes.DUP));
+			clinit.instructions.insertBefore(insn, new MethodInsnNode(Opcodes.INVOKESPECIAL, COUNTER_TYPE,
+					"<init>", "()V", false));
+			clinit.instructions.insertBefore(insn, new FieldInsnNode(Opcodes.PUTSTATIC, INGREDIENT,
+					"INVALIDATION_COUNTER", counterDesc));
+			inserted = true;
+		}
+		if (inserted) {
+			ForbricLog.warn("[Forbric/MergedBaseCompat] gave Ingredient.INVALIDATION_COUNTER the counter the merge "
+					+ "dropped — without it every TagsUpdated post NPEs in Ingredient.invalidateAll and a "
+					+ "quick-played world never opens");
+		}
+		return inserted;
 	}
 
 	/**
@@ -2394,20 +2457,28 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 	 *
 	 * <p>The added constructor is the empty one the bus contract assumes: {@code super()}, nothing else. Only the
 	 * bus calls it, and only to read the (already-built) listener list, so the event's own fields are never read
-	 * through it. Only classes whose superclass chain can actually supply a no-arg constructor are patched — a
-	 * concrete subclass of an abstract event ({@code MobSpawnEvent$FinalizeSpawn}) cannot be and does not need to
-	 * be: the bus instantiates a posted event's ANCESTORS, never the posted class.
+	 * through it. Only classes whose superclass chain can supply a no-arg constructor are patched.
+	 *
+	 * <p><b>ABSTRACT classes are patched too.</b> This used to stop at concrete ones, on the premise that "the bus
+	 * instantiates a posted event's ANCESTORS, never the posted class" — measured false on the client: a listener
+	 * registered for {@code ClientPlayerNetworkEvent$LoggingIn} makes the bus instantiate THAT class, and it is a
+	 * leaf whose abstract parent carries the only constructor. Neither had a no-arg constructor, so every client
+	 * boot died in {@code MinecraftForge.initialize} → {@code ForgeMod.<init>} with
+	 * {@code NoSuchMethodException: net.minecraftforge.client.event.ClientPlayerNetworkEvent$LoggingIn.<init>()}
+	 * wrapped as "Error computing listener list". A leaf can only be given one when its parent can supply
+	 * {@code ()V}, so the parent is patched in the same pass: the chain walk below treats an ancestor this repair
+	 * will itself patch as supplying it, abstract included. Patching an abstract event is inert on its own —
+	 * nothing instantiates it, and the constructor is reachable only from a patched subclass's {@code super()}.
 	 *
 	 * <p>Stands down without a class resolver, like {@link #dropStubsThatBypassARealSuperclassMethod}: it cannot
 	 * answer its own question without reading the superclass chain.
 	 */
-	private boolean giveConcreteForgeEventsTheConstructorTheEventBusWants(ClassNode node) {
+	private boolean giveForgeEventsTheConstructorTheEventBusWants(ClassNode node) {
 		if (classBytes == null || node.superName == null || node.methods == null) return false;
 		if (!node.name.startsWith("net/minecraftforge/") || !node.superName.startsWith("net/minecraftforge/")) {
 			return false;
 		}
-		if ((node.access & (Opcodes.ACC_INTERFACE | Opcodes.ACC_ABSTRACT | Opcodes.ACC_ENUM
-				| Opcodes.ACC_ANNOTATION)) != 0) {
+		if ((node.access & (Opcodes.ACC_INTERFACE | Opcodes.ACC_ENUM | Opcodes.ACC_ANNOTATION)) != 0) {
 			return false;
 		}
 		if (hasMethod(node, "<init>", "()V")) return false;
@@ -2447,7 +2518,7 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 			if (hasMethod(parent, "<init>", "()V")) return true;
 			// A concrete Forge event class this repair will itself patch: keep walking to its own super.
 			boolean willBePatched = parent.name.startsWith("net/minecraftforge/")
-					&& (parent.access & (Opcodes.ACC_INTERFACE | Opcodes.ACC_ABSTRACT | Opcodes.ACC_ENUM)) == 0
+					&& (parent.access & (Opcodes.ACC_INTERFACE | Opcodes.ACC_ENUM | Opcodes.ACC_ANNOTATION)) == 0
 					&& parent.superName != null && parent.superName.startsWith("net/minecraftforge/");
 			if (!willBePatched) return false;
 			at = parent.superName;

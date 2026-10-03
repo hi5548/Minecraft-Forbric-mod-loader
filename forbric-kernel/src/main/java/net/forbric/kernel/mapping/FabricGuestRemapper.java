@@ -110,8 +110,9 @@ public final class FabricGuestRemapper {
 				IMappingProvider jarProvider = MixinShadowMembers.withRenames(provider, jar, spine);
 				ForgeModRemapper.remapJar(jar, out, jarProvider, sourceClasspath, true);
 				// Mixin resolves names through the mod's refmap before it looks at the game, so the refmap is a
-				// namespace too: its values are intermediary and must become named (see MixinRefmaps).
-				MixinRefmaps.translate(out, spine);
+				// namespace too: its selector strings, and the values of its refmap, are intermediary and must
+				// become named (see MixinNames — the extension translates neither).
+				MixinNames.translate(out, spine);
 				ForbricLog.info("[Forbric/Mapping] remapped %s → %s (%s → %s, mixin annotations included)",
 						jar.getFileName(), out.getFileName(), ForbricMappings.INTERMEDIARY, ForbricMappings.NAMED);
 			}

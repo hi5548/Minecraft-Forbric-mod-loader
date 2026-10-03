@@ -137,7 +137,7 @@ public final class KernelClientSmoke {
 	}
 
 	private static void tick(Object minecraft) {
-		if (!connectionProbesArmed) armConnectionProbes(minecraft);
+		if (!connectionProbesTried) armConnectionProbes(minecraft);
 		Object level = fieldValue(minecraft, "level");
 		Object player = fieldValue(minecraft, "player");
 
@@ -224,6 +224,14 @@ public final class KernelClientSmoke {
 			{"ModelsBaked", "net.minecraftforge.client.event.ModelEvent$BakingCompleted"}};
 	private static final java.util.Map<String, Integer> forgeHeard = new java.util.concurrent.ConcurrentHashMap<>();
 	private static boolean connectionProbesArmed;
+	/**
+	 * Whether arming has been attempted at all. Arming is one-shot: it either succeeds or is recorded as
+	 * unavailable, and a tick never retries it. Measured on a 1.21.1 client before this guard: the Forge census
+	 * listeners could not attach (see {@link #forgeListen}), so every one of the 18k ticks logged the same
+	 * {@code NoSuchFieldException: BUS} — a probe that cannot arm must stay quiet, not become the loudest thing
+	 * in the log.
+	 */
+	private static boolean connectionProbesTried;
 
 	/**
 	 * Listens the way a MinecraftForge mod does for the client joining and leaving, and registers one client command
@@ -233,6 +241,7 @@ public final class KernelClientSmoke {
 	 */
 	@SuppressWarnings({"unchecked", "rawtypes"})
 	private static void armConnectionProbes(Object minecraft) {
+		connectionProbesTried = true;
 		connectionProbesArmed = true;
 		try {
 			ClassLoader cl = minecraft.getClass().getClassLoader();
@@ -268,19 +277,38 @@ public final class KernelClientSmoke {
 
 	@SuppressWarnings({"unchecked", "rawtypes"})
 	private static void forgeListen(ClassLoader cl, String event, java.util.function.Consumer<Object> listener) throws Exception {
-		Object bus = Class.forName(event, true, cl).getField("BUS").get(null);
+		Object bus;
+		try {
+			bus = Class.forName(event, true, cl).getField("BUS").get(null);
+		} catch (NoSuchFieldException absent) {
+			// PORT(1.21.1): Forge 52 has no per-event BUS field — that is the 26.2 event-bus API; its events are
+			// posted on an IEventBus, and the only Forge bus this generation has is the global one. Same fallback,
+			// and the same reason, as ForgeDatapackDeclarations.declare.
+			bus = Class.forName("net.minecraftforge.common.MinecraftForge", false, cl).getField("EVENT_BUS").get(null);
+		}
 		// The bus's public interface, not its class: the implementation is not public.
+		//
+		// The overload that NAMES the event class is preferred, and that is not a style choice. The generic
+		// addListener(Consumer) resolves the event type by reflecting on the consumer's own type argument, and this
+		// class is BOOT-side: it cannot name a game event type, so its listener is a raw Consumer whose argument is
+		// Object. The bus then computed the listener list for java.lang.Object and died on
+		// "class java.lang.Object cannot be cast to class net.minecraftforge.eventbus.api.Event" — measured on the
+		// client, every tick, as "could not arm the connection probes". Naming the class skips the reflection.
+		Class<?> priority = Class.forName("net.minecraftforge.eventbus.api.EventPriority", false, cl);
+		Object normalPriority = Enum.valueOf(priority.asSubclass(Enum.class), "NORMAL");
 		for (Class<?> type = bus.getClass(); type != null; type = type.getSuperclass()) {
 			for (Class<?> api : type.getInterfaces()) {
 				try {
-					api.getMethod("addListener", java.util.function.Consumer.class).invoke(bus, (java.util.function.Consumer) listener);
+					api.getMethod("addListener", priority, boolean.class, Class.class, java.util.function.Consumer.class)
+							.invoke(bus, normalPriority, false, Class.forName(event, true, cl),
+									(java.util.function.Consumer) listener);
 					return;
 				} catch (NoSuchMethodException elsewhere) {
 					continue;
 				}
 			}
 		}
-		throw new NoSuchMethodException(event + ".BUS.addListener(Consumer)");
+		throw new NoSuchMethodException(event + ".BUS.addListener(Class, Consumer)");
 	}
 
 	private static Object invoke(Object target, String method) {

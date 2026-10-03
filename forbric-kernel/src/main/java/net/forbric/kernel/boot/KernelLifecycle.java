@@ -2801,13 +2801,46 @@ public final class KernelLifecycle {
 		}
 	}
 
-	/** Re-closes after the client entrypoints and redoes the id bookkeeping their registrations invalidated. */
+	/**
+	 * Re-closes after the client entrypoints and redoes the id bookkeeping their registrations invalidated.
+	 *
+	 * <p><b>The freeze waits for the ecosystem registration window.</b> This used to freeze unconditionally, and on
+	 * the client that is one window too early. Measured on a 1.21.1 client (sound-physics-remastered, Fabric):
+	 *
+	 * <pre>
+	 * 14:22:54  [Forbric/Lifecycle] registries reopened for the Fabric client entrypoints
+	 * 14:22:54  [Forbric/Lifecycle] GameData.freezeData() THREW — neoforge:swim_speed is unbound
+	 * 14:22:55  [Forbric/Lifecycle] kernel CLIENT mod-loading window (native, no FancyModLoader) — registering
+	 * 14:22:55  [Forbric/Lifecycle] constructed NeoForge baseline mod on a native bus (dist=CLIENT)
+	 * </pre>
+	 *
+	 * <p>{@code GameData.freezeData} validates Forge's attribute registry, that validation reads
+	 * {@code DefaultAttributes}, and its {@code <clinit>} walks every entity's {@code createAttributes}. The merged
+	 * base's {@code LivingEntity} adds NeoForge's {@code swim_speed} there — as NeoForge's own patch does — and the
+	 * holder is unbound because {@code registerNeoForgeContent}, which constructs the baseline that binds it, has
+	 * not run yet. The NPE inside a class initializer poisons {@code DefaultAttributes} permanently: every later
+	 * user, world load included, is {@code NoClassDefFoundError: Could not initialize class ...DefaultAttributes}.
+	 * Genuine NeoForge registers its attributes before that class is first touched; this window closed before it.
+	 *
+	 * <p>So the freeze is skipped while the baseline is absent and left to the registration window's own close
+	 * ({@code registerNeoForgeContent}'s finally → {@link #closeRegistrationWindow}), which runs after the baseline
+	 * and the {@code RegisterEvent} stream that binds it — exactly one freeze on this path, and exactly one on the
+	 * path where the baseline is already there. The deferral is named in the log so a missed freeze is visible
+	 * rather than silent; a server never reaches this method at all.
+	 */
 	private static void closeClientEntrypointWindow(ClassLoader cl, ReopenedRegistries opened) {
 		try {
 			linkBlockItems(cl);
 			recloseForgeRegistries(cl, opened);
 			rootRegistry(cl, false);
-			freeze(cl);
+			if (baselineContainer == null) {
+				ForbricLog.info("[Forbric/Lifecycle] left the registries for the ecosystem registration window to "
+						+ "freeze: the Fabric client entrypoints ran before it constructed NeoForge's baseline, and "
+						+ "freezing here initialises DefaultAttributes against a registry that has not bound "
+						+ "neoforge:swim_speed yet — the NPE in its <clinit> poisons the class for the whole run");
+			} else {
+				freeze(cl);
+			}
 			rebuildNeoForgeBlockStateIds(cl);
 		} catch (Throwable t) {
 			ForbricLog.warn("[Forbric/Lifecycle] could not re-close after the Fabric client entrypoints", unwrap(t));

@@ -23,8 +23,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -69,6 +71,8 @@ public final class ForbricMappings {
 	 * obfuscated column — so every namespace needs its own index.
 	 */
 	private final Map<String, Map<String, MappingTree.ClassMapping>> byNamespace = new HashMap<>();
+	/** Lazily built by {@link #mapMemberName}; null until a lookup misses its owner. */
+	private Map<String, String> memberNameIndex;
 
 	private ForbricMappings(MemoryMappingTree namedKeyed) {
 		this.namedKeyed = namedKeyed;
@@ -96,6 +100,52 @@ public final class ForbricMappings {
 	 */
 	private int namespaceId(String namespace) {
 		return NAMED.equals(namespace) ? MappingTreeView.SRC_NAMESPACE_ID : namedKeyed.getNamespaceId(namespace);
+	}
+
+	/**
+	 * The named name of an intermediary method or field, indexed by the intermediary name alone — built on first
+	 * use, and only needed where an owner-scoped lookup finds nothing.
+	 *
+	 * <p>Intermediary names a member once across the whole game: a subclass that overrides a method the obfuscated
+	 * jar already spells with its superclass's own name and descriptor gets no row of its own in the intermediary
+	 * file, so the merged tree carries that member under its declaring class only. Measured on 1.21.1:
+	 * {@code net/minecraft/class_746} (LocalPlayer) declares {@code playSound(SoundEvent,float,float)}, yet the
+	 * intermediary file gives class_746 no such row — {@code method_5783} belongs to {@code class_1297} (Entity).
+	 * A mod's refmap is written against its own dev mappings and names the subclass, so an owner-scoped lookup
+	 * returns nothing where the name alone is unambiguous, and the mixin is injected by a name that no longer
+	 * exists. An intermediary name two classes disagree about is left out rather than guessed.
+	 */
+	public String mapMemberName(String name) {
+		if (name == null) return null;
+
+		Map<String, String> index = memberNameIndex;
+		if (index == null) {
+			index = new HashMap<>();
+			Set<String> ambiguous = new HashSet<>();
+			int fromId = namespaceId(INTERMEDIARY);
+
+			for (MappingTree.ClassMapping cls : namedKeyed.getClasses()) {
+				for (MappingTree.MethodMapping method : cls.getMethods()) {
+					indexMember(index, ambiguous, method.getName(fromId), method.getSrcName());
+				}
+				for (MappingTree.FieldMapping field : cls.getFields()) {
+					indexMember(index, ambiguous, field.getName(fromId), field.getSrcName());
+				}
+			}
+			memberNameIndex = index;
+		}
+
+		return orSelf(index.get(name), name);
+	}
+
+	private static void indexMember(Map<String, String> index, Set<String> ambiguous, String intermediary, String named) {
+		if (intermediary == null || named == null || ambiguous.contains(intermediary)) return;
+
+		String previous = index.put(intermediary, named);
+		if (previous != null && !previous.equals(named)) {
+			ambiguous.add(intermediary);
+			index.remove(intermediary);
+		}
 	}
 
 	private static String nameIn(MappingTree.ClassMapping cls, int ns) {

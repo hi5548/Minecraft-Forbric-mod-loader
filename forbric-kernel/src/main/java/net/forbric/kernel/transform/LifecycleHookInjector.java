@@ -265,11 +265,21 @@ public final class LifecycleHookInjector implements ClassTransformer {
 	 */
 	public static MergedBaseCalleeSwaps.Substitution substitutionRow(String hostClass, String hostMethod, String owner,
 			String name, String desc, Ecosystem ecosystem, String hookOwner, String hookName, String hookDesc) {
+		// EVERY ecosystem, deliberately — not the family whose arm fired. A carrier substitution is family-scoped
+		// because a mod compiled against another family's jar never had that call to begin with, so its anchor
+		// missing is what it would do natively. This swap is the KERNEL's: it replaced the call in the base for
+		// everyone, so every guest anchored on it was anchored on a call that is now gone, whatever family compiled
+		// it. Filtering by family left Sinytra Connector behind — a Fabric-ecosystem mod that anchors on NeoForge's
+		// loader class precisely because that is what it exists to interact with — and the census kept reporting
+		// `1/2 anchors resolve, missing: @At(INVOKE) …ServerModLoader.load in Main.main` on a boot where the swap had
+		// been published. The family of the arm is still named in the text because it is the provenance of the row.
 		return new MergedBaseCalleeSwaps.Substitution(hostClass, hostMethod, "L" + owner + ";" + name + desc,
-				"L" + hookOwner + ";" + hookName + hookDesc, java.util.Set.of(ecosystem),
+				"L" + hookOwner + ";" + hookName + hookDesc,
+				java.util.Set.of(Ecosystem.FABRIC, Ecosystem.FORGE, Ecosystem.NEOFORGE),
 				"the kernel owns the lifecycle: this pass replaced " + owner.replace('/', '.') + "." + name
 						+ " with its own hook at the same instruction, so the point BEFORE the hook is still the point "
-						+ "before the mod-loading window every guest anchored on that call meant");
+						+ "before the mod-loading window every guest anchored on that call meant (the "
+						+ ecosystem + " arm is the one that fired here)");
 	}
 
 	@Override

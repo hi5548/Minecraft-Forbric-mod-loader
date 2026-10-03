@@ -43,9 +43,8 @@ import net.forbric.kernel.transform.LifecycleHookInjector;
  * caused and the census reported as the merge's. Publishing the swap lets the anchor move onto the hook, the same
  * program point, so the handler still runs where the loader's trigger now is.
  *
- * <p>Both directions are asserted: with a published row the anchor moves and the mixin re-evaluates FIT, and a guest
- * of another ecosystem is NOT moved — the row names the family whose jar made that call, and a mod compiled against
- * a different one never had an anchor there.
+ * <p>Both directions are asserted: with a published row the anchor moves and the mixin re-evaluates FIT, and it
+ * moves for a guest of ANY ecosystem, because the swap belongs to the kernel rather than to a family.
  */
 class KernelLifecycleSwapTest {
 	private static final String MAIN = "net/minecraft/server/Main";
@@ -90,12 +89,19 @@ class KernelLifecycleSwapTest {
 				"the moved handler binds at the hook, which is where the trigger now is");
 	}
 
+	/**
+	 * A kernel-made swap is not family-scoped: the kernel replaced the call in the BASE, so every guest anchored on
+	 * it — whatever family compiled it — was anchored on a call that is now gone. Merely plausible for a Fabric mod
+	 * here: Sinytra Connector is Fabric-ecosystem and anchors on NeoForge's loader class on purpose, and family
+	 * filtering left its handler behind on a real boot.
+	 */
 	@Test
-	void aGuestOfAnotherEcosystemIsNotMoved() {
+	void aGuestOfAnyEcosystemMoves() {
 		MixinStubRebind.noteEcosystem(MIXIN, Ecosystem.FABRIC);
 		MergedBaseCalleeSwaps.kernelSubstituted(row());
-		assertTrue(MixinRetarget.plan(MixinFit.parse(guest(TRIGGER)), resolver(call(HOOK))).isEmpty(),
-				"a Fabric mod was never compiled against the NeoForge loader class");
+		MixinRetarget.Plan plan = MixinRetarget.plan(MixinFit.parse(guest(TRIGGER)), resolver(call(HOOK)));
+		assertEquals(2, plan.rewrites().size(), plan.describe());
+		assertEquals(HOOK, plan.rewrites().get(0).to());
 	}
 
 	/** The row the pass publishes for the redirect it makes, built by the pass's own constructor. */

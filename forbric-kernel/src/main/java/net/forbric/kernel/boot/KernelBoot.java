@@ -47,6 +47,7 @@ import net.forbric.kernel.transform.ChunkExecutorGuardInjector;
 import net.forbric.kernel.transform.ClientPackHookInjector;
 import net.forbric.kernel.transform.ClientSmokeTickInjector;
 import net.forbric.kernel.transform.CommonNetworkInteropInjector;
+import net.forbric.kernel.transform.EventBusWrapperDefinerInjector;
 import net.forbric.kernel.transform.ModLauncherClaimRewriter;
 import net.forbric.kernel.transform.ForgeOverlayNeuterInjector;
 import net.forbric.kernel.transform.SodiumConfigUserBridgeInjector;
@@ -378,6 +379,10 @@ public final class KernelBoot {
 		// platform-only class would otherwise get a bare NoClassDefFoundError. See ForbricClassLoader.setRescueJars
 		// for why this cannot shadow the winner, and for what it deliberately does not fix.
 		loader.setRescueJars(rescueUrls(dupes));
+		// The event bus defines its generated handler wrappers through the game loader, so a package-private
+		// listener (Forge's DeferredRegister$EventDispatcher) shares its runtime package. Hand the loader over now,
+		// before any Forge class can register a handler.
+		net.forbric.kernel.interop.EventBusWrapperDefiner.attach(loader);
 
 		// Every mod jar probes as the loader the arbiter gave it, so a mod cannot wander into a branch it never ran
 		// on its own platform — and a universal jar answers as the ONE ecosystem it was arbitrated to. Plain
@@ -929,6 +934,13 @@ public final class KernelBoot {
 		// as `ClassNotFoundException: net.minecraftforge.client.model.data.__ModelDataManager_onChunkUnload_Unload`
 		// while registering Forge's own client handlers, and as Launcher.INSTANCE being null on the NeoForge side.
 		chain.register(TransformPhase.COREMOD, new ModLauncherClaimRewriter());
+
+		// With the launcher claim gone the bus generates its own wrapper — but into its child ASMClassLoader, a
+		// DIFFERENT runtime package from the listener, so package-private listeners (Forge's own
+		// DeferredRegister$EventDispatcher) are unreachable and every Forge DeferredRegister/NewRegistryEvent
+		// dispatch dies with IllegalAccessError. Define the wrapper where ModLauncherFactory would have: the game
+		// loader. Pairs with ModLauncherClaimRewriter (same decision, same phase).
+		chain.register(TransformPhase.COREMOD, new EventBusWrapperDefinerInjector());
 
 		// A NeoForge mod adds constants to vanilla enums by declaring them in META-INF/enumextensions.json; FML
 		// rewrites the enum's <clinit> and $VALUES at load. Nothing did that here, so Sophisticated Backpacks' model

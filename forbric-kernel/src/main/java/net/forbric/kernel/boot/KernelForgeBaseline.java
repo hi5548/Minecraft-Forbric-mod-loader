@@ -89,11 +89,11 @@ public final class KernelForgeBaseline {
 			// so those registries never exist and RegistryObjects like ForgeMod.EMPTY_TYPE (minecraft:empty fluid type,
 			// read by EntityFluidInteraction when a chest minecart spawns during worldgen) stay unbound. Fire it FIRST
 			// so the registries exist before the RegisterEvent pass enumerates + populates them.
-			int created = fireNewRegistryEvent(cl);
-
 			List<KernelForgeModContext.Handle> all = new java.util.ArrayList<>();
 			if (baseline != null) all.add(baseline);
 			all.addAll(modHandles);
+			int created = fireNewRegistryEvent(cl, all);
+
 			int n = KernelForgeModContext.fireRegisterEvents(cl, all);
 			ForbricLog.info("[Forbric/Forge] created %d custom registr(ies) via NewRegistryEvent + fired Forge "
 					+ "RegisterEvent x%d on %d bus(es) [%s + %d mod(s)]", created, n, all.size(),
@@ -106,11 +106,19 @@ public final class KernelForgeBaseline {
 	}
 
 	/**
-	 * Post a {@code NewRegistryEvent} on its global bus (delivering to ForgeMod's {@code DeferredRegister} subscribers,
-	 * which call {@code event.create(builder)}) then {@code fill()} it to build + register those registries into
-	 * {@code RegistryManager.ACTIVE}. Returns the count of registries that came into being. Best-effort.
+	 * Posts a {@code NewRegistryEvent} on every mod bus (delivering to each {@code DeferredRegister}'s
+	 * {@code createRegistry} subscriber, which calls {@code event.create(builder)}) then {@code fill()}s it to build
+	 * and register those registries into {@code RegistryManager.ACTIVE}. Returns the count that came into being.
+	 * Best-effort.
+	 *
+	 * <p>On 1.21.1 the event is a MOD-BUS event ({@code IModBusEvent}) and Forge 52's {@code NewRegistryEvent} has no
+	 * static {@code BUS} field — the 26.2-era {@code getField("BUS")} threw {@code NoSuchFieldException}, so this pass
+	 * created nothing and every Forge custom registry (biome/structure modifier serializers, fluid_type, …) stayed
+	 * null. A datapack naming one then died at registry load: a Forge {@code biome_modifier} file hit
+	 * {@code BiomeModifier.DIRECT_CODEC}'s null {@code RegistryHolder.get()}. A {@code DeferredRegister.makeRegistry}
+	 * registry is built when the event reaches the bus the register was registered on, so post on each handle's bus.
 	 */
-	private static int fireNewRegistryEvent(ClassLoader cl) {
+	private static int fireNewRegistryEvent(ClassLoader cl, List<KernelForgeModContext.Handle> handles) {
 		try {
 			Class<?> newRegCls = Class.forName(ForeignType.NEW_REGISTRY_EVENT.binary(Ecosystem.FORGE), false, cl);
 			Class<?> regManager = Class.forName(ForeignType.REGISTRY_MANAGER.binary(Ecosystem.FORGE), false, cl);
@@ -120,23 +128,24 @@ public final class KernelForgeBaseline {
 			int before = ((java.util.Map<?, ?>) rf.get(active)).size();
 
 			Object event = newRegCls.getDeclaredConstructor().newInstance();
-			Object bus = newRegCls.getField("BUS").get(null);
 
-			// The post and the fill are separated on purpose. This is traditional Forge's GLOBAL bus, so every
-			// mod's NewRegistryEvent listener runs inside one call and there is no seam to isolate them at. What
-			// there IS a seam for is the consequence: one listener throwing used to take fill() down with it, and
-			// with it EVERY Forge custom registry in the instance -- forge:fluid_type, holder_set_type, the
+			// The post and the fill are separated on purpose. A listener that throws used to take fill() down with
+			// it, and with it EVERY Forge custom registry in the instance -- forge:fluid_type, holder_set_type, the
 			// modifier serializers -- including the ones listeners that already ran had created. Filling anyway
-			// keeps those. This is the same shape as the deferred-work drain in KernelNeoSetup: the failure is
-			// one mod's, and the cost should be too.
+			// keeps those. This is the same shape as the deferred-work drain in KernelNeoSetup: the failure is one
+			// mod's, and the cost should be too. One event instance across the buses, filled once: each
+			// DeferredRegister subscribes on exactly one bus, so each registry is created exactly once.
 			boolean posted = true;
-			try {
-				KernelForgeModContext.single(bus.getClass(), "post").invoke(bus, event);
-			} catch (Throwable t) {
-				posted = false;
-				ForbricLog.warn("[Forbric/Forge] a traditional-Forge mod's NewRegistryEvent listener failed — the "
-						+ "registries collected before it are still created below, the ones after it are not",
-						Reflect.unwrap(t));
+			for (KernelForgeModContext.Handle handle : handles) {
+				Object bus = handle.busGroup();
+				try {
+					KernelForgeModContext.single(bus.getClass(), "post").invoke(bus, event);
+				} catch (Throwable t) {
+					posted = false;
+					ForbricLog.warn("[Forbric/Forge] NewRegistryEvent could not reach %s's bus — the custom "
+							+ "registries collected before it are still created below, the ones after it are not",
+							handle.modId(), Reflect.unwrap(t));
+				}
 			}
 
 			Method fill = newRegCls.getDeclaredMethod("fill");

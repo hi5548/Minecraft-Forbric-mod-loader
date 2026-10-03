@@ -17,7 +17,10 @@
 package net.forbric.kernel.transform;
 
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -26,9 +29,13 @@ import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.Handle;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.AnnotationNode;
 import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.InvokeDynamicInsnNode;
+import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 
 import net.forbric.kernel.mixin.MixinFit;
@@ -163,7 +170,12 @@ public final class LambdaSelectorRetarget implements ClassTransformer {
 			byte[] bytes = mergedBase.apply(owner);
 			if (bytes == null) return null;
 			List<String> candidates = candidates(bytes, enclosing, selector.desc());
-			// None is a different function; more than one means the number cannot be trusted. Either way, decline.
+			// More than one means the NUMBER cannot be trusted on its own — but the merge keeps a dead duplicate of a
+			// lambda beside the body it actually wired into the invokedynamic, and that reference settles it. Measured
+			// on the merged 1.21.1 LivingEntity: lambda$stopSleeping$9(BlockPos)V has two bodies ($11, $12) and only
+			// $12 is the Optional.ifPresent handle from stopSleeping; lambda$checkBedExists$7(BlockPos)Boolean has
+			// two ($9, $10) and only $10 is referenced. A class that references both — or neither — still declines.
+			if (candidates.size() > 1) candidates = liveMembers(bytes, candidates, selector.desc());
 			if (candidates.size() != 1) return null;
 			String candidate = candidates.getFirst();
 			if (replacement != null && !replacement.equals(candidate)) return null;
@@ -189,6 +201,36 @@ public final class LambdaSelectorRetarget implements ClassTransformer {
 			found.add(method.name);
 		}
 		return found;
+	}
+
+	/**
+	 * Of {@code candidates}, the ones this class itself references through a method handle — a lambda body wired into
+	 * an {@code invokedynamic} (LambdaMetafactory) or held as an {@code ldc} constant. A merge that kept a dead
+	 * duplicate of the body leaves exactly one referenced; both referenced (or none) is not a decision this may make.
+	 */
+	private static List<String> liveMembers(byte[] ownerBytes, List<String> candidates, String desc) {
+		ClassNode owner = new ClassNode();
+		new ClassReader(ownerBytes).accept(owner, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+		Set<String> wanted = new HashSet<>(candidates);
+		Set<String> live = new LinkedHashSet<>();
+		for (MethodNode method : owner.methods) {
+			for (AbstractInsnNode instruction : method.instructions.toArray()) {
+				if (instruction instanceof InvokeDynamicInsnNode dynamic) {
+					for (Object argument : dynamic.bsmArgs) {
+						if (argument instanceof Handle handle) record(live, wanted, handle, owner.name, desc);
+					}
+				} else if (instruction instanceof LdcInsnNode constant && constant.cst instanceof Handle handle) {
+					record(live, wanted, handle, owner.name, desc);
+				}
+			}
+		}
+		return new ArrayList<>(live);
+	}
+
+	private static void record(Set<String> live, Set<String> wanted, Handle handle, String owner, String desc) {
+		if (handle.getOwner().equals(owner) && handle.getDesc().equals(desc) && wanted.contains(handle.getName())) {
+			live.add(handle.getName());
+		}
 	}
 
 	/** Whether {@code classBytes} carries a {@code @Mixin}, the one class annotation every mixin has. */

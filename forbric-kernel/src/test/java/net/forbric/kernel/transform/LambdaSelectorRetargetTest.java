@@ -120,6 +120,33 @@ class LambdaSelectorRetargetTest {
 	}
 
 	@Test
+	void anAmbiguousNumberResolvesWhenTheClassReferencesOnlyOneBody() {
+		byte[] owner = ownerClassReferencing("alpha/Foo", List.of("lambda$foo$1", "lambda$foo$2"), "(I)V", "lambda$foo$2");
+		Function<String, byte[]> resolver = name -> "alpha/Foo".equals(name) ? owner : null;
+
+		ClassNode node = mixin("alpha/Foo");
+		handler(node, "handler", "Lalpha/Foo;lambda$foo$3(I)V");
+		byte[] retargeted = new LambdaSelectorRetarget(resolver).transform("p.HandlerMixin", bytes(node), null);
+
+		assertEquals(List.of("Lalpha/Foo;lambda$foo$2(I)V"), selectors(retargeted, "handler"),
+				"the merge kept a dead duplicate; the one the class references through its invokedynamic is the body");
+	}
+
+	@Test
+	void anAmbiguousNumberWithBothBodiesReferencedIsStillRefused() {
+		byte[] owner = ownerClassReferencing("alpha/Foo", List.of("lambda$foo$1", "lambda$foo$2"), "(I)V",
+				"lambda$foo$1", "lambda$foo$2");
+		Function<String, byte[]> resolver = name -> "alpha/Foo".equals(name) ? owner : null;
+
+		ClassNode node = mixin("alpha/Foo");
+		handler(node, "handler", "Lalpha/Foo;lambda$foo$3(I)V");
+		byte[] mixin = bytes(node);
+
+		assertSame(mixin, new LambdaSelectorRetarget(resolver).transform("p.HandlerMixin", mixin, null),
+				"both bodies are referenced, so the number still cannot be trusted");
+	}
+
+	@Test
 	void twoCandidatesForOneEnclosingAndDescriptorAreNotGuessed() {
 		byte[] owner = ownerClass("alpha/Foo", "(I)V", "lambda$foo$1", "lambda$foo$2");
 		Function<String, byte[]> onlyFoo = name -> "alpha/Foo".equals(name) ? owner : null;
@@ -194,6 +221,32 @@ class LambdaSelectorRetargetTest {
 			node.methods.add(new MethodNode(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC,
 					lambda, desc, null, null));
 		}
+		return bytes(node);
+	}
+
+	/**
+	 * The same owner with the named lambda bodies wired into an {@code invokedynamic}'s bootstrap arguments — the way
+	 * javac leaves a live lambda body and a byte-merge can leave a dead duplicate beside it.
+	 */
+	private static byte[] ownerClassReferencing(String internalName, List<String> lambdas, String desc, String... referenced) {
+		ClassNode node = new ClassNode();
+		node.version = Opcodes.V21;
+		node.access = Opcodes.ACC_PUBLIC | Opcodes.ACC_SUPER;
+		node.name = internalName;
+		node.superName = "java/lang/Object";
+		for (String lambda : lambdas) {
+			node.methods.add(new MethodNode(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC,
+					lambda, desc, null, null));
+		}
+		MethodNode carrier = new MethodNode(Opcodes.ACC_PUBLIC, "carrier", "()V", null, null);
+		for (String lambda : referenced) {
+			org.objectweb.asm.Handle handle = new org.objectweb.asm.Handle(Opcodes.H_INVOKESTATIC, internalName, lambda, desc, false);
+			carrier.instructions.add(new org.objectweb.asm.tree.InvokeDynamicInsnNode("accept",
+					"()Ljava/lang/Object;", handle, handle));
+			carrier.instructions.add(new org.objectweb.asm.tree.InsnNode(Opcodes.POP));
+		}
+		carrier.instructions.add(new org.objectweb.asm.tree.InsnNode(Opcodes.RETURN));
+		node.methods.add(carrier);
 		return bytes(node);
 	}
 

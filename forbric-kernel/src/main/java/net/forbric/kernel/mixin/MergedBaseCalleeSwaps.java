@@ -114,6 +114,12 @@ public final class MergedBaseCalleeSwaps {
 		KERNEL_SUBSTITUTED.add(row);
 	}
 
+	/** How many kernel-made swaps have been published so far — the reader's line and the publisher's line compare these
+	 * to say whether the row existed when the reader asked, which is a different failure from a key that differs. */
+	public static int kernelRowCount() {
+		return KERNEL_SUBSTITUTED.size();
+	}
+
 	/** Drops the published swaps. For tests: the list is process-wide because the pass that fills it is. */
 	public static void forgetKernelSubstitutions() {
 		KERNEL_SUBSTITUTED.clear();

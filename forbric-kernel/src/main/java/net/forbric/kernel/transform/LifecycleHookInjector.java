@@ -28,6 +28,7 @@ import org.objectweb.asm.tree.VarInsnNode;
 
 import net.forbric.api.Ecosystem;
 import net.forbric.kernel.mixin.MergedBaseCalleeSwaps;
+import net.forbric.kernel.mixin.MixinRetarget;
 import net.forbric.api.ForeignType;
 import net.forbric.kernel.util.ForbricLog;
 
@@ -330,8 +331,18 @@ public final class LifecycleHookInjector implements ClassTransformer {
 				// a call that is no longer there (Sinytra Connector's boot.ServerMainMixin#earlyInit, whose
 				// `@At(INVOKE) ServerModLoader.load in Main.main` read as missing on every subject while the console
 				// line above was naming that very call as ours).
-				MergedBaseCalleeSwaps.kernelSubstituted(substitutionRow(transformClass, m, t.owner(),
-						t.name(), t.desc(), t.ecosystem(), hookOwner, call.name, call.desc));
+				MergedBaseCalleeSwaps.Substitution published = substitutionRow(transformClass, m, t.owner(),
+						t.name(), t.desc(), t.ecosystem(), hookOwner, call.name, call.desc);
+				MergedBaseCalleeSwaps.kernelSubstituted(published);
+				// The other half of the pair `-Dforbric.mixinRetarget.diagnose=on` prints at the reader: the reader's
+				// line says which key it asked for and whether a row answered; this one says which key was published
+				// and WHEN relative to that ask. A row published after the ask cannot answer it, and the two lines
+				// together separate that from a key that simply differs.
+				if ("on".equalsIgnoreCase(System.getProperty(MixinRetarget.DIAGNOSE_PROPERTY, "off"))) {
+					ForbricLog.info("[Forbric/Lifecycle] published a kernel substitution row for %s.%s (member %s) "
+							+ "— kernel rows published so far: %d", published.target(), published.method(),
+							published.member(), MergedBaseCalleeSwaps.kernelRowCount());
+				}
 				ForbricLog.info("[Forbric/Lifecycle] redirected genuine loader trigger %s.%s to %s.%s from %s.%s "
 						+ "— kernel owns the lifecycle", t.owner(), t.name(), hookOwner, t.hookName(),
 						transformClass, transformMethod);

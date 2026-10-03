@@ -562,9 +562,10 @@ public final class MixinRetarget {
 			boolean diagnose = "on".equalsIgnoreCase(System.getProperty(DIAGNOSE_PROPERTY, "off"));
 			int occurrences = row == null ? -1 : CarrierHelpers.occurrences(method, row.replacement());
 			if (row == null || occurrences != 1) {
-				if (diagnose) ForbricLog.info("[Forbric/Mixin] %s#%s: no move for %s in %s — row=%s ecosystem=%s occurrences=%d",
-						mixinName, handler.name, member, method.name + method.desc, row == null ? "none" : "found",
-						ecosystem, occurrences);
+				if (diagnose) ForbricLog.info("[Forbric/Mixin] %s#%s: no move for %s in %s — row=%s ecosystem=%s "
+						+ "occurrences=%d kernel rows published at this ask=%d", mixinName, handler.name, member,
+						method.name + method.desc, row == null ? "none" : "found", ecosystem, occurrences,
+						MergedBaseCalleeSwaps.kernelRowCount());
 				continue;
 			}
 			if (captured.length > 0) {

@@ -5,6 +5,7 @@ import java.util.function.Function;
 import org.objectweb.asm.*;
 import org.objectweb.asm.tree.*;
 import org.objectweb.asm.tree.analysis.*;
+import net.forbric.kernel.util.ForbricLog;
 /** Proven moved block-entity removal, a context-expanded call whose Fabric redirect is strictly a no-op, and Fabric's
  * per-screen draw events around NeoForge's screen-stack call. */
 public final class FabricClientMixinAnchors {
@@ -79,14 +80,18 @@ public final class FabricClientMixinAnchors {
  private static int removal(ClassNode mixin,Function<String,ClassNode> targets){
   String owner="net/minecraft/world/level/chunk/LevelChunk",desc="(Lnet/minecraft/core/BlockPos;L"+owner+"$EntityCreationType;)Lnet/minecraft/world/level/block/entity/BlockEntity;";
   MethodNode handler=find(mixin,"onRemoveBlockEntity","(Ljava/util/Map;Ljava/lang/Object;)Ljava/lang/Object;");ClassNode target=targets.apply(owner);
-  if(handler==null||target==null||group(handler))return 0;MethodNode host=find(target,"getBlockEntity",desc);if(host==null)return 0;
-  AnnotationNode injector=MixinFit.injectorOf(handler);if(injector==null||!injector.desc.equals("Lorg/spongepowered/asm/mixin/injection/Redirect;"))return 0;
-  if(!MixinFit.stringList(MixinFit.value(injector,"method")).equals(List.of("getBlockEntity"+desc)))return 0;
+  // Every decline says WHICH guard declined, at INFO, because the retarget is measured from a boot log and this one
+  // was reported as "the adapter did not take effect" with no way to tell a wrong anchor from a silent throw. The
+  // four names this runs for are the two generations of one mixin per side, so the noise is at most two lines.
+  if(handler==null||target==null||group(handler))return declined(mixin,"no handler "+"(onRemoveBlockEntity(Map,Object)Object), no "+owner+" node, or @Group");
+  MethodNode host=find(target,"getBlockEntity",desc);if(host==null)return declined(mixin,"host getBlockEntity"+desc+" is not declared");
+  AnnotationNode injector=MixinFit.injectorOf(handler);if(injector==null||!injector.desc.equals("Lorg/spongepowered/asm/mixin/injection/Redirect;"))return declined(mixin,"handler carries no @Redirect");
+  if(!MixinFit.stringList(MixinFit.value(injector,"method")).equals(List.of("getBlockEntity"+desc)))return declined(mixin,"@Redirect method= is "+MixinFit.value(injector,"method")+" not getBlockEntity"+desc);
   Object slice=MixinFit.value(injector,"slice");
   if(!(slice instanceof AnnotationNode sliced)||!(MixinFit.value(sliced,"from") instanceof AnnotationNode from)
-    ||!("L"+owner+";createBlockEntity(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/entity/BlockEntity;").equals(MixinFit.value(from,"target")))return 0;
-  List<AnnotationNode> ats=MixinFit.atNodes(injector).stream().filter(a->"Ljava/util/Map;remove(Ljava/lang/Object;)Ljava/lang/Object;".equals(MixinFit.value(a,"target"))).toList();if(ats.size()!=1)return 0;
-  Object originalOrdinal=MixinFit.value(ats.getFirst(),"ordinal");if(originalOrdinal!=null&&!Integer.valueOf(0).equals(originalOrdinal))return 0;
+    ||!("L"+owner+";createBlockEntity(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/entity/BlockEntity;").equals(MixinFit.value(from,"target")))return declined(mixin,"@Slice(from=LevelChunk.createBlockEntity) absent or different");
+  List<AnnotationNode> ats=MixinFit.atNodes(injector).stream().filter(a->"Ljava/util/Map;remove(Ljava/lang/Object;)Ljava/lang/Object;".equals(MixinFit.value(a,"target"))).toList();if(ats.size()!=1)return declined(mixin,"Map.remove @At count is "+ats.size()+" not 1");
+  Object originalOrdinal=MixinFit.value(ats.getFirst(),"ordinal");if(originalOrdinal!=null&&!Integer.valueOf(0).equals(originalOrdinal))return declined(mixin,"@At ordinal is "+originalOrdinal+" not 0");
   try{
    Frame<SourceValue>[] frames=new Analyzer<>(new SourceInterpreter()).analyze(owner,host);int ordinal=0,selected=-1,matches=0,selectedInstruction=-1,factory=-1,factories=0;
    for(var instruction:host.instructions)if(instruction instanceof MethodInsnNode call&&call.owner.equals(owner)&&call.name.equals("createBlockEntity")&&call.desc.equals("(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/entity/BlockEntity;")){factory=host.instructions.indexOf(instruction);factories++;}
@@ -95,8 +100,16 @@ public final class FabricClientMixinAnchors {
     if(frame!=null&&frame.getStackSize()>=2){SourceValue receiver=frame.getStack(frame.getStackSize()-2);if(receiver.insns.size()==1&&receiver.insns.iterator().next() instanceof FieldInsnNode field&&field.getOpcode()==Opcodes.GETFIELD&&field.owner.equals(owner)&&field.name.equals("blockEntities")&&field.desc.equals("Ljava/util/Map;")){selected=ordinal;selectedInstruction=host.instructions.indexOf(instruction);matches++;}}
     ordinal++;
    }
-   if(matches!=1||factories!=1||selectedInstruction>=factory)return 0;set(ats.getFirst(),"ordinal",selected);remove(injector,"slice");return 1;
-  }catch(AnalyzerException malformed){return 0;}
+   if(matches!=1||factories!=1||selectedInstruction>=factory)return declined(mixin,"analyzer: matches="+matches+" factories="+factories+" selectedInstruction="+selectedInstruction+" factory="+factory);
+   set(ats.getFirst(),"ordinal",selected);remove(injector,"slice");
+   ForbricLog.info("[Forbric/Mixin] retargeted guest mixin %s:onRemoveBlockEntity onto the blockEntities Map.remove at instruction %d (factory at %d)",mixin.name,selectedInstruction,factory);
+   return 1;
+  }catch(AnalyzerException malformed){return declined(mixin,"analyzer threw "+malformed);}
+ }
+ /** A declined retarget, named: which guard said no, on which mixin. Never silent. */
+ private static int declined(ClassNode mixin,String why){
+  ForbricLog.info("[Forbric/Mixin] %s:onRemoveBlockEntity retarget DECLINED — %s",mixin.name,why);
+  return 0;
  }
  private static int render(ClassNode mixin,Function<String,ClassNode> targets){
   String model="net/minecraft/client/renderer/block/dispatch/BlockStateModel",tail="Lnet/minecraft/util/RandomSource;Ljava/util/List;)V";

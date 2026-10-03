@@ -5,6 +5,7 @@ import java.util.function.Function;
 import org.objectweb.asm.*;
 import org.objectweb.asm.tree.*;
 import net.forbric.kernel.transform.FabricItemContractTransformer;
+import net.forbric.kernel.util.ForbricLog;
 /** Keep native reset decisions; a same-item Fabric override can explicitly keep the current mining action. */
 public final class FabricMiningMixinAdapter {
  /** Two generations of the same class: 26.2 ships MultiPlayerGameModeMixin, 0.116.17 ClientPlayerInteractionManagerMixin. */
@@ -32,6 +33,9 @@ public final class FabricMiningMixinAdapter {
   for(int i=0;i<at.values.size();i+=2)if(at.values.get(i).equals("target"))at.values.set(i+1,"L"+STACK+";shouldCauseBlockBreakReset(L"+STACK+";)Z");
   handler.instructions.clear();handler.tryCatchBlocks.clear();handler.localVariables=null;
   if(current)currentGeneration(handler);else provenComposition(handler);
+  // A marker, so "did this retarget fire" is a grep and not an inference: the adapter returned 1 silently
+  // before, and its absence was once read as the adapter declining when nothing had logged either way.
+  ForbricLog.info("[Forbric/Mixin] retargeted guest mixin %s:fabricItemContinueBlockBreakingInject onto ItemStack.shouldCauseBlockBreakReset (%s generation)",mixin.name,current?"1.21.1":"26.2");
   return 1;
  }
  /** The 0.116.17 handler, expressed on the merged base: {@code isSameItemSameComponents(a, b)} becomes

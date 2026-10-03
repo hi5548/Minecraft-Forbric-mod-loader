@@ -71,6 +71,16 @@ the recurring moves a group fix could address are: `Enchantment.canEnchant` → 
   issue; left to its own pass.
 * **balm `FabricCropBlockMixin`** — the apply-time `InvalidInjectionException` → `VerifyError` cluster
   ([`read-balm-cropblock.md`](read-balm-cropblock.md)); an apply/recovery defect, its own owner.
+* **`builders-enhancements` `mod=FAILED`** (new on the deeper boot, arm 7): `NoSuchMethodError:
+  'BlockBehaviour$Properties FabricBlockSettings.method_9630(BlockBehaviour)'` at
+  `com.zrollus.bd.block.ModBlocks.<clinit>`. `method_9630` is intermediary for
+  `BlockBehaviour$Properties.copyOf(BlockBehaviour)` (`class_4970$class_2251`), and the mod calls it with the
+  fabric-api subclass `FabricBlockSettings` as owner — a game member reached through a non-game owner the remap
+  did not resolve. A remap gap in an ordinary mod class (the mixin path resolves inherited members; this one did
+  not), not an anchor. Revealed, not caused, by the deeper boot.
+* **`cobblemon_skills_api` `mod=FAILED`**: `ClassNotFoundException: com/cobblemon/mod/…` — cobblemon core is not in
+  the subject's closure (`deps = [fabric-api]`), so its classes referencing cobblemon cannot load. A corpus/closure
+  limit (same family as miguelfaction's missing `migueleconomy`), subject-side, not kernel.
 
 ### Remaining CONFIRMED per subject (the load gate)
 

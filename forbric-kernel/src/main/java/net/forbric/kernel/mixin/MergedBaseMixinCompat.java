@@ -74,13 +74,23 @@ public final class MergedBaseMixinCompat {
 	 *       Fabric main has run. Nothing the kernel forces may run Fabric code in that gap — its datapack-registry
 	 *       declaration did, through {@code RegistryDataLoader.<clinit>}, and poisoned world loading for the
 	 *       session; see {@code DatapackRegistryDeclaration}.</li>
-	 *   <li><b>registry-sync {@code RegistryDataLoaderMixin}</b> — binds a {@code ScopedValue IS_SERVER} in one
-	 *       wrap and reads it in another, re-binding across the async boundary in two more. The re-bind wraps do
-	 *       not match the merged base's {@code RegistryDataLoader.load}, so the read throws
-	 *       {@code NoSuchElementException: ScopedValue not bound} on a ForkJoin worker. Cost: registry-sync's
-	 *       server/client context during datapack registry load. FabricRegistryLoaderMixinAdapter now restores
-	 *       the original ScopedValue bindings and async propagation on both widened overloads; this pin returns
-	 *       only with that adapter switched off.</li>
+	 *   <li><b>registry-sync {@code RegistryLoaderMixin}</b> — <b>PORT(1.21.1): the class is
+	 *       {@code RegistryLoaderMixin} in this generation.</b> fabric-api 0.116.17's
+	 *       {@code fabric-registry-sync-v0.mixins.json} declares that name (and its jar contains it); the
+	 *       {@code RegistryDataLoaderMixin} this entry used to name is the 0.154.0-era class and exists in NEITHER
+	 *       the config nor the jar — so the entry suppressed nothing while the shipped mixin applied. What the
+	 *       shipped one does (remapped jar, {@code javap -v}): {@code wrapIsServerCall} binds a {@code ThreadLocal
+	 *       IS_SERVER} around the private {@code load(LoadingFunction, RegistryAccess, List)}, {@code beforeLoad}
+	 *       injects at the two {@code List.forEach} calls there to fire {@code DynamicRegistrySetupCallback}, and
+	 *       {@code prependDirectoryWithNamespace} wraps {@code Registries.elementsDirPath}. It carries none of the
+	 *       asynchronous {@code ScopedValue} re-binds the 0.154.0 class had, and its {@code @At} already names the
+	 *       live private overload, so nothing can be re-anchored:
+	 *       {@link FabricRegistryLoaderMixinAdapter#retainsOnBase} is false on this base (there is no widened
+	 *       {@code load(LoaderFactory, List, List, Executor, List)}), the adapter declines, and this pin is what
+	 *       applies. Cost, stated: registry-sync's server/client context and its
+	 *       {@code DynamicRegistrySetupCallback} during datapack registry load — reported as a finding by
+	 *       {@code FabricApiModuleLossAudit}. It returns only on a base that has the widened overloads the adapter
+	 *       re-anchors onto, where {@code ForbricMixinService} lifts it.</li>
 	 *   <li><b>loot-api-v3 {@code ReloadableServerRegistriesMixin}</b> —
 	 *       <b>PORT(1.21.1): the class is {@code ReloadableRegistriesMixin} in this generation.</b> Mojang renamed
 	 *       the class it mixes into ({@code class_9383} is {@code ReloadableServerRegistries} in 26.2 and
@@ -166,6 +176,9 @@ public final class MergedBaseMixinCompat {
  * the unfit injectors are separable.
  */
 	public static final List<String> SUPPRESSED_MIXINS = List.of(
+			"fabric-registry-sync-v0.mixins.json:RegistryLoaderMixin",
+			// The same mixin in the other fabric-api generation. One of the two exists in an installed module and the
+			// other is a no-op; keeping both means a 26.2-era module needs no edit. See FabricRegistryLoaderMixinAdapter.
 			"fabric-registry-sync-v0.mixins.json:RegistryDataLoaderMixin",
 			"fabric-registry-sync-v0.mixins.json:BootstrapMixin",
 			"fabric-registry-sync-v0.mixins.json:MainMixin",

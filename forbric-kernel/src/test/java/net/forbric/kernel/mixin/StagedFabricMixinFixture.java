@@ -20,6 +20,23 @@ final class StagedFabricMixinFixture {
  static ClassNode living(boolean vanilla)throws Exception{
   return game("net/minecraft/world/entity/LivingEntity",vanilla);
  }
+ /**
+  * A staged module's own mixin config, verbatim, or empty when the fixture is not staged. The ASSUMPTION lives at
+  * the call site: JUnit's abort cannot unwind through a stream lambda, and a helper that throws it from one turns
+  * "fixture absent" into a failure.
+  */
+ static java.util.Optional<String> mixinConfigText(String module,String config)throws Exception{
+  Path api=TestFixtures.fabricApi();
+  if(!Files.isRegularFile(api))return java.util.Optional.empty();
+  try(ZipFile z=new ZipFile(api.toFile())){
+   ZipEntry e=z.stream().filter(x->x.getName().startsWith("META-INF/jars/"+module+"-")).findFirst().orElseThrow();
+   try(ZipInputStream inner=new ZipInputStream(z.getInputStream(e))){
+    for(ZipEntry entry;(entry=inner.getNextEntry())!=null;)
+     if(entry.getName().equals(config))return java.util.Optional.of(new String(inner.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8));
+   }
+  }
+  throw new AssertionError("mixin config not found: "+module+"/"+config);
+ }
  /** The merged base under the root this build compiled against, whatever version is staged there. */
  static ClassNode merged(String name)throws Exception{
   Path p=TestFixtures.mergedBase();

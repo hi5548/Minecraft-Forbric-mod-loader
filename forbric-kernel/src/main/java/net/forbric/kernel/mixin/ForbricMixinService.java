@@ -384,6 +384,16 @@ public final class ForbricMixinService
 	}
 
 	private ClassNode mergedBaseNode(String internalName, int flags) {
+		return mergedBaseNodeFor(internalName, flags);
+	}
+
+	/**
+	 * The same read, callable without an instance — for a predicate a MIXIN CONFIG's rewrite has to answer, which
+	 * runs before Mixin has handed anyone the class being prepared. {@link
+	 * net.forbric.kernel.mixin.FabricRegistryLoaderMixinAdapter#retainsOnBase} is the one caller, and it must agree
+	 * with what the adapter will later find in {@link #mergedBaseNodeWithCode}: same reader, same bytes.
+	 */
+	static ClassNode mergedBaseNodeFor(String internalName, int flags) {
 		try {
 			byte[] bytes = loader().getPreMixinClassBytes(internalName.replace('/', '.'));
 			if (bytes == null) return null;
@@ -591,8 +601,14 @@ public final class ForbricMixinService
 
 		if (MergedBaseMixinCompat.enabled()) {
 			collectSuppressed(MergedBaseMixinCompat.SUPPRESSED_MIXINS, configName, out);
-			if (FabricRegistryLoaderMixinAdapter.enabled() && configName.equals("fabric-registry-sync-v0.mixins.json")) {
-				out.remove("RegistryDataLoaderMixin");
+			// The fallback pin lifts only when the adapter can actually RETAIN the callback (its re-anchoring needs
+			// the carrier's widened load overloads; 1.21.1's merged base has none — see retainsOnBase). Lifting it on
+			// the switch alone suppressed nothing, because the entry named a class fabric-api 0.116.17 does not ship
+			// while the class it DOES ship applied unmeasured. Ask the config name first: the read is per-process.
+			if (configName.equals("fabric-registry-sync-v0.mixins.json") && FabricRegistryLoaderMixinAdapter.enabled()
+					&& FabricRegistryLoaderMixinAdapter.retainsOnBase()) {
+				// The module ships exactly one of the two generations' classes; remove whichever entry is in force.
+				FabricRegistryLoaderMixinAdapter.PINS.forEach(pin -> out.remove(pin.substring(pin.indexOf(':') + 1)));
 			}
 			if (FabricRegistryInitializationMixinAdapter.enabled()) {
 				if (configName.equals("fabric-registry-sync-v0.mixins.json")) out.removeAll(List.of("BootstrapMixin","MainMixin"));

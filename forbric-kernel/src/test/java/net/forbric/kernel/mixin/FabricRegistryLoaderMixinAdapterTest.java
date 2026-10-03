@@ -2,6 +2,7 @@ package net.forbric.kernel.mixin;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import java.nio.file.*;
+import java.util.*;
 import java.util.zip.ZipFile;
 import org.junit.jupiter.api.Test;
 import org.objectweb.asm.tree.*;
@@ -28,5 +29,30 @@ class FabricRegistryLoaderMixinAdapterTest {
 	@Test void aVanillaLoaderKeepsTheOriginalHandlers() throws Exception {
 		ClassNode vanilla=StagedFabricMixinFixture.game("net/minecraft/resources/RegistryDataLoader",true);
 		assertEquals(0,FabricRegistryLoaderMixinAdapter.adapt(mixin(),n->vanilla));
+	}
+
+	/**
+	 * The oracle for the defect this adapter's name carried: the class a PIN names must be the class the installed
+	 * module declares, or the pin suppresses nothing while the shipped mixin runs unmeasured. 0.116.17 (this branch's
+	 * fabric-api) declares {@code RegistryLoaderMixin}; the 26.2 fixture declares {@code RegistryDataLoaderMixin};
+	 * whichever is staged, every one the adapter knows must also be pinned. Red while the pin named only
+	 * {@code RegistryDataLoaderMixin} and the module shipped the other name.
+	 */
+	@Test void everyRegistryLoaderNameTheStagedModuleDeclaresIsPinned() throws Exception {
+		String config="fabric-registry-sync-v0.mixins.json";
+		java.util.Optional<String> json=StagedFabricMixinFixture.mixinConfigText("fabric-registry-sync-v0",config);
+		assumeTrue(json.isPresent(),"the staged fabric-api fixture is required for the generation check");
+		Set<String> declared=FabricRegistryLoaderMixinAdapter.knownNames().stream()
+				.map(n->n.substring(n.lastIndexOf('/')+1))
+				.filter(simple->json.get().contains("\""+simple+"\""))
+				.collect(java.util.stream.Collectors.toSet());
+		assertFalse(declared.isEmpty(),"the staged fabric-api module must declare one generation's registry-loader mixin");
+		for(String simple:declared){
+			assertTrue(FabricRegistryLoaderMixinAdapter.PINS.contains(config+":"+simple),
+					"the module declares "+simple+" and the adapter knows it, so a pin must name it — otherwise the "
+							+"fallback suppresses nothing: "+FabricRegistryLoaderMixinAdapter.PINS);
+		}
+		assertTrue(FabricRegistryLoaderMixinAdapter.PINS.contains(config+":RegistryLoaderMixin"),
+				"this branch's own generation (fabric-api 0.116.17) must be pinned: it is the name that applies here");
 	}
 }

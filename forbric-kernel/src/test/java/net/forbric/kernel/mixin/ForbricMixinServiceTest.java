@@ -163,9 +163,26 @@ class ForbricMixinServiceTest {
 	void restoredRegistryMixinsRunByDefaultAndExplicitSuppressionsStillWin() {
 		String config = "fabric-registry-sync-v0.mixins.json";
 		assertFalse(ForbricMixinService.suppressedMixinsFor(config).contains("BootstrapMixin"));
-		assertFalse(ForbricMixinService.suppressedMixinsFor(config).contains("RegistryDataLoaderMixin"));
 		System.setProperty("forbric.suppressMixins", config + ":BootstrapMixin");
 		assertTrue(ForbricMixinService.suppressedMixinsFor(config).contains("BootstrapMixin"));
+	}
+
+	@Test
+	void theRegistryLoaderPinHoldsUntilTheAdapterCanRetainTheCallback() {
+		String config = "fabric-registry-sync-v0.mixins.json";
+		// An unreadable base (there is no loader in a unit test) is the safe direction: the documented fallback pin
+		// stays in force. It must name the class fabric-api 0.116.17 actually ships — the entry this test exists for
+		// named RegistryDataLoaderMixin, which is in neither that module's config nor its jar, so it suppressed
+		// nothing while the shipped mixin applied. Red before the rename, green after.
+		FabricRegistryLoaderMixinAdapter.resetForTests(false);
+		assertTrue(ForbricMixinService.suppressedMixinsFor(config).contains("RegistryLoaderMixin"),
+				"nothing can retain the callback here, so the fallback pin applies — and it must name the shipped class");
+		FabricRegistryLoaderMixinAdapter.resetForTests(true);
+		assertFalse(ForbricMixinService.suppressedMixinsFor(config).contains("RegistryLoaderMixin"),
+				"a base with the carrier's widened overloads is where the adapter re-anchors, and there the pin lifts");
+		assertFalse(ForbricMixinService.suppressedMixinsFor(config).contains("RegistryDataLoaderMixin"),
+				"both generations' entries are lifted together, so a 26.2-era module is covered by the same rule");
+		FabricRegistryLoaderMixinAdapter.resetForTests(null);
 	}
 
 	@Test

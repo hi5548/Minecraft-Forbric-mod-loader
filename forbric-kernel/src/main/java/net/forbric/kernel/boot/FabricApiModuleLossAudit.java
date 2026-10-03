@@ -103,7 +103,7 @@ public final class FabricApiModuleLossAudit {
 							+ "call throws AssertionError, not ClassCastException)"),
 			// The CLASS, not the package: lithostitched names DynamicRegistries in the same package, which works.
 			new Loss("fabric-registry-sync-v0", "net/fabricmc/fabric/api/event/registry/DynamicRegistrySetupCallback", null,
-					"DynamicRegistrySetupCallback never fires (RegistryDataLoaderMixin is pinned)",
+					"DynamicRegistrySetupCallback never fires (RegistryLoaderMixin is pinned)",
 					() -> MergedBaseMixinCompat.pinInForce(net.forbric.kernel.mixin.FabricRegistryLoaderMixinAdapter.PIN)),
 			new Loss("fabric-item-api-v1", "net/fabricmc/fabric/api/item/v1/ItemComponentTooltipProviderRegistry", null,
 					"a component tooltip provider is drawn nowhere in normal tooltips and bunched above the item id in advanced ones",

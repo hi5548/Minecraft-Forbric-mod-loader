@@ -80,6 +80,33 @@ class MixinMergedTwinTest {
 				"a point pinning some other class is not this pass's business");
 	}
 
+	/**
+	 * fabric-networking-api-v1's CustomPayloadPacketCodecMixin is the measured case: it pins the twinned class in BOTH
+	 * spellings — {@code @At(target = "L…$1;findCodec(…)")} and {@code @WrapOperation(method = ["L…$1;writeCap(…)V", …])}.
+	 * MixinExtras refuses the annotation outright when a method selector names another class ("specifies a target
+	 * class '…$1', which is not supported"), so the whole mixin failed to apply instead of silently wiring nothing.
+	 */
+	@Test
+	void theDescriptorSpellingAndTheMethodSelectorsLoseTheirOwnerToo() {
+		ClassNode mixin = mixinTargeting(TARGET);
+		String internal = TARGET.replace('.', '/');
+		String at = "L" + internal + ";findCodec(Lnet/minecraft/resources/Identifier;)"
+				+ "Lnet/minecraft/network/codec/StreamCodec;";
+		String wrap = "L" + internal + ";writeCap(Lnet/minecraft/network/FriendlyByteBuf;"
+				+ "Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload$Type;"
+				+ "Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;)V";
+		mixin.methods.add(wrapOperation(wrap, at));
+
+		assertEquals(1, MixinMergedTwin.addTwins(mixin, present(TARGET + MixinMergedTwin.NEO_SUFFIX)));
+
+		assertEquals("findCodec(Lnet/minecraft/resources/Identifier;)Lnet/minecraft/network/codec/StreamCodec;",
+				targetOfAt(mixin.methods.get(0)));
+		assertEquals("writeCap(Lnet/minecraft/network/FriendlyByteBuf;"
+						+ "Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload$Type;"
+						+ "Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;)V",
+				methodSelectorOf(mixin.methods.get(0)));
+	}
+
 	@Test
 	void aTwinnedMixinsShadowsStopAskingToBeRemapped() {
 		ClassNode mixin = mixinTargeting(TARGET);
@@ -175,6 +202,31 @@ class MixinMergedTwinTest {
 						"at", new java.util.ArrayList<>(List.of(at))));
 		method.visibleAnnotations = new java.util.ArrayList<>(List.of(inject));
 		return method;
+	}
+
+	/** A method carrying {@code @WrapOperation(method = [<selector>], at = @At(value = "INVOKE", target = <atTarget>))}. */
+	private static org.objectweb.asm.tree.MethodNode wrapOperation(String selector, String atTarget) {
+		org.objectweb.asm.tree.MethodNode method =
+				new org.objectweb.asm.tree.MethodNode(Opcodes.ACC_PRIVATE, "wrapGetCodec", "()V", null, null);
+		AnnotationNode at = new AnnotationNode("Lorg/spongepowered/asm/mixin/injection/At;");
+		at.values = new java.util.ArrayList<>(List.of("value", "INVOKE", "target", atTarget));
+		AnnotationNode wrap = new AnnotationNode(
+				"Lcom/llamalad7/mixinextras/injector/wrapoperation/WrapOperation;");
+		wrap.values = new java.util.ArrayList<>(
+				List.of("method", new java.util.ArrayList<>(List.of(selector)),
+						"at", new java.util.ArrayList<>(List.of(at))));
+		method.visibleAnnotations = new java.util.ArrayList<>(List.of(wrap));
+		return method;
+	}
+
+	@SuppressWarnings("unchecked")
+	private static String methodSelectorOf(org.objectweb.asm.tree.MethodNode method) {
+		AnnotationNode annotation = method.visibleAnnotations.get(0);
+		for (int i = 0; i + 1 < annotation.values.size(); i += 2) {
+			if (!"method".equals(annotation.values.get(i))) continue;
+			return (String) ((List<?>) annotation.values.get(i + 1)).get(0);
+		}
+		throw new AssertionError("no method selector");
 	}
 
 	private static String targetOfAt(org.objectweb.asm.tree.MethodNode method) {

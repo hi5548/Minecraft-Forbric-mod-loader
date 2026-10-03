@@ -149,7 +149,16 @@ public final class MixinMergedTwin {
 	 */
 	static void unpinInjectionPointOwners(ClassNode mixin, Set<String> twinned) {
 		List<String> prefixes = new ArrayList<>();
-		for (String owner : twinned) prefixes.add(owner.replace('.', '/') + ".");
+		for (String owner : twinned) {
+			String internal = owner.replace('.', '/');
+			// Both spellings a selector can use: the dotted `owner.member(desc)` and the descriptor
+			// `Lowner;member(desc)ret`. `@At(target = …)` is usually written the second way, and matching only
+			// the first left fabric-networking-api-v1's CustomPayloadPacketCodecMixin pinning `CustomPacketPayload$1`
+			// inside `CustomPacketPayload$1$forbricneo` — where MixinExtras rejected the `@WrapOperation` outright
+			// ("specifies a target class '…$1', which is not supported") instead of silently wiring nothing.
+			prefixes.add(internal + ".");
+			prefixes.add("L" + internal + ";");
+		}
 		int unpinned = 0;
 		for (MethodNode method : mixin.methods) {
 			unpinned += unpinAll(method.visibleAnnotations, prefixes);
@@ -161,6 +170,11 @@ public final class MixinMergedTwin {
 					+ "nothing there while Mixin still adds the handler, so the injection goes missing in silence",
 					mixin.name.replace('/', '.'), unpinned);
 		}
+	}
+
+	private static String stripped(String selector, List<String> prefixes) {
+		for (String prefix : prefixes) if (selector.startsWith(prefix)) return selector.substring(prefix.length());
+		return null;
 	}
 
 	private static int unpinAll(List<AnnotationNode> annotations, List<String> prefixes) {
@@ -179,12 +193,32 @@ public final class MixinMergedTwin {
 			Object name = annotation.values.get(i);
 			Object value = annotation.values.get(i + 1);
 			if (AT_DESC.equals(annotation.desc) && "target".equals(name) && value instanceof String target) {
-				for (String prefix : prefixes) {
-					if (!target.startsWith(prefix)) continue;
-					annotation.values.set(i + 1, target.substring(prefix.length()));
+				String ownerless = stripped(target, prefixes);
+				if (ownerless != null) {
+					annotation.values.set(i + 1, ownerless);
 					unpinned++;
-					break;
 				}
+			} else if ("method".equals(name) && value instanceof String selector) {
+				// The injector's own selector pins the twinned class too: `@WrapOperation(method =
+				// "L…$1;findCodec(…)…")` names a class that is not the one the handler ends up in, and MixinExtras
+				// refuses the whole annotation over it. Same owner-removal, same reason.
+				String ownerless = stripped(selector, prefixes);
+				if (ownerless != null) {
+					annotation.values.set(i + 1, ownerless);
+					unpinned++;
+				}
+			} else if ("method".equals(name) && value instanceof List<?> selectors) {
+				List<Object> replaced = new ArrayList<>((List<Object>) selectors);
+				boolean changed = false;
+				for (int j = 0; j < replaced.size(); j++) {
+					if (!(replaced.get(j) instanceof String selector)) continue;
+					String ownerless = stripped(selector, prefixes);
+					if (ownerless == null) continue;
+					replaced.set(j, ownerless);
+					changed = true;
+					unpinned++;
+				}
+				if (changed) annotation.values.set(i + 1, replaced);
 			} else if (value instanceof AnnotationNode nested) {
 				unpinned += unpin(nested, prefixes);
 			} else if (value instanceof List<?> list) {

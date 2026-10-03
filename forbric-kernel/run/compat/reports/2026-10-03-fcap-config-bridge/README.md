@@ -66,6 +66,20 @@ public ModConfig registerConfig(Type, IConfigSpec, ModContainer, String);
 `getfield` → 桥的 `forgeHandle(NeoModConfig) → Forge ModConfig` 是**另一个一行改写**:都是弹 1 推 1,
 指令数/`maxStack` 不变(字段读换成静态调用,节点必须换成 `MethodInsnNode`,不是改 opcode)。
 
+改完之后的真字节(一次性脚本把真 jar 交给真 transformer,再 javap;两条重载各取一条):
+
+```
+public void register(String, NeoType, ForgeSpec);          // 第 2 条:void
+  13: invokestatic KernelConfigPortBridge.registerConfig:(Lnet/neoforged/fml/config/ConfigTracker;…)L…ModConfig;
+  16: pop                                                   //   原 13: invokevirtual ConfigTracker.registerConfig + 16: pop
+public net.minecraftforge.fml.config.ModConfig register(String, ForgeType, ForgeSpec);   // 第 1 条:返回 Forge
+  16: invokestatic KernelConfigPortBridge.registerConfig:(…)L…ModConfig;
+  19: invokestatic KernelConfigPortBridge.forgeHandle:(Lnet/neoforged/fml/config/ModConfig;)Lnet/minecraftforge/fml/config/ModConfig;
+  22: astore 4                                              //   原 19: getfield ModConfig.modConfig
+```
+
+偏移逐字对齐(0–17 / 0–34),只是三条指令的 owner/opcode/描述符换了。
+
 ## 3. 桥
 
 - `PortingLayerAbiInjector.CONFIG_REGISTRIES`:三个类名 + 各自的调用点数(`ConfigRegistryImpl`=4、
@@ -133,6 +147,59 @@ file watcher,盘上一次编辑两边都触发。两边读的是同一个文件�
 
 第三种读数不接受:没有 `world=true` 的 `cr=0` 不是证据(纪律原文)。
 
-### 5.2 读数
+### 5.2 读数 —— **A(修复成立)**
 
-PENDING —— 本节在 W7Harness 给出启动日志后填写。
+运行:`w7/harness/sweep.py --only no-smithing-template-refabriced`,冷/暖 remap 缓存见 §5.3,
+冻结 jar 的 sha256 逐字等于 §5.1 预先登记的那个(`/tmp/fcap-boot-36e93f82-v3/frozen-kernel-sha256.txt`)。
+
+`per-mod/results.jsonl` 该行(逐字):
+
+```
+run=PASS  exit=0  stopped=true  world=true  mod=OK
+dep_status: ForgeConfigAPIPort-v21.1.6-1.21.1-Fabric.jar=OK, fabric-api-0.116.17+1.21.1.jar=OK
+confirmed_required=0   findings_required=14   findings_total=36   strict=true   na=false
+seconds=283   cause=null
+```
+
+console 逐字:
+
+- `1138:[07:47:33] [Forbric/PortShim] routed fuzs.forgeconfigapiport.fabric.impl.core.ForgeConfigRegistryImpl's
+  4 mod-id-keyed config registration(s) through the kernel — … and gave its 2 Forge-flavoured overload(s) a real
+  MinecraftForge ModConfig over the mod's own Forge container, …`
+  —— 21.1.6 的类名确实被认出来了(修前这条一行都不会有)。
+- `1141:[07:47:33] [Forbric/Fabric] invoked main entrypoint of no_smithing_template_refabriced` —— 入口点跑完。
+- `1415:[07:47:42] [Server thread/INFO]: Done (6.251s)! For help, type "help"`,且 `world/level.dat`(1655 B)
+  落盘 ⇒ `world=true`。
+- 全文只有一处 `NoSuchMethodError`,而且它是内核自己**描述**别处修好的一件事的一句说明
+  (`…so asking for it was a NoSuchMethodError`),**不是异常**;主体那条 `ConfigTracker.registerConfig` 的
+  `NoSuchMethodError` 已消失。
+- 正面证据:`config/no_smithing_template_refabriced-common.toml`(330 B)被写出,内容就是该 mod 自己
+  Forge spec 的注释与键(`forcedTemplateItems = []`)⇒ 配置**真的注册并被打开了**,不是"绕过"。
+
+### 5.3 两次先行运行的记账(不是读数,是时间预算)
+
+同一冻结 jar、同一主体,前两次都是 harness 时间预算打掉的,不是主体或内核的读数:
+
+| 运行 | 参数 | 结果 | 证据 |
+|---|---|---|---|
+| `/tmp/fcap-boot-36e93f82-mine` | 冷 remap 缓存,`--boot-stall 120`(默认) | `STALL 210s cause=not-discovered` | `latest.log` 停在 `discovered 42 Fabric mod(s)`;preflight 已预告冷缓存要 200–320 s |
+| `/tmp/fcap-boot-36e93f82-warm` | 半暖,`--boot-stall 300`,`--boot-timeout 600` | `TIMEOUT 615s cause=not-discovered` | `latest.log` 被杀时仍在 `[Forbric/Mapping] remapped …`,即 remap 仍在该主体的启动窗口内跑 |
+| `/tmp/fcap-boot-36e93f82-v3` | 暖,`--boot-timeout 2400` | **`PASS / world=true / cr=0 / 283 s`** | §5.2 |
+
+偏离预先登记的一处,如实写明:§5.1 写的是"冷 remap 缓存",实际以**暖**缓存出读数——因为冷缓存的
+remap 会在该主体的启动窗口内跑满(第一、二次运行实测),那是 harness 预算问题而不是任何一方的读数。
+冻结的字节、主体、判据都没变。
+
+### 5.4 未被启动覆盖的部分(写明,不假装)
+
+语料库里有 227 个主体,**只有两个**引用 FCAP 的 API(`ForgeConfigRegistry` / `NeoForgeConfigRegistry`):
+`no-smithing-template-refabriced`(走 21.1.6 的**两个 `void` 重载之一**)和 FCAP 自己。另有两个引用
+NeoForge 那半(`cobblecoop`、`rctmod-fabric`),但闭包都要 Cobblemon + architectury + rctapi(重 remap 且需要
+JDK 21)。因此:
+
+- 六个调用点里,**一个**(主体走的那条)有启动级真机证据;
+- 另外五个(另 1 个 `void`、2 个 NeoForge、2 个 Forge)只有**真字节**证据(§4 的测试)+ 与已验证那条**结构相同**
+  的一行改写;
+- 两个 Forge-modConfig 返回重载所依赖的 `forgeHandle` **没有启动级证据**(语料库里没有走到它的主体),
+  它的成本也在 §3 写着。这是本次交付**剩下的风险面**,不是"已证"。
+

@@ -36,6 +36,7 @@ import org.objectweb.asm.tree.MethodNode;
 
 import net.fabricmc.tinyremapper.IMappingProvider;
 
+import net.forbric.kernel.util.ByteScan;
 import net.forbric.kernel.util.ForbricLog;
 
 /**
@@ -137,6 +138,9 @@ public final class MixinShadowMembers {
 				try (InputStream in = zip.getInputStream(entry)) {
 					bytes = in.readAllBytes();
 				}
+				// A .class SUFFIX is not a class: see ByteScan.isClass for the AppleDouble entry that killed the
+				// launch in this exact line.
+				if (!ByteScan.isClass(bytes)) continue;
 
 				// An entry NAMED .class that ASM cannot read — empty, truncated, or a resource misnamed — must not
 				// take the boot down with it. This pass did not validate the input and cannot repair it, so it names

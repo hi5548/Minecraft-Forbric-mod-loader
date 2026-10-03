@@ -47,6 +47,26 @@ public final class ByteScan {
 	}
 
 	/**
+	 * Whether {@code bytes} begin with a class file's magic number — the only cheap test that separates a real
+	 * class from an entry that merely ends in {@code .class}.
+	 *
+	 * <p>Why a name is not enough: a jar written on macOS carries an {@code __MACOSX/} tree of AppleDouble
+	 * sidecars, one per entry, named {@code ._<original>} — so a jar with {@code ModrinthWrapper.class} also has
+	 * {@code __MACOSX/com/modrinth/_6sSDO6Y/._ModrinthWrapper.class}, whose bytes are a resource fork
+	 * ({@code 00 05 16 07 …}), not a class. Every jar scanner in this package walks entries by suffix, so each
+	 * one handed those bytes to ASM, and {@code new ClassReader(bytes)} answers a file that is not a class with
+	 * {@code IllegalArgumentException: null} — no class name, no entry name, nothing to act on. Measured on
+	 * {@code CheaperGapples.jar} (uhc-gapples, forge bucket): the whole launch died in
+	 * {@code MixinShadowMembers.scan} before a single Fabric guest was remapped. The check is the magic, not the
+	 * {@code __MACOSX/} prefix, because the invariant that matters is the one ASM needs.
+	 */
+	public static boolean isClass(byte[] bytes) {
+		return bytes != null && bytes.length >= 4
+				&& bytes[0] == (byte) 0xCA && bytes[1] == (byte) 0xFE
+				&& bytes[2] == (byte) 0xBA && bytes[3] == (byte) 0xBE;
+	}
+
+	/**
 	 * Whether {@code haystack} contains any of {@code needles}, in ONE pass over the bytes.
 	 *
 	 * <p>One pass rather than one per needle: the answer is almost always no, and a scan per needle walks the

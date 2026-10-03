@@ -102,9 +102,69 @@ class MixinShadowMembersTest {
 		}
 	}
 
+	/**
+	 * A jar whose entries include an AppleDouble sidecar — a macOS metadata file named {@code ._X.class} under
+	 * {@code __MACOSX/} whose bytes are a resource fork — must not take the scanner down.
+	 *
+	 * <p>Measured on {@code CheaperGapples.jar} (uhc-gapples): {@code new ClassReader} on the sidecar threw
+	 * {@code IllegalArgumentException: null} out of {@code scan}, which runs before any guest is remapped, so the
+	 * launch never reached a subject. The appledouble bytes here are the ones macOS wrote into that jar.
+	 */
+	@Test
+	void anAppleDoubleSidecarNamedClassDoesNotEmptyTheJar(@TempDir Path dir) throws Exception {
+		ForbricMappings spine = FabricGuestMappings.of(MappingFixtures.intermediary(), MappingFixtures.mojmap())
+				.mappings();
+		Path jar = dir.resolve("guested-sidecar.jar");
+
+		ClassWriter writer = new ClassWriter(0);
+		writeMixin(writer, TARGET);
+		try (ZipOutputStream out = new ZipOutputStream(Files.newOutputStream(jar))) {
+			out.putNextEntry(new ZipEntry(MIXIN_CLASS + ".class"));
+			out.write(writer.toByteArray());
+			out.closeEntry();
+			out.putNextEntry(new ZipEntry("__MACOSX/example/._FerriteMixin.class"));
+			out.write(new byte[] {0x00, 0x05, 0x16, 0x07, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00});
+			out.closeEntry();
+		}
+
+		assertEquals(List.of(MIXIN_CLASS + "." + FIELD + DESC + " -> collisionShape"), scanFieldRenames(jar, spine),
+				"the real mixin must still be scanned while the sidecar is passed over");
+	}
+
+	/** Every accepted field rename, through the same mapping-acceptor path the engine drives. */
+	private static List<String> scanFieldRenames(Path jar, ForbricMappings spine) throws Exception {
+		List<String> renames = new ArrayList<>();
+		IMappingProvider provider = MixinShadowMembers.withRenames(acceptor -> { }, jar, spine);
+		provider.load(new IMappingProvider.MappingAcceptor() {
+			@Override public void acceptClass(String srcName, String dstName) { }
+
+			@Override public void acceptMethod(IMappingProvider.Member member, String newName) { }
+
+			@Override public void acceptMethodArg(IMappingProvider.Member member, int index, String newName) { }
+
+			@Override public void acceptMethodVar(IMappingProvider.Member member, int index, int startOpIdx,
+					int asmIndex, String newName) { }
+
+			@Override public void acceptField(IMappingProvider.Member member, String newName) {
+				renames.add(member.owner + "." + member.name + member.desc + " -> " + newName);
+			}
+		});
+		return renames;
+	}
+
 	/** A mixin class exactly shaped like the measured one: {@code @Mixin(targets=…)} plus one {@code @Shadow} field. */
 	private static void writeMixinJar(Path jar, String target) throws Exception {
 		ClassWriter writer = new ClassWriter(0);
+		writeMixin(writer, target);
+
+		try (ZipOutputStream out = new ZipOutputStream(Files.newOutputStream(jar))) {
+			out.putNextEntry(new ZipEntry(MIXIN_CLASS + ".class"));
+			out.write(writer.toByteArray());
+			out.closeEntry();
+		}
+	}
+
+	private static void writeMixin(ClassWriter writer, String target) {
 		writer.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, MIXIN_CLASS, null, "java/lang/Object", null);
 
 		AnnotationVisitor mixin = writer.visitAnnotation("Lorg/spongepowered/asm/mixin/Mixin;", true);
@@ -117,12 +177,6 @@ class MixinShadowMembersTest {
 		field.visitAnnotation("Lorg/spongepowered/asm/mixin/Shadow;", true).visitEnd();
 		field.visitEnd();
 		writer.visitEnd();
-
-		try (ZipOutputStream out = new ZipOutputStream(Files.newOutputStream(jar))) {
-			out.putNextEntry(new ZipEntry(MIXIN_CLASS + ".class"));
-			out.write(writer.toByteArray());
-			out.closeEntry();
-		}
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------

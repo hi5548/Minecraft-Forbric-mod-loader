@@ -131,6 +131,9 @@ public final class ModAnnotationScanner {
 		try (InputStream in = Files.newInputStream(classFile)) {
 			bytes = in.readAllBytes();
 		}
+		// A jar written on macOS carries AppleDouble sidecars named `._<entry>`, so a `.class` suffix is not a
+		// promise of a class file; see ByteScan.isClass.
+		if (!net.forbric.kernel.util.ByteScan.isClass(bytes)) return null;
 
 		ModCollector collector = new ModCollector();
 		new ClassReader(bytes).accept(collector, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);

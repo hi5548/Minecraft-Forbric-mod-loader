@@ -124,6 +124,7 @@ public final class InheritedMemberDecls {
 			if (!entry.getKey().endsWith(".class")) continue;
 
 			byte[] bytes = entry.getValue();
+			if (!ByteScan.isClass(bytes)) continue;
 			if (!ByteScan.contains(bytes, METHOD_NEEDLE)) continue;
 
 			byte[] fixed = translateDecls(bytes, spine);

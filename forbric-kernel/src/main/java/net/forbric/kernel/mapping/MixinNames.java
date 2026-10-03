@@ -46,6 +46,7 @@ import com.electronwill.nightconfig.core.Config;
 import com.electronwill.nightconfig.core.UnmodifiableConfig;
 import com.electronwill.nightconfig.json.JsonFormat;
 
+import net.forbric.kernel.util.ByteScan;
 import net.forbric.kernel.util.ForbricLog;
 
 /**
@@ -126,7 +127,7 @@ public final class MixinNames {
 		// The mixin's targets, by class name, as a fallback owner for selectors that name no owner of their own.
 		Map<String, List<String>> targets = new HashMap<>();
 		for (Map.Entry<String, byte[]> entry : entries.entrySet()) {
-			if (!entry.getKey().endsWith(".class")) continue;
+			if (!entry.getKey().endsWith(".class") || !ByteScan.isClass(entry.getValue())) continue;
 			ClassNode node = new ClassNode();
 			new ClassReader(entry.getValue()).accept(node, ClassReader.SKIP_FRAMES);
 			List<String> mixinTargets = mixinTargets(node);
@@ -141,7 +142,7 @@ public final class MixinNames {
 		boolean changed = false;
 		for (Map.Entry<String, byte[]> entry : new ArrayList<>(entries.entrySet())) {
 			String name = entry.getKey();
-			if (name.endsWith(".class")) {
+			if (name.endsWith(".class") && ByteScan.isClass(entry.getValue())) {
 				byte[] rewritten = translateSelectors(entry.getValue(), spine, targets, refmaps);
 				if (rewritten != null) {
 					entries.put(name, rewritten);

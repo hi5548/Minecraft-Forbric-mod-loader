@@ -108,6 +108,7 @@ public final class InheritedMemberRefs {
 			if (!entry.getKey().endsWith(".class")) continue;
 
 			byte[] bytes = entry.getValue();
+			if (!ByteScan.isClass(bytes)) continue;
 			if (!ByteScan.contains(bytes, METHOD_NEEDLE) && !ByteScan.contains(bytes, FIELD_NEEDLE)) continue;
 
 			byte[] fixed = translateRefs(bytes, spine);

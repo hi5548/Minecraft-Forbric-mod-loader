@@ -50,16 +50,16 @@
 | S2 | servereconomy | fabric | PASS/OK/true | dependency-not-ok | **主体侧** ✅ | 行内 `dep_status`:其声明必需依赖 `placeholder-api-2.4.2+1.21.jar` = **ABSENT**——闭包里根本没解析到这个 jar。主体自己的依赖不可解析 |
 | S3 | beilin-data-portability | fabric | PASS/OK/true | dependency-not-ok | **主体侧** ✅ | `dep_status`:`beilin-entry-control-fabric-1.21.x-1.2.7.jar` = **FAILED**——失败的字节是它的依赖,不是它自己 |
 | S4 | cobblemon_skills_api | fabric | PASS/FAILED/true | noclassdef `net/puffish/skillsmod/api/reward/Reward` | **主体侧** ✅(控制台) | 控制台点名 Puffish Skills 的 API 类;而闭包只有 fabric-api,`puffish_skills` 未被解析进来——主体声明的依赖解析不到 |
-| S5 | cobblemon-auto-battle / cobblespawnregions / cobblemon-coop | fabric | FAIL/…/false | registry-load | **主体侧(依赖侧)** ✅(控制台) | 失败**数据**属于依赖 Cobblemon 1.8.1,不属主体:`Unbound values … configured_feature]: [cobblemon:medicinal_leek]`、`Unknown registry key … block_predicate_type]: cobblemon:biome`、`Failed to parse cobblemon:worldgen/… from pack cobblemon` |
+| S5 | cobblemon-auto-battle / cobblespawnregions / cobblemon-coop | fabric | FAIL/…/false | registry-load | **依赖侧数据,根因未定**(同 P2) | 失败**数据**属于依赖 Cobblemon 1.8.1,不属主体:`Unbound values … configured_feature]: [cobblemon:medicinal_leek]`、`Unknown registry key … block_predicate_type]: cobblemon:biome`、`Failed to parse cobblemon:worldgen/… from pack cobblemon`。但同一控制台里 Cobblemon 的 guest mixin 只**部分**施加(缺锚点成列列出),而 `cobblemon:biome`/`cobblemon:locate_predicate` 这类自定义注册表没进注册表,与那批缺锚点同源 ⇒ **不得**据此记成干净的主体侧;决定步骤见 P2 |
 | S6 | gardnercraft-mod | fabric | FAIL/FAILED/false | registry-load | **主体侧(数据面)** ✅(控制台) | `Failed to parse gardnercraft:trim_pattern/gardnercraft.json` → `Failed to get element gardnercraft:gardnercraft_armor_trim_smithing_template`:主体自己的 trim_pattern 引用自己没注册成功的条目(该行另有冻结 id 10/11,见 §0) |
 
-### 1.4 仍待逐字节复核(⚑,已给出决定它的那一步)
+### 1.4 收尾(P1 已由复跑结案、P3 已结案;只余 P2 的根因待一次对照启动)
 
 | # | 主体 | loader | 行 | 存盘 cause | 现状与决定步骤 |
 |---|---|---|---|---|---|
 | P1 | more-gunpowder-creeper | forge | STALL/OK/true | boot-stall | 控制台 1011 行:Worker-Main 线程在 `LinearPalette.valueFor` 抛 `MissingPaletteEntryException: Missing Palette entry for index 10`(`ThreadedLevelLightEngine.runUpdate` → `runLightUpdates`),之后 spawn-area 停在 `18%`,没有 `Done (`、没有 `Stopping the server` ⇒ 真挂起。**已由夜间档的单独复跑结案**:在 `604a557d` 上用 600 s 窗口重跑 → `PASS / world=true / 172 s / cr=0`,中段线程转储 30 条、`main` RUNNABLE、无死锁(`/tmp/gunpowder-dump-1.txt`)。即 `boot-stall` **不再复现**,是其间某个提交修掉的;`boot-stall` 这个标签只是 harness 的 verdict 回退,不是证据 |
-| P2 | veinminer-enchantment | neoforge | FAIL/OK/false | registry-load | 闭包含 Cobblemon 1.8.1;控制台未逐条摘。**决定步骤**:同 S5 的读法——确认失败 registry 数据属 Cobblemon 还是主体 |
-| P3 | superb-warfare-perimeter | forge | FAIL/OK/true | noclassdef `com/atsuishio/superbwarfare/entity/vehicle/DroneEntity` | 栈里 `ClassNotFoundException` 指向**主体自己包名**下的类。**决定步骤**:`unzip -l` 主体与 `sbw-Perimeter-ops` 确认该类是否两者都不含(是则主体侧:自身缺类/缺依赖),以及 crash 报告的 `NullPointerException: cpw.mods.modlauncher.Launcher.INSTANCE is null` 是否只是崩溃报告的二次效应 |
+| P2 | veinminer-enchantment | neoforge | FAIL/OK/false | registry-load | **依赖侧数据,根因未定**:失败的每个元素都是 Cobblemon 1.8.1 自己的(`Unbound values … [cobblemon:medicinal_leek]`、`Failed to parse cobblemon:worldgen/… from pack cobblemon`、`Unknown registry key … block_predicate_type]: cobblemon:biome`)。但**不能**就此记成干净的主体侧:同一控制台里 Cobblemon 的 guest mixin 在合并基座上**只部分施加**(`BeehiveBlockEntityMixin 3/4`、`PiglinBarterMixin 0/1`、`StructurePoolAccessor cannot bind`),而 `cobblemon:biome` 这类自定义注册表没进注册表,和这些缺锚点是同一批客方代码。**决定步骤**:把 Cobblemon 1.8.1 单独放上本内核,与它在真 Fabric 1.21.1 上的行为对比 —— `cobblemon:biome` 在真 Fabric 上注册成功而这里没有 ⇒ 内核侧;两边都没有 ⇒ Cobblemon 自己 |
+| P3 | superb-warfare-perimeter | forge | FAIL/OK/true | noclassdef `com/atsuishio/superbwarfare/entity/vehicle/DroneEntity` | **主体/依赖侧** ✅:该 run 的 `mods/` 里**只有** `sbw-Perimeter-ops-1.6.0.jar`;它的 `META-INF/neoforge.mods.toml` 声明 `[[dependencies.sbwswarm]] modId = "superbwarfare"`,而宿主 mod superbwarfare 不在闭包里 ⇒ `ClassNotFoundException` 指向的是**未解析的声明依赖**,与 servereconomy 同一类 |
 
 ### 1.5 与夜间档 forge/fabric triage 的**一处实质分歧**(必须写在明面上)
 

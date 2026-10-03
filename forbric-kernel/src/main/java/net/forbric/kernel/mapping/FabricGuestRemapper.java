@@ -97,8 +97,12 @@ public final class FabricGuestRemapper {
 	 * <p>Bumped to {@code 1.21.1-11-inherited-member-decls} for {@link InheritedMemberDecls}, for the same reason
 	 * and by a wider margin than {@code 1.21.1-9}: a DECLARATION that gained its runtime name changes the class
 	 * file's method table, so a warm cache holding the previous bytes carries a class that implements nothing.
+	 *
+	 * <p>Bumped to {@code 1.21.1-12-kotlin-metadata} for {@link KotlinMetadataRemapper}: the same input jar now
+	 * produces a different class file for every Kotlin class, so a warm cache would keep the intermediary string
+	 * table and the fix would be latent on exactly the machines that have a cache.
 	 */
-	private static final String REMAP_VERSION = "1.21.1-11-inherited-member-decls";
+	private static final String REMAP_VERSION = "1.21.1-12-kotlin-metadata";
 
 	private FabricGuestRemapper() {
 	}
@@ -161,6 +165,10 @@ public final class FabricGuestRemapper {
 				// implement it keeps its intermediary name and satisfies nothing (see InheritedMemberDecls —
 				// betterrailwaysystem's reload listener died on the AbstractMethodError that produced).
 				InheritedMemberDecls.translate(out, spine);
+				// And a Kotlin class carries a namespace the bytecode remapper never sees: its @Metadata string
+				// table spells the game intermediary while the class itself is named, and kotlin-reflect resolves
+				// types out of exactly that table (see KotlinMetadataRemapper — Cobblemon's entrypoint died on it).
+				KotlinMetadataRemapper.translate(out, spine);
 				// And the access widener is a namespace too: its directives name class_*/method_* the runtime
 				// class does not have, so a pass that never rewrites it widens nothing (see AccessWidenerRemapper).
 				net.forbric.kernel.access.AccessWidenerRemapper.remap(out, spine);

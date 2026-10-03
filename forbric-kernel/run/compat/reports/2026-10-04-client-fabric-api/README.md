@@ -274,4 +274,52 @@ console  'retargeted guest mixin …'    6 行（上一轮 5 行，第 6 行是 
 描述符逐字相同），不是把谓词放宽。我自己推断出来的标记（`retargeted guest mixin fabric-item-api-v1 …`）
 在修复前后都不存在，那次"0 命中"没有任何证明力，这条也留在 §7。
 
+## 9. 深度规则（两份读数并列，不互相取消），以及世界深度暴露的第 15+1 条
+
+**同一个内核状态、两次读数、两个深度——两个数都写出来，不让它们看起来互相矛盾：**
+
+| 读数 | 深度 | `confirmedRequired` |
+|---|---|---|
+| `b9db9617`（sha `1cebf284…`） | 客户端起来了、渲染 200 帧、**从未进世界**（`world=false`，停在 TitleScreen） | **0**（枚举 0） |
+| `e22a3d3d` 之后（`world=true`、`frames=1`、`PASS`、`joined world via quick-play`、30 s） | **进了世界**，这就是深度 | **1** |
+
+**这不是两句矛盾的话，是一条深度规则**——与服务端文档里那条同源，这里第一次出现在客户端：
+**一个从不加载世界的客户端，报不出只有加载世界之后才出现的东西**。"集合为空"永远要带深度说，
+否则后一次更深的读数会被读成前一次的翻案。本战场因此改成：**世界深度的读数才算验收读数**，
+浅的那次只作历史。
+
+### 9.1 世界深度暴露的那一条（已落地，`55164ff3`）
+
+```
+mixin-injector:fabric-renderer-indigo.mixins.json:
+  net.fabricmc.fabric.mixin.client.indigo.renderer.SectionBuilderMixin#hookBuildRenderBlock
+```
+
+**判决：重锚（不是带账退出），代价为零。** 字节两侧都读过：
+
+- 合并基底的 `SectionCompiler.compile(SectionPos,RenderChunkRegion,VertexSorting,SectionBufferBuilderPack)`
+  只调一处 `renderBatched`，收尾是 `…util/RandomSource;Lnet/neoforged/neoforge/client/model/data/ModelData;
+  Lnet/minecraft/client/renderer/RenderType;)V` —— NeoForge **加宽了被调方**；guest 的 `@At(INVOKE)`
+  指的是 7 参那一形。7 参方法**仍然声明**（`BlockRenderDispatcher` 上两种都在），只是 `compile` 里不再调它
+  ——所以这是**锚点问题而不是缺成员**，也正是它能被重锚的原因。
+- 结果：redirect 绑不上，Indigo 的包装器从未运行；而包装器对"非 vanilla 适配"的模型是唯一路径。
+
+**改动（既有适配器 `FabricSectionCompilerMixinAdapter` 的 1.21.1 分支；26.2 那支一字未动）**：
+包装器按编译原样保留（Indigo 快路径 `TerrainRenderContext.tessellateBlock` 不动，其余样本原样转发），
+只把"转发到哪"这一处加宽——注解 target 与 handler 描述符同时多两个参数，并在这条调用前压入
+`ALOAD 9`/`ALOAD 10`，把 NeoForge 的 `ModelData` 与 `RenderType` **原样**交给同一个重载：不丢、不加、不换序，
+快路径不参与这两个参数。Mixin 绑定时检查的就是注解与 handler 形状一致，两者一起动。
+
+**离证据**（真实字节，不启游戏 JVM：remapped guest × merged base 跑适配器本身）：
+`adapt returned 1`；handler 描述符为 10 参（dispatcher + 9）；转发调用描述符为 9 参 NeoForge 形；
+调用前确有新压入的 `ALOAD 9`/`ALOAD 10`；注解 target 变为 9 参形；**再跑一次返回 0（幂等）**。
+第一次跑返回 0——我的 `TerrainRenderContext.tessellateBlock` 守卫写成了前缀而不是完整描述符，
+被这个离线探针挡住并改正：**那是一个真实缺陷，不是假设**。
+
+**验收读数（待运行，预先登记）**：上面那条 id 缺席；`world=true`；`joined world via quick-play` 在；
+`confirmed_required: 0`。三者同时成立才算，B 那次只认控制台行的纪律在这里继续适用——
+本条的对照行是 `[Forbric/Renderer] retargeted Indigo's per-block redirect onto the merged compile body's
+nine-argument renderBatched …`。
+
+
 

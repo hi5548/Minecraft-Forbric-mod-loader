@@ -155,25 +155,39 @@ java.util.zip.ZipException: duplicate entry: META-INF/mods.toml
 freeze 时 unbound —— 该 JSON 引用的 `cobblemon:biome` 这类由 Cobblemon 自己注册的 predicate/placement 类型
 没进注册表,于是 entry 解析失败、freeze 报 unbound。
 
-**K5 已经收窄到"一个内建注册表 + 一个键"(W7Harness 的计数 + 我读的 cause 链)**:
+**K5 收窄到"一次 abort、一个守卫"(真字节已核,W7Harness 定位,我在合并基底上 javap 复核)**:
 
-- 91 个 Cobblemon 自己的 datapack 元素解析失败,其中 **86 个**在 `worldgen/processor_list`
-  (habitats 59 + ruins 26 + 1)。同一个 jar、同一个 JDK 在参考启动上 43/43 且 0 error ⇒ 差异在**解析上下文**,
-  不是字节。
-- 每个失败的**叶子 cause 是同一个键**:
-  `Caused by: java.lang.IllegalStateException: Unknown registry key in ResourceKey[minecraft:root /
-  minecraft:worldgen/structure_processor]: cobblemon:height_range`
-  (`…/processor_list/habitats/badlands_shaded_rock.json` 等,console 1845–1912 行一带)。
-  注意这是 **vanilla 的内建注册表** `BuiltInRegistries.STRUCTURE_PROCESSOR`,不是 datapack 注册表:
-  所以问题不是"pack 没被挂载/没被扫",而是 **Cobblemon 往这个内建注册表注册 `height_range` 这一步没发生**
-  ——与"0/43 注册表"是同一件事的两个投影。
-- 因此下一次开工的第一件事是:在 `CobblemonRegistries`/其 `Registry.register(BuiltInRegistries.STRUCTURE_PROCESSOR,
-  cobblemon.id("height_range"), …)` 那条路径上,找出内核侧把这一步挡掉/吞掉的点(注意 `1386: Launching
-  Cobblemon 1.8.1` 已经打过,所以断点在其后)。
-- **不要**把 `no-cooldown-enchantment` 并进来:它是主体自己的数据写错版本(§1.3 S1),形状相同、原因不同
-  (W7Harness 亦如此判),一修未必两治。
+```
+[Forbric/Fabric] main entrypoint of cobblemon failed
+java.lang.UnsupportedOperationException: Modded EntityDataSerializers must be registered to
+  NeoForgeRegistries.ENTITY_DATA_SERIALIZERS instead to prevent ID mismatches between client and server
+	at net.minecraft.network.syncher.EntityDataSerializers.registerSerializer:136
+	at com.cobblemon.mod.fabric.CobblemonFabric.registerEntityDataSerializers
+	at com.cobblemon.mod.common.Cobblemon.preInitialize
+```
 
-同一条 console 里另外三条线索(都指向"注册这一步",不是 freeze 机制):
+逐字节核实(合并基底 `patched-mc-merged-1.21.1.jar` 的 `net/minecraft/network/syncher/EntityDataSerializers`):
+`registerSerializer` 用 `StackWalker.getCallerClass()` 比 `EntityDataSerializers.class`,不等就 `LOGGER.error` +
+`athrow UnsupportedOperationException`(常量池 #131 就是那句提示)。**内核侧没有任何对应处理**
+(`grep registerSerializer` 在 `src/main/java` 下零命中)——这正是"NeoForge 补丁硬拒一切外部调用者,而 Fabric
+生态的客方无从知道那个注册表存在"。
+
+**一个 abort,三张脸**:0/43 注册表(`Registered the cobblemon:* registry` 在 throw 下游,永不打印)、
+86/91 个 `processor_list` 失败(`STRUCTURE_PROCESSOR` 的内建注册没发生 ⇒ `cobblemon:height_range` unknown)、
+`block_predicate_type` 的 `cobblemon:biome` 与 `placement_modifier_type` 的 `cobblemon:locate_predicate`。
+**不是三个 bug,是一个**。
+
+**这是策略题,不是解析题**,两条路各有一处必须先读真字节再定:
+(a) **代客翻译**到 `NeoForgeRegistries.ENTITY_DATA_SERIALIZERS`——与内核在 `MergedBaseCompat`/`Presence`/
+`MultiLoader` 上已经做过多次的跨生态翻译同形;但 vanilla 的 `registerSerializer(EntityDataSerializer)`
+**不带 id**,而 NeoForge 注册表要 id,所以要先定"id 从哪来"(内核自己是权威,可给确定序,才不致 client/server
+错位——这正是守卫要防的);
+(b) **stand-down + 记代价**——Cobblemon 的 entity data serializer 在该主体上不可用,主体到不了世界。
+**未修的理由**:需要一次 Cobblemon 启动来证,而剩余预算为 0;按纪律不猜着改注册表守卫。
+**证明它的启动**:只装 Cobblemon + fabric-api、**JDK 21**,判据 `Registered the cobblemon:* registry` 回到
+**43** 且 `world=true`;参考装置 `/tmp/w7-fabric-ref` 可做并排。
+
+同一条 console 里另外三条线索(现在都从属于上面那一次 abort —— 保留是因为它们各自独立可读):
 
 1. **不是"entrypoint 没跑"**:`1386:[12:52:19] Launching Cobblemon 1.8.1` —— Cobblemon 自己的初始化到了;
    它之后没有任何一条 `Registered the cobblemon:* registry`(参考启动 43 条)。所以断点在**它的注册循环**

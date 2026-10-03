@@ -57,9 +57,28 @@
 
 | # | 主体 | loader | 行 | 存盘 cause | 现状与决定步骤 |
 |---|---|---|---|---|---|
-| P1 | more-gunpowder-creeper | forge | STALL/OK/true | boot-stall | 控制台 1011 行:Worker-Main 线程在 `LinearPalette.valueFor` 抛 `MissingPaletteEntryException: Missing Palette entry for index 10`(`ThreadedLevelLightEngine.runUpdate` → `runLightUpdates`),之后 spawn-area 停在 `18%`,没有 `Done (`、没有 `Stopping the server` ⇒ 真挂起。**决定步骤**:把合并基底的 `LinearPalette`/`PalettedContainer` 与 `p0/mc-1.21.1/.forbric-build/client-official.jar` 逐方法对比(是否被补丁改过),以及看该主体自己的 worldgen 是否注册了越界 blockstate;`boot-stall` 这个标签本身只是 harness 的 verdict 回退,不是证据 |
+| P1 | more-gunpowder-creeper | forge | STALL/OK/true | boot-stall | 控制台 1011 行:Worker-Main 线程在 `LinearPalette.valueFor` 抛 `MissingPaletteEntryException: Missing Palette entry for index 10`(`ThreadedLevelLightEngine.runUpdate` → `runLightUpdates`),之后 spawn-area 停在 `18%`,没有 `Done (`、没有 `Stopping the server` ⇒ 真挂起。**已由夜间档的单独复跑结案**:在 `604a557d` 上用 600 s 窗口重跑 → `PASS / world=true / 172 s / cr=0`,中段线程转储 30 条、`main` RUNNABLE、无死锁(`/tmp/gunpowder-dump-1.txt`)。即 `boot-stall` **不再复现**,是其间某个提交修掉的;`boot-stall` 这个标签只是 harness 的 verdict 回退,不是证据 |
 | P2 | veinminer-enchantment | neoforge | FAIL/OK/false | registry-load | 闭包含 Cobblemon 1.8.1;控制台未逐条摘。**决定步骤**:同 S5 的读法——确认失败 registry 数据属 Cobblemon 还是主体 |
 | P3 | superb-warfare-perimeter | forge | FAIL/OK/true | noclassdef `com/atsuishio/superbwarfare/entity/vehicle/DroneEntity` | 栈里 `ClassNotFoundException` 指向**主体自己包名**下的类。**决定步骤**:`unzip -l` 主体与 `sbw-Perimeter-ops` 确认该类是否两者都不含(是则主体侧:自身缺类/缺依赖),以及 crash 报告的 `NullPointerException: cpw.mods.modlauncher.Launcher.INSTANCE is null` 是否只是崩溃报告的二次效应 |
+
+### 1.5 与夜间档 forge/fabric triage 的**一处实质分歧**(必须写在明面上)
+
+`w7/NIGHT_SHIFT.md` 的 "Update, same evening" 把 `simple-hats-collection` 的 `endec` NoSuchMethodError 记为
+"26.2-era API reached from a jar labelled 1.21.1 ⇒ subject/version mismatch,outside the kernel"。本轮**不同意**,
+且已按分歧落地了 K3:
+
+- 失败的 entrypoint 不是被测主体,是**依赖** `accessories`(`main entrypoint of accessories failed`);
+- `endec` 不是外来的 26.2 API,它就在闭包里的 `owo-lib-0.13.0-alpha.15`:javap 出
+  `OwoComponentTypeBuilder.endec(Endec)` 与 `endec(Endec,SerializationContext)` 两个 default 方法,由
+  `owo.mixins.json` 里的 `ComponentTypeBuilderMixin` 施加到 `DataComponentType$Builder`;
+- 内核**明说**它把真的 owo-lib 丢掉了:`duplicate mod id 'owo' (owo-sentinel … and owo (owo-lib …)) — keeping the first`。
+  `owo-sentinel` 的 `fabric.mod.json` 里 `id` 是 `owo-sentinel`,只是 `provides ["owo","owo-lib"]`;
+- 因此该行是内核仲裁把 id 和别名混为一谈,不是主体版本错配。测试 `KernelFabricLoaderPresenceAliasTest`
+  2/2 钉住了两条语义(别名让位 / 真重复保留第一个)。
+
+若终表要采纳夜间档的口径,应当先否掉上面四条中的任意一条;在此之前**不应**把该主体记成主体侧。
+
+
 
 ## 2. 待复核/口径注记
 

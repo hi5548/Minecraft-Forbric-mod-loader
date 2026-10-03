@@ -66,8 +66,12 @@ import net.forbric.kernel.util.ForbricLog;
  * to its own argument.
  */
 public final class ClientModLoadingWrapperRewriter implements ClassTransformer {
-	private static final String NEOFORGE_OWNER = "net/neoforged/neoforge/client/loading/ClientModLoader";
-	private static final String FORGE_OWNER = "net/minecraftforge/client/loading/ClientModLoader";
+	// BINARY (dotted) names, which is what ClassTransformer.transform is handed — MethodBodyNeuter compares its
+	// targets the same way. Written slashed first, this matched nothing and the rewrite silently did nothing at all;
+	// caught by defining the rewritten class offline and calling the method, which is the only check that can see a
+	// no-op like this (a boot would just show the old behaviour, with no line saying why).
+	private static final String NEOFORGE_OWNER = "net.neoforged.neoforge.client.loading.ClientModLoader";
+	private static final String FORGE_OWNER = "net.minecraftforge.client.loading.ClientModLoader";
 	private static final String METHOD = "completeModLoading";
 	private static final String DESCRIPTOR = "(Ljava/lang/Runnable;)Ljava/lang/Runnable;";
 

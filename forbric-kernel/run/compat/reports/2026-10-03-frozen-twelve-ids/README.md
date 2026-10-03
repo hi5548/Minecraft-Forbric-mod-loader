@@ -24,6 +24,37 @@ connector 那条**无代价**(handler 仍运行在装载窗口之前)。
 | 6 OPAC `MixinOptionalExperienceOrb#onScanForEntities` | `missing: @At(INVOKE_ASSIGN) Level.getNearestPlayer in ExperienceOrb.scanForEntities` | 合并的 `scanForEntities` 走的是 NeoForge 的 `XpOrbTargetingEvent` + `Level.getEntities(EntityTypeTest,AABB,Predicate)`,`getNearestPlayer` 那条调用没了 | 查 `MergedBaseCalleeSwaps#SUBSTITUTED` 是否已有对应行;无行且语义不可等同 ⇒ 剪/钉 + 记代价 |
 | 10/11 polymer `PacketCodecsEntriesMixin`/`PacketCodecsRegistryMixin` | 目标类是 `ByteBufCodecs$22`/`$23`(匿名类编号) | 合并里的匿名类**重新编号**:内核证据逐字 `ByteBufCodecs$22 is not the class vanilla compiled at that name (vanilla's body now lives at …$16 or $18 or $4 or $5 or $6)` | `MixinAnonymousRetarget.home(...)` 只在候选**唯一**时移动;此处候选 3–5 个 ⇒ 用 handler 自己的 `@Inject` 目标描述符(`$22`→`encode(ByteBuf,Object)V`、`$23`→`encode(RegistryFriendlyByteBuf,Object)V`)在候选中挑出唯一匹配者 ⇒ 可重定位、零损失(并且同一机制会一并清掉同族的 `PacketCodecsRegistryEntry{List,}Mixin`) |
 
+## 第二轮验证(W7Harness,内核 `a4fdec5a…` 由干净 worktree 构建,全新空缓存)
+
+| 主体 | 结果 | 预判 |
+|---|---|---|
+| better-teleport | PASS / world=true / cr=0 | id 1、3 消失 ✓ |
+| shadowguard | PASS / world=true / cr=0 | id 7、8、12 消失 ✓ |
+| sun_fade | PASS / world=true / cr=2 | **id 5 未消失 ✗(已修,见下)**;id 2 仍在 ✓ |
+| cobblecoop | FAIL / world=false / cr=0 | **id 9 不可测** |
+
+无任何主体新增 id。**三次落地共 5 个预判在"到达世界"的启动上得到证明,1 个被证伪后修好。**
+
+### id 5 被证伪的原因与修复(`7eef89e4`)
+
+替换行**已发布**(`[Forbric/Lifecycle] redirected … ServerModLoader.load …` 在),但锚点**没被搬**——普查仍报
+`1/2 anchors resolve, missing: @At(INVOKE) …ServerModLoader.load in Main.main`。原因在真字节上复现:替换行的
+`ecosystems` 写成**触发臂那个家族**,而 `substitution(...)` 按**客方生态**过滤。这对**载体**替换是对的
+(按别家 jar 编译的 mod 本来就没有那条调用),对**内核自己做的**替换是错的——内核把基底里那条调用换掉了,
+对所有客方一样。Sinytra Connector 正是反例:Fabric 生态、刻意锚在 NeoForge 的装载器类上。
+修复:内核替换行三家全列(家族只作**出处**);`KernelLifecycleSwapTest` 中"另一生态不移"的用例翻转为"任何生态都移"。
+复现/验证:FABRIC、FORGE 两个生态在改前**不移**、改后**都移**,NEOFORGE 三条一致绿。
+
+### id 9:判据已证,启动级确认在本主体上不可能 —— 不计入分母
+
+- **已证(真字节)**:对该 mixin 与它自己闭包里的 Cobblemon 1.8.1,`MixinFit` 由 `UNFIT` 变 `PARTIAL`
+  (unresolved 仍如实列出),即产生类级 finding 的那次 auto-suppress 不再发生。
+- **不可测**:`cobblecoop-1.5.1-fabric.jar` 在**任何**内核上都到不了世界(`cause=registry-load`,早于本次改动),
+  因此它的 `cr 2 → 0` 两侧都是**世界之前**的读数,不构成证据。
+- **对分母的处置(明确写下,不留给读者推断)**:主体因**自身**注册表原因到不了世界者,不在闭环完整集合内,
+  **id 9 不计入 loader 的账**;理由是上面的 `cause=registry-load` 早于本轮全部改动,且该主体的 `world=false`
+  与本清单的任何一条修复无关。
+
 ## 已落地(第二轮)
 
 | 决定 | 提交 | 逐字节证据 |
@@ -34,6 +65,13 @@ connector 那条**无代价**(handler 仍运行在装载窗口之前)。
 (full-corpus 186 / bucket-fabric 52 / bucket-neoforge 4 / bucket-forge 70) ⇒ 这 312 行是本判据可能影响的上界;
 真正被抬高的子集是其中 handler 有效要求为 0 的那些(逐行读 `require`,或重跑重派生)。套件:`mixin.*`+`transform.*`
 失败集合在本修前后逐条相同(24 = 24)。
+
+## 未由本车道处理 / 已知注意项
+
+- **ids 2、4、6、10、11** 转由 FrozenIds2 接手(连同 census 影响面计数)。原因与下一步见上表。
+- **归因注意项(报告问题,不是重定位问题;Main 已决定纳入最终报告)**:connector 的 finding 被记为
+  "belongs to no installed mod" —— 它以**捆绑库**形式到达,`modIdOf` 知道它的配置但没有同名已安装 mod。
+  这与 id 5 的存活**无关**(锚点确实没被搬);读者不应把该行当作修复未生效的证据。
 
 ## 环境事实(不是发现)
 

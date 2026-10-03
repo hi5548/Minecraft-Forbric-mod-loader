@@ -50,6 +50,20 @@ import net.forbric.kernel.util.ForbricLog;
  */
 public final class PayloadInterop {
 	private static final String FABRIC_REGISTRY = "net.fabricmc.fabric.impl.networking.PayloadTypeRegistryImpl";
+	/**
+	 * {@code PayloadTypeRegistryImpl}'s four registries, by the field names BOTH generations give them: the
+	 * 26.2-era module names each registry for the direction it carries
+	 * ({@code CLIENTBOUND_CONFIGURATION}/{@code CLIENTBOUND_PLAY}/…), while fabric-api 0.116.17 names it for the
+	 * phase and the peer side ({@code CONFIGURATION_S2C}/{@code CONFIGURATION_C2S}/{@code PLAY_S2C}/
+	 * {@code PLAY_C2S}). Measured 2026-10-04 with javap on the remapped 0.116.17 module, which declares no
+	 * {@code CLIENTBOUND_}/{@code SERVERBOUND_} field at all. Both spellings are the same registry, so resolving
+	 * by the first name the module declares keeps a module of either generation working. A miss here is
+	 * reflective and silent — it nulls the Fabric codec candidate and, on encode, hands a Fabric payload to
+	 * NeoForge's codec for the same id, which is the {@code minecraft:register} ClassCastException.
+	 */
+	private static final List<String> FABRIC_REGISTRY_FIELD_NAMES = List.of(
+			"SERVERBOUND_CONFIGURATION", "CLIENTBOUND_CONFIGURATION", "CONFIGURATION_C2S", "CONFIGURATION_S2C",
+			"SERVERBOUND_PLAY", "CLIENTBOUND_PLAY", "PLAY_C2S", "PLAY_S2C");
 	private static final String FABRIC_REGISTRATION_PAYLOAD = "net.fabricmc.fabric.impl.networking.RegistrationPayload";
 	private static final String FABRIC_COMMON_VERSION_PAYLOAD = "net.fabricmc.fabric.impl.networking.CommonVersionPayload";
 	private static final String FABRIC_COMMON_REGISTER_PAYLOAD = "net.fabricmc.fabric.impl.networking.CommonRegisterPayload";
@@ -423,8 +437,7 @@ public final class PayloadInterop {
 		if (packetTypesField == null) return out;
 		packetTypesField.setAccessible(true);
 
-		for (String fieldName : List.of("SERVERBOUND_CONFIGURATION", "CLIENTBOUND_CONFIGURATION", "SERVERBOUND_PLAY",
-				"CLIENTBOUND_PLAY")) {
+		for (String fieldName : FABRIC_REGISTRY_FIELD_NAMES) {
 			Object registry = staticField(registryClass, fieldName);
 			if (registry == null) continue;
 			try {
@@ -524,9 +537,7 @@ public final class PayloadInterop {
 		Class<?> registryClass = load(loader, FABRIC_REGISTRY);
 		if (registryClass == null) return null;
 
-		String field = fabricRegistryField(protocol, packetFlow);
-		if (field == null) return null;
-		Object registry = staticField(registryClass, field);
+		Object registry = fabricRegistry(registryClass, protocol, packetFlow);
 		if (registry == null) return null;
 		Object existing = invoke(registry, "get", id);
 		if (existing != null) return existing;
@@ -1227,21 +1238,35 @@ public final class PayloadInterop {
 		Class<?> registryClass = load(loader, FABRIC_REGISTRY);
 		if (registryClass == null) return null;
 
-		String field = fabricRegistryField(protocol, packetFlow);
-		if (field == null) return null;
-		Object registry = staticField(registryClass, field);
+		Object registry = fabricRegistry(registryClass, protocol, packetFlow);
 		if (registry == null) return null;
 		Object entry = invoke(registry, "get", id);
 		return entry != null ? entry : mirrorNeoPayloadIntoFabricRegistry(loader, id, protocol, packetFlow);
 	}
 
-	private static String fabricRegistryField(Object protocol, Object packetFlow) {
+	/**
+	 * The one {@code PayloadTypeRegistryImpl} for a protocol/flow, under whichever generation's field name the
+	 * loaded module declares it. See {@link #FABRIC_REGISTRY_FIELD_NAMES}.
+	 */
+	private static Object fabricRegistry(Class<?> registryClass, Object protocol, Object packetFlow) {
 		String protocolName = enumName(protocol);
 		String flowName = enumName(packetFlow);
-		if ("CONFIGURATION".equals(protocolName) && "CLIENTBOUND".equals(flowName)) return "CLIENTBOUND_CONFIGURATION";
-		if ("CONFIGURATION".equals(protocolName) && "SERVERBOUND".equals(flowName)) return "SERVERBOUND_CONFIGURATION";
-		if ("PLAY".equals(protocolName) && "CLIENTBOUND".equals(flowName)) return "CLIENTBOUND_PLAY";
-		if ("PLAY".equals(protocolName) && "SERVERBOUND".equals(flowName)) return "SERVERBOUND_PLAY";
+		List<String> candidates;
+		if ("CONFIGURATION".equals(protocolName) && "CLIENTBOUND".equals(flowName)) {
+			candidates = List.of("CLIENTBOUND_CONFIGURATION", "CONFIGURATION_S2C");
+		} else if ("CONFIGURATION".equals(protocolName) && "SERVERBOUND".equals(flowName)) {
+			candidates = List.of("SERVERBOUND_CONFIGURATION", "CONFIGURATION_C2S");
+		} else if ("PLAY".equals(protocolName) && "CLIENTBOUND".equals(flowName)) {
+			candidates = List.of("CLIENTBOUND_PLAY", "PLAY_S2C");
+		} else if ("PLAY".equals(protocolName) && "SERVERBOUND".equals(flowName)) {
+			candidates = List.of("SERVERBOUND_PLAY", "PLAY_C2S");
+		} else {
+			return null;
+		}
+		for (String field : candidates) {
+			Object registry = staticField(registryClass, field);
+			if (registry != null) return registry;
+		}
 		return null;
 	}
 

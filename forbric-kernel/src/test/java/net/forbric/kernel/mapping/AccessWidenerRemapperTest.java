@@ -6,6 +6,8 @@ package net.forbric.kernel.mapping;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.file.Path;
+
 import org.junit.jupiter.api.Test;
 
 import net.forbric.kernel.access.AccessWidenerRemapper;
@@ -57,5 +59,33 @@ class AccessWidenerRemapperTest {
 
 		assertEquals("accessWidener\tv2\tofficial\n"
 				+ "accessible\tmethod\tnet/minecraft/core/registries/BuiltInRegistries\tcreateContents\t()V\n", out);
+	}
+
+	/**
+	 * A camelCase entry name and a v1 header are both real: cloth-config ships {@code cloth-config.accessWidener}
+	 * with {@code accessWidener v1 intermediary}. Matching the suffix case-sensitively left it unrewritten, and
+	 * being first in mod order it set the merge namespace and disabled the other 18 files.
+	 */
+	@Test
+	void aCamelCaseV1EntryIsRewrittenToo() throws Exception {
+		ForbricMappings spine = FabricGuestMappings.of(MappingFixtures.intermediary(), MappingFixtures.mojmap()).mappings();
+		Path jar = java.nio.file.Files.createTempFile("cloth-config", ".jar");
+		try (java.util.zip.ZipOutputStream out = new java.util.zip.ZipOutputStream(java.nio.file.Files.newOutputStream(jar))) {
+			out.putNextEntry(new java.util.zip.ZipEntry("cloth-config.accessWidener"));
+			out.write(("accessWidener\tv1\tintermediary\n"
+					+ "accessible\tmethod\tnet/minecraft/class_7923\tmethod_47487\t()V\n")
+					.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+			out.closeEntry();
+		}
+
+		assertEquals(1, AccessWidenerRemapper.remap(jar, spine));
+
+		try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(jar.toFile())) {
+			String text = new String(zip.getInputStream(zip.getEntry("cloth-config.accessWidener")).readAllBytes(),
+					java.nio.charset.StandardCharsets.UTF_8);
+			assertTrue(text.startsWith("accessWidener\tv1\tofficial"), text);
+			assertTrue(text.contains("accessible\tmethod\tnet/minecraft/core/registries/BuiltInRegistries"
+					+ "\tcreateContents\t()V"), text);
+		}
 	}
 }

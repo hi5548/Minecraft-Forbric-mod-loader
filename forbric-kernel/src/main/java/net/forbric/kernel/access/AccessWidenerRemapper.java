@@ -108,7 +108,11 @@ public final class AccessWidenerRemapper {
 	}
 
 	private static boolean isWidener(String entryName) {
-		return entryName.endsWith(".accesswidener") || entryName.endsWith(".classtweaker");
+		// Case-insensitive: the entry name is the mod's own and neither Fabric's spec nor the loader forces lower
+		// case. cloth-config ships `cloth-config.accessWidener` (camelCase, v1) — a case-sensitive match left it
+		// unrewritten, and being first in mod order it then set the merge namespace and disabled the other 18 files.
+		String lower = entryName.toLowerCase(java.util.Locale.ROOT);
+		return lower.endsWith(".accesswidener") || lower.endsWith(".classtweaker");
 	}
 
 	/**

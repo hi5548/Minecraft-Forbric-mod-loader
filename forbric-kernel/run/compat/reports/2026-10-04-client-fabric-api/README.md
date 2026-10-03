@@ -197,3 +197,46 @@ kernel sha256=191273137f60a8503c0450af2179490eb64ede46309854358d633325377e76df  
 - **D/E/F/C 的代价**都是真实玩家可见的（流体渲染、粒子染色、声音流、Fabric 颜色注册），已逐条写进
   `MergedBaseMixinCompat` 的注释与上面 §3；本次没有把它们做成"消失"，而是做成"记录在案的缺失"。
 - **没有跑过的运行**：A、B 的重锚效果、C–G 的降级效果，都还没有客户端读数。
+
+## 7. 追加（`9746f217`/`b9db9617` 之后）：两条重锚的原因都量到了，B 的原因是一个拼写
+
+§5 说"未验证"是对的，随后两轮运行把它收口如下（`W7Harness` 跑，读数逐字回传）：
+
+**13 条带账退出：已验证。** `d293d776` 上 `confirmed_required` **15 → 1**，十二行
+`suppressed mixin`、一行 `pruned 1 injector(s) from …MinecraftClientMixin`；两次启动读数一致。
+再加上 `9746f217` 的第三次启动（同为 1），所以 15→1 不是一次性现象。
+
+**A（fabric-item-api 的挖矿重定向）：已归因。** `9746f217` 的控制台逐字有
+`retargeted guest mixin net/fabricmc/fabric/mixin/item/client/ClientPlayerInteractionManagerMixin:fabricItemContinueBlockBreakingInject onto ItemStack.shouldCauseBlockBreakReset (1.21.1 generation)`，
+所以它那条 CONFIRMED required 的消失是重锚生效，不是无法归因。**上一轮我登记的
+`retargeted guest mixin fabric-item-api-v1 …` 标记是我从别的适配器推断出来的，内核里从来不存在**，
+那次"0 命中"什么都没证明；`9746f217` 把这类标记变成真实打点，这条教训留在提交信息里。
+
+**B（fabric-lifecycle-events 的 WorldChunkMixin）：原因量到了，且与锚点无关。** `9746f217` 的
+DECLINED 行（逐字）：
+
+```
+net/fabricmc/fabric/mixin/event/lifecycle/client/WorldChunkMixin:onRemoveBlockEntity retarget DECLINED —
+  @Redirect method= is
+    [Lnet/minecraft/world/level/chunk/LevelChunk;getBlockEntity(Lnet/minecraft/core/BlockPos;
+      Lnet/minecraft/world/level/chunk/LevelChunk$EntityCreationType;)Lnet/minecraft/world/level/block/entity/BlockEntity;]
+  not
+    getBlockEntity(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/chunk/LevelChunk$EntityCreationType;)
+      Lnet/minecraft/world/level/block/entity/BlockEntity;
+```
+
+拒绝它的那条守卫是 `@Redirect method=` 的**拼写**：0.116.17 写 owner 限定形，适配器比的是裸名，
+而两边描述符逐字相同。`b9db9617` 接受两种写法（Mixin 两种都接受），属于接受面修补、不是谓词放宽；
+与 `MixinNames` 的 refmap 拼写修复同类。**整个控制台里 B 是唯一的 DECLINED 行**（另有 5 条 retargeted
+成功），所以这不是系统性谓词问题。
+
+顺带纠正我自己的两处推断：`blockEntities` 的 `Fieldref` owner 是 `LevelChunk`（常量池 `#701`）而不是
+`ChunkAccess`，所以我提的"放宽 owner 比较"是错的、已撤回；host 描述符也逐字匹配，"描述符不符"同样被证伪。
+这两条都是**测量推翻推断**，不是推断自我修正。
+
+**验收状态：仍未验证。** 15 条现在预期为 0——13 条已验证的降级 + A 已验证的生效 + B 的拼写修复
+（`b9db9617` 尚未跑过）。B 是否真的生效，只认下一次运行的控制台：出现
+`retargeted guest mixin …client/WorldChunkMixin:onRemoveBlockEntity onto the blockEntities Map.remove at instruction <N>`
+才算，不再接受任何推断性标记。另外，客户端至今**没有一次读到 world**，卡点是
+`ClientShaderFix` 的着色器路径缺陷（`neoforge:neoforge:shaders/…` 的双命名空间），不是本车道。
+

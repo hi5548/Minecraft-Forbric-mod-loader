@@ -276,7 +276,9 @@ public final class KernelClientSmoke {
 					ForbricLog.info("[Forbric/ClientSmoke] MinecraftForge client events heard:%s", census);
 				}
 				ForbricLog.info("[Forbric/ClientSmoke] clean disconnect observed; stopping client");
-				invokeNoArg(minecraft, "stop");
+				if (!invokeNoArg(minecraft, "stop")) {
+					ForbricLog.warn("[Forbric/ClientSmoke] no Minecraft.stop() to call — the client will not end on its own");
+				}
 			}
 			return;
 		}
@@ -305,7 +307,10 @@ public final class KernelClientSmoke {
 		if (ready && !drillDone && Boolean.getBoolean(DRILL)) drill(minecraft, player);
 		if (ready) elytraCheck(minecraft, player);
 		if (ready) screenMouseIfDue(minecraft, player);
-		if (ready) screenshotIfDue(minecraft);
+		// Not gated on ready: the property names world ticks, and a tick before READY_TICKS still has a rendered
+		// world — gating it here made every configured screenshot tick below READY_TICKS unreachable (the harness
+		// asks for readyTicks/2), so the step silently never ran.
+		screenshotIfDue(minecraft);
 		if (ready) keyBindsScreenIfDue(minecraft);
 		if (ready) modsScreenIfDue(minecraft);
 		if (ready && !tooltipProbed) probeTooltip(level, player);
@@ -317,7 +322,7 @@ public final class KernelClientSmoke {
 		if (!disconnectRequested && worldTicks >= Integer.getInteger(DISCONNECT_TICKS, 120)) {
 			disconnectRequested = true;
 			ForbricLog.info("[Forbric/ClientSmoke] requesting clean disconnect after %d world tick(s)", worldTicks);
-			invokeNoArg(minecraft, "disconnectWithSavingScreen");
+			leaveWorld(minecraft);
 		}
 	}
 
@@ -1844,11 +1849,28 @@ public final class KernelClientSmoke {
 	private static void screenshotIfDue(Object minecraft) {
 		if (!screenshotDue(System.getProperty(SCREENSHOTS, ""), worldTicks) || !shotsTaken.add(worldTicks)) return;
 		try {
-			Class<?> screenshot = Class.forName("net.minecraft.client.Screenshot", true,
-					minecraft.getClass().getClassLoader());
-			java.lang.reflect.Method grab = screenshot.getMethod("grab", minecraft.getClass(), boolean.class);
-			grab.invoke(null, minecraft, false);
-			ForbricLog.info("[Forbric/ClientSmoke] screenshot requested at world tick %d", worldTicks);
+			ClassLoader loader = minecraft.getClass().getClassLoader();
+			Class<?> screenshot = Class.forName("net.minecraft.client.Screenshot", true, loader);
+			Class<?> renderTarget = Class.forName("com.mojang.blaze3d.pipeline.RenderTarget", true, loader);
+			// 1.21.1's signature: grab(File gameDirectory, RenderTarget target, Consumer<Component> onSaved). The
+			// game's own screenshot key calls this, from the render thread, which is where we are (tick runs on it).
+			java.io.File gameDirectory = (java.io.File) minecraft.getClass().getField("gameDirectory").get(minecraft);
+			Object target = minecraft.getClass().getMethod("getMainRenderTarget").invoke(minecraft);
+			java.lang.reflect.Method grab = screenshot.getMethod("grab", java.io.File.class, renderTarget,
+					java.util.function.Consumer.class);
+			java.util.function.Consumer<Object> onSaved = message -> { };
+			grab.invoke(null, gameDirectory, target, onSaved);
+
+			// Fail loudly rather than log a request that wrote nothing: _grab runs synchronously on the render
+			// thread, so a missing file is a real failure, not a race with a later frame.
+			java.io.File dir = new java.io.File(gameDirectory, "screenshots");
+			java.io.File[] files = dir.listFiles((ignored, name) -> name.endsWith(".png"));
+			if (files == null || files.length == 0) {
+				ForbricLog.warn("[Forbric/ClientSmoke] screenshot at world tick %d wrote nothing to %s", worldTicks, dir);
+			} else {
+				ForbricLog.info("[Forbric/ClientSmoke] screenshot at world tick %d — %s",
+						worldTicks, files[files.length - 1].getName());
+			}
 		} catch (Throwable t) {
 			ForbricLog.warn("[Forbric/ClientSmoke] could not take a screenshot at world tick %d: %s", worldTicks,
 					String.valueOf(t));
@@ -1906,7 +1928,12 @@ public final class KernelClientSmoke {
 		}
 	}
 
-	private static void invokeNoArg(Object owner, String name) {
+	/**
+	 * Invokes a no-arg method wherever it is declared in the object's hierarchy; false when none exists. The name
+	 * moved between versions — 1.21.2 saves and quits to the title with {@code disconnectWithSavingScreen}, 1.21.1
+	 * with {@code disconnect()} — so callers chain the names they accept rather than this guessing one.
+	 */
+	private static boolean invokeNoArg(Object owner, String name) {
 		for (Class<?> c = owner.getClass(); c != null; c = c.getSuperclass()) {
 			for (Method method : c.getDeclaredMethods()) {
 				if (!method.getName().equals(name) || method.getParameterCount() != 0) continue;
@@ -1916,10 +1943,22 @@ public final class KernelClientSmoke {
 				} catch (ReflectiveOperationException | RuntimeException e) {
 					ForbricLog.warn("[Forbric/ClientSmoke] could not invoke Minecraft." + name, e);
 				}
-				return;
+				return true;
 			}
 		}
-		ForbricLog.warn("[Forbric/ClientSmoke] no no-arg Minecraft.%s to invoke — the run will not end on its own",
-				name);
+		return false;
+	}
+
+	/**
+	 * Leaves the world so the run can stop. Whichever spelling the merged {@code Minecraft} declares is invoked:
+	 * 1.21.1 saves and quits to the title with {@code disconnect()}, and a version carrying
+	 * {@code disconnectWithSavingScreen} gets that. The tick handler then waits for {@code level} to become null and
+	 * calls {@code stop()}, so a version with neither name is the only case that still needs the harness timeout.
+	 */
+	private static void leaveWorld(Object minecraft) {
+		if (invokeNoArg(minecraft, "disconnectWithSavingScreen")) return;
+		if (invokeNoArg(minecraft, "disconnect")) return;
+		ForbricLog.warn("[Forbric/ClientSmoke] neither Minecraft.disconnectWithSavingScreen nor Minecraft.disconnect() "
+				+ "exists — the run will not end on its own");
 	}
 }

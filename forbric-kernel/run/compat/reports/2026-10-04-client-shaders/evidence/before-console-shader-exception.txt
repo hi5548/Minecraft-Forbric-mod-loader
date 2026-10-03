@@ -1,0 +1,43 @@
+[15:58:34] [Render thread/ERROR]: Exception caught during firing event: Invalid shaders/core/rendertype_entity_unlit_translucent.json: Non [a-z0-9/._-] character in path of location: neoforge:neoforge:shaders/core/rendertype_entity_unlit_translucent.vsh
+	Index: 0
+	Listeners:
+		0: net.neoforged.bus.EventListenerFactory$registerShaders/0x0000007801f2c800@7b4ccec3
+net.minecraft.server.ChainedJsonException: Invalid shaders/core/rendertype_entity_unlit_translucent.json: Non [a-z0-9/._-] character in path of location: neoforge:neoforge:shaders/core/rendertype_entity_unlit_translucent.vsh
+	at forbric//net.minecraft.server.ChainedJsonException.forException(ChainedJsonException.java:48)
+	at forbric//net.minecraft.client.renderer.ShaderInstance.<init>(ShaderInstance.java:157)
+	at forbric//net.neoforged.neoforge.client.ClientHooks$ClientEvents.registerShaders(ClientHooks.java:788)
+	at forbric//net.neoforged.bus.EventBus.post(EventBus.java:360)
+	at forbric//net.neoforged.bus.EventBus.post(EventBus.java:342)
+	at forbric//net.neoforged.fml.ModContainer.acceptEvent(ModContainer.java:177)
+	at forbric//net.neoforged.fml.ModLoader.lambda$postEvent$13(ModLoader.java:358)
+	at java.base/java.lang.Iterable.forEach(Iterable.java:75)
+	at forbric//net.neoforged.fml.ModList.forEachModInOrder(ModList.java:174)
+	at forbric//net.neoforged.fml.ModLoader.postEvent(ModLoader.java:358)
+	at forbric//net.minecraft.client.renderer.GameRenderer.reloadShaders(GameRenderer.java:719)
+	at forbric//net.minecraft.client.renderer.GameRenderer$1.apply(GameRenderer.java:386)
+	at forbric//net.minecraft.client.renderer.GameRenderer$1.apply(GameRenderer.java:361)
+	at forbric//net.minecraft.server.packs.resources.SimplePreparableReloadListener.lambda$reload$1(SimplePreparableReloadListener.java:19)
+	at java.base/java.util.concurrent.CompletableFuture$UniAccept.tryFire(CompletableFuture.java:718)
+	at java.base/java.util.concurrent.CompletableFuture$Completion.run(CompletableFuture.java:482)
+	at forbric//net.minecraft.server.packs.resources.SimpleReloadInstance.lambda$new$3(SimpleReloadInstance.java:69)
+	at forbric//net.minecraft.util.thread.BlockableEventLoop.doRunTask(BlockableEventLoop.java:148)
+	at forbric//net.minecraft.util.thread.ReentrantBlockableEventLoop.doRunTask(ReentrantBlockableEventLoop.java:23)
+	at forbric//net.minecraft.util.thread.BlockableEventLoop.pollTask(BlockableEventLoop.java:122)
+	at forbric//net.minecraft.util.thread.BlockableEventLoop.runAllTasks(BlockableEventLoop.java:111)
+	at forbric//net.minecraft.client.Minecraft.runTick(Minecraft.java:1155)
+	at forbric//net.minecraft.client.Minecraft.run(Minecraft.java:807)
+	at forbric//net.minecraft.client.main.Main.main(Main.java:230)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at net.forbric.kernel.boot.KernelBoot.launch(KernelBoot.java:1192)
+	at net.forbric.kernel.boot.KernelClientLaunch.lambda$main$0(KernelClientLaunch.java:34)
+	at net.forbric.kernel.boot.CompatibilityLaunchBoundary.run(CompatibilityLaunchBoundary.java:23)
+	at net.forbric.kernel.boot.KernelClientLaunch.main(KernelClientLaunch.java:34)
+Caused by: net.minecraft.ResourceLocationException: Non [a-z0-9/._-] character in path of location: neoforge:neoforge:shaders/core/rendertype_entity_unlit_translucent.vsh
+	at forbric//net.minecraft.resources.ResourceLocation.assertValidPath(ResourceLocation.java:284)
+	at forbric//net.minecraft.resources.ResourceLocation.createUntrusted(ResourceLocation.java:48)
+	at forbric//net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(ResourceLocation.java:52)
+	at forbric//net.minecraft.client.renderer.ShaderInstance.getOrCreate(ShaderInstance.java:186)
+	at forbric//net.minecraft.client.renderer.ShaderInstance.<init>(ShaderInstance.java:144)
+	... 28 more
+

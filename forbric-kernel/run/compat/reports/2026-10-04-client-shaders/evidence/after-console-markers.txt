@@ -1,0 +1,11 @@
+### after-console markers (kernel d7184178 behaviour; built as eb8aff51, Javadoc-only delta)
+### file: /Volumes/ORICO/forbric/w7-reports/2026-10-04-client-shaders/per-mod/run/000-fabric-api__fabric/console.log
+
+-- exception counts: ResourceLocationException=0  neoforge:neoforge=0  reloadShaders=0
+
+L233: [06:42:37] [main/INFO]: [Forbric/Mixin] guest mixin fabric-rendering-v1 (fabric-rendering-v1.mixins.json):shader.ShaderProgramMixin applies only partially on the merged base — 4/6 anchors resolve, missing: @At(INVOKE) net.minecraft.resources.ResourceLocation.withDefaultNamespace in ShaderInstance.<init>, @At(INVOKE) net.minecraft.resources.ResourceLocation.withDefaultNamespace in ShaderInstance.getOrCreate (kept; -Dforbric.mixinFit=strict drops these)
+L317: [06:42:37] [main/INFO]: [Forbric/Mixin] normalised net/fabricmc/fabric/mixin/client/rendering/shader/ShaderProgramMixin:modifyStageId — the stage id it hands ShaderInstance.getOrCreate is the path, not a full location; the merged NeoForge reader attaches the namespace itself
+L1336: [06:42:50] [Server thread/INFO]: Starting integrated minecraft server version 1.21.1
+L1482: Caused by: java.lang.ClassCastException: class net.fabricmc.fabric.impl.networking.RegistrationPayload cannot be cast to class net.neoforged.neoforge.network.payload.MinecraftRegisterPayload (net.fabricmc.fabric.impl.networking.RegistrationPayload and net.neoforged.neoforge.network.payload.MinecraftRegisterPayload are in unnamed module of loader 'forbric' @1abbc1d4)
+L1617: [06:42:53] [Server thread/INFO]: com.mojang.authlib.GameProfile@4acc8e83[id=00000000-0000-0000-0000-000000000000,name=ForbricKernel,properties={}] lost connection: Internal Exception: io.netty.handler.codec.EncoderException: Failed to encode packet 'clientbound/minecraft:custom_payload' (minecraft:register)
+L1621: [06:42:53] [Server thread/INFO]: Stopping server

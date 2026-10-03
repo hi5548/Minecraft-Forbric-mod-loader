@@ -1,0 +1,8 @@
+[Forbric/INFO] [Forbric/Mixin] normalised net/fabricmc/fabric/mixin/client/rendering/shader/ShaderProgramMixin:modifyStageId — the stage id it hands ShaderInstance.getOrCreate is the path, not a full location; the merged NeoForge reader attaches the namespace itself
+adapt returned 1
+handler modifyStageId(Ljava/lang/String;Lnet/minecraft/server/packs/resources/ResourceProvider;Lcom/mojang/blaze3d/shaders/Program$Type;Ljava/lang/String;)Ljava/lang/String;
+  184 java/lang/String.valueOf(C)Ljava/lang/String;
+  182 java/lang/String.contains(Ljava/lang/CharSequence;)Z
+  184 net/fabricmc/fabric/impl/client/rendering/FabricShaderProgram.rewriteAsId(Ljava/lang/String;Ljava/lang/String;)Lnet/minecraft/resources/ResourceLocation;
+  182 net/minecraft/resources/ResourceLocation.getPath()Ljava/lang/String;
+annotation: [org.objectweb.asm.tree.AnnotationNode@7b23ec81]

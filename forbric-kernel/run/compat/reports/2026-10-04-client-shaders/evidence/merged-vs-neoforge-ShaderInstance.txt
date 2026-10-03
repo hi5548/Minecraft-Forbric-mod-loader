@@ -1,0 +1,45 @@
+### merged ShaderInstance.class sha256
+e7b0a73efbcdf0b1c43eacefc2e7bcf022d4fb5ef3c5b2bf6c1448c9568371e1  -
+### neoforge ShaderInstance.class sha256
+672dd3962571727972e80f98f2ca96e452bb374dd702c6f0a7a5be9d70cfa540  -
+### decompiled source diff (empty == identical)
+(no diff)
+### javap -c -p instruction-sequence diff (constant-pool refs + offsets normalised)
+816
+### raw byte diff sample (ldc vs ldc_w only)
+changed lines: 198
+-invokestatic  #                // Method net/minecraft/resources/ResourceLocation.parse:(Ljava/lang/String;)Lnet/minecr
+-aload_3
+-invokespecial #                // Method "<init>":(Lnet/minecraft/server/packs/resources/ResourceProvider;Lnet/minecraf
++invokestatic  #                  // Method net/minecraft/resources/ResourceLocation.parse:(Ljava/lang/String;)Lnet/mine
++aload_3
++invokespecial #                  // Method "<init>":(Lnet/minecraft/server/packs/resources/ResourceProvider;Lnet/minecr
+-invokespecial #                // Method java/lang/Object."<init>":()V
+-aload_0
+### whitespace-normalised javap line diff (should only be ldc vs ldc_w): 26
+-ldc_w#//StringModelViewMat
++ldc#//StringModelViewMat
+-ldc_w#//StringProjMat
++ldc#//StringProjMat
+-ldc_w#//StringTextureMat
++ldc#//StringTextureMat
+-ldc_w#//StringScreenSize
++ldc#//StringScreenSize
+-ldc_w#//StringColorModulator
++ldc#//StringColorModulator
+-ldc_w#//StringLight0_Direction
++ldc#//StringLight0_Direction
+-ldc_w#//StringLight1_Direction
++ldc#//StringLight1_Direction
+-privatestaticjava.lang.Stringlambda$getOrCreate$1(com.mojang.blaze3d.shaders.Program$Type,java.lang.String);
+-Code:
+-aload_1
+-aload_0
+-invokevirtual#//Methodcom/mojang/blaze3d/shaders/Program$Type.getExtension:()Ljava/lang/String;
+-invokedynamic#,0//InvokeDynamic#:makeConcatWithConstants:(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+-areturn
+-privatestaticjava.lang.Stringlambda$new$0(java.lang.String);
+-Code:
+-aload_0
+-invokedynamic#,0//InvokeDynamic#:makeConcatWithConstants:(Ljava/lang/String;)Ljava/lang/String;
+-areturn

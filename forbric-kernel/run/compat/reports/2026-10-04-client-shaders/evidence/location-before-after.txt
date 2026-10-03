@@ -1,0 +1,4 @@
+handler(before) = neoforge:shaders/core/rendertype_entity_unlit_translucent.vsh
+location(before) THROWS: net.minecraft.ResourceLocationException: Non [a-z0-9/._-] character in path of location: neoforge:neoforge:shaders/core/rendertype_entity_unlit_translucent.vsh
+handler(after)  = shaders/core/rendertype_entity_unlit_translucent.vsh
+location(after) = neoforge:shaders/core/rendertype_entity_unlit_translucent.vsh

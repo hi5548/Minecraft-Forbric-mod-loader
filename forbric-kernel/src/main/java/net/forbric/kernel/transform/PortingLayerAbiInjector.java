@@ -16,12 +16,15 @@
 
 package net.forbric.kernel.transform;
 
+import java.util.Map;
+
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.FieldInsnNode;
 import org.objectweb.asm.tree.FrameNode;
 import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.tree.InsnNode;
@@ -39,19 +42,25 @@ import net.forbric.kernel.util.ForbricLog;
  *
  * <p>{@link net.forbric.kernel.boot.PortingLayerAudit} is the general half of this problem: it reports, for any
  * Fabric mod that ships its own {@code net.neoforged.*} / {@code net.minecraftforge.*}, where its copy and the
- * carrier's disagree. This is the special half, and it is honestly special: a two-method ABI shim for one named
- * mod. There is no general repair, because "the port's copy differs from the real one" has as many right answers
- * as there are differences, and guessing is how a config ends up written to two files.
+ * carrier's disagree. This is the special half, and it is honestly special: a named ABI shim for one mod. There is
+ * no general repair, because "the port's copy differs from the real one" has as many right answers as there are
+ * differences, and guessing is how a config ends up written to two files.
  *
- * <p>The two differences that matter, out of 54 shadowed classes and 8 disagreements:
+ * <p>The differences that matter:
  *
  * <ul>
- *   <li>{@code ConfigTracker.registerConfig} takes a {@code ModContainer} on real NeoForge 26.2.0.88 and a mod-ID
- *       {@code String} in the port's copy. Four call sites, two of each descriptor, all
- *       {@code getstatic ConfigTracker.INSTANCE} then {@code invokevirtual}. Each becomes an
- *       {@code invokestatic} into {@link net.forbric.kernel.runtime.KernelConfigPortBridge} with the tracker as
- *       argument zero — a one-instruction owner/opcode/descriptor swap, so no stack surgery, no frames, no
- *       {@code maxStack} change.</li>
+ *   <li>{@code ConfigTracker.registerConfig} takes a {@code ModContainer} on the carrier and a mod-ID
+ *       {@code String} in the port's copy. Every call site is {@code getstatic ConfigTracker.INSTANCE} then
+ *       {@code invokevirtual}, and each becomes an {@code invokestatic} into
+ *       {@link net.forbric.kernel.runtime.KernelConfigPortBridge} with the tracker as argument zero — a
+ *       one-instruction owner/opcode/descriptor swap, so no stack surgery, no frames, no {@code maxStack}
+ *       change. The port does not keep one name for the class those sites live in; see
+ *       {@link #CONFIG_REGISTRIES}.</li>
+ *   <li>Its Forge-flavoured registrars return a {@code net.minecraftforge.fml.config.ModConfig}, read straight
+ *       back out of the NeoForge config through the port's own {@code ModConfig.modConfig} field. The carrier's
+ *       {@code ModConfig} is one class with no such field and no Forge half, so that read becomes the bridge's
+ *       manufacture of a real MinecraftForge {@code ModConfig} — the other one-instruction swap here, and the
+ *       only part of the bridge with a cost (the bridge's {@code forgeHandle} records it).</li>
  *   <li>Real {@code IConfigSpec} declares {@code validateSpec(ModConfig)}; the port's copy does not, and its
  *       {@code ForgeConfigSpecAdapter} implements the interface without it. The carrier's {@code registerConfig}
  *       calls it unconditionally, so the adapter gets an {@code AbstractMethodError}. Added here as a no-op,
@@ -60,8 +69,9 @@ import net.forbric.kernel.util.ForbricLog;
  * </ul>
  *
  * <p><b>Drift is a refusal, not a warning.</b> If the port moves — a fifth call site, a renamed class, a
- * {@code validateSpec} it now declares itself — the shim stands down whole rather than half-rewriting a jar it no
- * longer understands, and the audit's report stands on its own. {@code -Dforbric.portingLayerAbi=off} disables it.
+ * {@code validateSpec} it now declares itself, a {@code modConfig} read that has come loose from the call it
+ * belonged to — the shim stands down whole rather than half-rewriting a jar it no longer understands, and the
+ * audit's report stands on its own. {@code -Dforbric.portingLayerAbi=off} disables it.
  *
  * <p>Known limitation, stated rather than half-fixed: {@code /config showfile} stays broken. Its argument type is
  * built by {@code EnumArgument} over {@code ModConfig$Type}, and the carrier's enum implements
@@ -70,15 +80,42 @@ import net.forbric.kernel.util.ForbricLog;
  */
 public final class PortingLayerAbiInjector implements ClassTransformer {
 
-	private static final String CONFIG_REGISTRY = "fuzs/forgeconfigapiport/fabric/impl/core/ConfigRegistryImpl";
 	private static final String ADAPTER_INTERNAL = "fuzs/forgeconfigapiport/fabric/impl/core/ForgeConfigSpecAdapter";
 	private static final String TRACKER = "net/neoforged/fml/config/ConfigTracker";
 	private static final String BRIDGE = "net/forbric/kernel/runtime/KernelConfigPortBridge";
+
+	/**
+	 * The port's config-registry implementations, by the version that named them so, each with the number of
+	 * mod-id-keyed {@code ConfigTracker.registerConfig} call sites it compiles.
+	 *
+	 * <p>ForgeConfigAPIPort does not keep one name. 21.1.x splits the API in two — {@code
+	 * NeoForgeConfigRegistryImpl} for its NeoForge-shaped registry and {@code ForgeConfigRegistryImpl} for the
+	 * traditional-Forge-shaped one, and only the latter reads {@link #MOD_CONFIG_FIELD} back — while 26.2.x folds
+	 * the mod-id-keyed registrations into one {@code ConfigRegistryImpl}. The counts are from {@code javap} on
+	 * each jar, not from the port's source: the class that matters is the one that ships.
+	 *
+	 * <p>A class whose count has moved is refused whole, exactly as a fifth call site used to be — three of four
+	 * sites rewritten would leave the fourth a {@code NoSuchMethodError} and the first three pointing at a bridge
+	 * built for a contract that had moved.
+	 */
+	private static final Map<String, Integer> CONFIG_REGISTRIES = Map.of(
+			"fuzs/forgeconfigapiport/fabric/impl/core/ConfigRegistryImpl", 4,
+			"fuzs/forgeconfigapiport/fabric/impl/core/NeoForgeConfigRegistryImpl", 2,
+			"fuzs/forgeconfigapiport/fabric/impl/core/ForgeConfigRegistryImpl", 4);
+
 	private static final String MOD_CONFIG = "Lnet/neoforged/fml/config/ModConfig;";
 	private static final String SPEC = "Lnet/neoforged/fml/config/IConfigSpec;";
 	private static final String TYPE = "Lnet/neoforged/fml/config/ModConfig$Type;";
 	private static final String BY_ID_3 = "(" + TYPE + SPEC + "Ljava/lang/String;)" + MOD_CONFIG;
 	private static final String BY_ID_4 = "(" + TYPE + SPEC + "Ljava/lang/String;Ljava/lang/String;)" + MOD_CONFIG;
+
+	/** The port's own pair field, and the MinecraftForge type it holds: the carrier's {@code ModConfig} has neither. */
+	private static final String MOD_CONFIG_OWNER = "net/neoforged/fml/config/ModConfig";
+	private static final String MOD_CONFIG_FIELD = "modConfig";
+	private static final String FORGE_MOD_CONFIG = "Lnet/minecraftforge/fml/config/ModConfig;";
+
+	/** What the bridge's manufacture of that field's value is called. */
+	private static final String FORGE_HANDLE = "forgeHandle";
 	private static final String VALIDATE_SPEC = "validateSpec";
 	private static final String CONFIG_SCREEN = "net/neoforged/neoforge/client/gui/ConfigurationScreen";
 	private static final String SCREEN = "Lnet/minecraft/client/gui/screens/Screen;";
@@ -86,9 +123,6 @@ public final class PortingLayerAbiInjector implements ClassTransformer {
 	private static final String SCREEN_CTOR_BY_ID = "(Ljava/lang/String;" + SCREEN + ")V";
 	private static final String SCREEN_FACTORY = "configurationScreen";
 	private static final String SCREEN_FACTORY_DESC = "(Ljava/lang/String;" + SCREEN + ")" + SCREEN;
-
-	/** What the port looks like on the version this was written against. Anything else and the shim stands down. */
-	private static final int EXPECTED_REGISTER_SITES = 4;
 
 	private static final String SWITCH = "forbric.portingLayerAbi";
 
@@ -110,8 +144,8 @@ public final class PortingLayerAbiInjector implements ClassTransformer {
 	public byte[] transform(String className, byte[] classBytes, TransformContext context) {
 		if (classBytes == null || classBytes.length == 0) return classBytes;
 		if ("net.neoforged.fml.config.ConfigTracker".equals(className)) return leaveAnOpenConfigOpen(classBytes);
-		boolean port = "fuzs.forgeconfigapiport.fabric.impl.core.ConfigRegistryImpl".equals(className)
-				|| "fuzs.forgeconfigapiport.fabric.impl.core.ForgeConfigSpecAdapter".equals(className);
+		String internalName = className.replace('.', '/');
+		boolean port = CONFIG_REGISTRIES.containsKey(internalName) || ADAPTER_INTERNAL.equals(internalName);
 		// The screen constructor is named by the port's CONSUMERS, not by the port, so it can be in any class.
 		// Scanned at the byte level first: parsing every class that loads would be a real cost, and a class that
 		// does not carry the name in its constant pool cannot reference it.
@@ -127,7 +161,7 @@ public final class PortingLayerAbiInjector implements ClassTransformer {
 			ClassNode node = new ClassNode();
 			new ClassReader(classBytes).accept(node, 0);
 			boolean changed;
-			if (CONFIG_REGISTRY.equals(node.name)) changed = routeRegistrationsThroughTheBridge(node);
+			if (CONFIG_REGISTRIES.containsKey(node.name)) changed = routeRegistrationsThroughTheBridge(node);
 			else if (ADAPTER_INTERNAL.equals(node.name)) changed = addTheValidateSpecTheCarrierCalls(node);
 			else changed = routeTheConfigScreenThroughTheBridge(node);
 			if (!changed) return classBytes;
@@ -199,7 +233,8 @@ public final class PortingLayerAbiInjector implements ClassTransformer {
 	}
 
 	private static boolean routeRegistrationsThroughTheBridge(ClassNode node) {
-		int sites = 0;
+		int expected = CONFIG_REGISTRIES.get(node.name);
+		int sites = 0, reads = modConfigReads(node);
 		for (MethodNode method : node.methods) {
 			if (method.instructions == null) continue;
 			for (AbstractInsnNode insn : method.instructions) {
@@ -214,27 +249,66 @@ public final class PortingLayerAbiInjector implements ClassTransformer {
 				sites++;
 			}
 		}
-		if (sites != EXPECTED_REGISTER_SITES) {
-			throw new IllegalStateException("expected " + EXPECTED_REGISTER_SITES
-					+ " mod-id-keyed ConfigTracker.registerConfig call sites, found " + sites);
+		if (sites != expected) {
+			throw new IllegalStateException("expected " + expected + " mod-id-keyed ConfigTracker.registerConfig "
+					+ "call sites in " + node.name + ", found " + sites);
 		}
+		int bridged = 0, handles = 0;
 		for (MethodNode method : node.methods) {
 			if (method.instructions == null) continue;
-			for (AbstractInsnNode insn : method.instructions) {
-				if (insn instanceof MethodInsnNode call && call.getOpcode() == Opcodes.INVOKEVIRTUAL
-						&& TRACKER.equals(call.owner) && "registerConfig".equals(call.name)) {
-					// The receiver stays on the stack and becomes argument zero, so the instruction count and the
-					// stack depth are both unchanged — only the owner, the opcode and the descriptor move.
-					call.setOpcode(Opcodes.INVOKESTATIC);
-					call.desc = "(L" + TRACKER + ";" + call.desc.substring(1);
-					call.owner = BRIDGE;
+			// Snapshot: this pass replaces nodes, and a replaced node must not move the iterator under the loop.
+			for (AbstractInsnNode insn : method.instructions.toArray()) {
+				if (!(insn instanceof MethodInsnNode call) || call.getOpcode() != Opcodes.INVOKEVIRTUAL
+						|| !TRACKER.equals(call.owner) || !"registerConfig".equals(call.name)) {
+					continue;
+				}
+				// The receiver stays on the stack and becomes argument zero, so the instruction count and the
+				// stack depth are both unchanged — only the owner, the opcode and the descriptor move.
+				call.setOpcode(Opcodes.INVOKESTATIC);
+				call.desc = "(L" + TRACKER + ";" + call.desc.substring(1);
+				call.owner = BRIDGE;
+				bridged++;
+				// The two Forge-flavoured overloads read the MinecraftForge half straight back out of the NeoForge
+				// config. The replacement pops the same one value and pushes the other, so this too leaves the
+				// instruction count and the stack depth alone — but a field read is not a call, so it is a swap.
+				AbstractInsnNode next = call.getNext();
+				while (next != null && next.getOpcode() < 0) next = next.getNext();
+				if (next instanceof FieldInsnNode read && read.getOpcode() == Opcodes.GETFIELD
+						&& MOD_CONFIG_OWNER.equals(read.owner) && MOD_CONFIG_FIELD.equals(read.name)
+						&& FORGE_MOD_CONFIG.equals(read.desc)) {
+					method.instructions.set(read, new MethodInsnNode(Opcodes.INVOKESTATIC, BRIDGE, FORGE_HANDLE,
+							"(" + MOD_CONFIG + ")" + FORGE_MOD_CONFIG, false));
+					handles++;
 				}
 			}
 		}
-		ForbricLog.warn("[Forbric/PortShim] routed ForgeConfigAPIPort's %d config registrations through the kernel "
-				+ "— it asks for a mod-id-keyed ConfigTracker.registerConfig, and real NeoForge %s takes a "
-				+ "ModContainer", sites, "26.2.x");
+		if (handles != reads || modConfigReads(node) != 0) {
+			throw new IllegalStateException("the port reads " + MOD_CONFIG_OWNER + "." + MOD_CONFIG_FIELD + " in "
+					+ reads + " place(s) but only " + handles + " sit directly after a registerConfig call — this "
+					+ "shim re-aims that pairing and nothing else, so the port has moved");
+		}
+		ForbricLog.warn("[Forbric/PortShim] routed %s's %d mod-id-keyed config registration(s) through the kernel "
+				+ "— it asks for a ConfigTracker.registerConfig keyed by mod id, and this carrier's takes a "
+				+ "ModContainer%s", node.name.replace('/', '.'), bridged,
+				handles == 0 ? "" : ", and gave its " + handles + " Forge-flavoured overload(s) a real MinecraftForge "
+						+ "ModConfig over the mod's own Forge container, because the carrier's ModConfig has no "
+						+ "Forge half to read back");
 		return true;
+	}
+
+	/** How many {@code ModConfig.modConfig} reads {@code node} still carries. */
+	private static int modConfigReads(ClassNode node) {
+		int reads = 0;
+		for (MethodNode method : node.methods) {
+			if (method.instructions == null) continue;
+			for (AbstractInsnNode insn : method.instructions) {
+				if (insn instanceof FieldInsnNode read && read.getOpcode() == Opcodes.GETFIELD
+						&& MOD_CONFIG_OWNER.equals(read.owner) && MOD_CONFIG_FIELD.equals(read.name)) {
+					reads++;
+				}
+			}
+		}
+		return reads;
 	}
 
 	/**

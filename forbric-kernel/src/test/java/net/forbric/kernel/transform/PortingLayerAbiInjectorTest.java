@@ -49,9 +49,20 @@ import org.objectweb.asm.tree.MethodNode;
 class PortingLayerAbiInjectorTest {
 	private static final Path PORT = Path.of(System.getProperty("user.dir"), "run", "client-kernel", "mods",
 			"ForgeConfigAPIPort-v26.2.1-mc26.2.x-Fabric.jar").normalize();
+	/**
+	 * The same port on the 1.21.1 line. It is a different jar with different class names AND a different set of
+	 * registries — the version that matters is the one that ships, so both are covered by name rather than by a
+	 * glob that would silently test whichever happens to be staged.
+	 */
+	private static final Path PORT_2116 = Path.of(System.getProperty("user.dir"), "run", "client-kernel", "mods",
+			"ForgeConfigAPIPort-v21.1.6-1.21.1-Fabric.jar").normalize();
 	private static final String REGISTRY = "fuzs/forgeconfigapiport/fabric/impl/core/ConfigRegistryImpl";
+	private static final String NEO_REGISTRY = "fuzs/forgeconfigapiport/fabric/impl/core/NeoForgeConfigRegistryImpl";
+	private static final String FORGE_REGISTRY = "fuzs/forgeconfigapiport/fabric/impl/core/ForgeConfigRegistryImpl";
 	private static final String ADAPTER = "fuzs/forgeconfigapiport/fabric/impl/core/ForgeConfigSpecAdapter";
 	private static final String TRACKER = "net/neoforged/fml/config/ConfigTracker";
+	private static final String NEO_MOD_CONFIG = "net/neoforged/fml/config/ModConfig";
+	private static final String FORGE_MOD_CONFIG = "Lnet/minecraftforge/fml/config/ModConfig;";
 	private static final String BRIDGE = "net/forbric/kernel/runtime/KernelConfigPortBridge";
 
 	@Test
@@ -279,22 +290,167 @@ class PortingLayerAbiInjectorTest {
 		assertSame(bytes, new PortingLayerAbiInjector().transform("com.example.Whatever", bytes, null));
 	}
 
+	/**
+	 * The 1.21.1 line, where the port splits its registry in two and names neither of them what 26.2 does.
+	 *
+	 * <p>That is the whole defect: the shim keyed on one 26.2 class name never fired on this jar, so every config
+	 * a Fabric mod registered through the port was a {@code NoSuchMethodError} at whatever line of its own
+	 * {@code onInitialize} came first. This is the test that fails before the fix and passes after it.
+	 */
+	@Test
+	void everyModIdKeyedRegistrationOfThe2116PortGoesThroughTheBridge() throws Exception {
+		assertAllRouted(PORT_2116, NEO_REGISTRY, 2);
+		assertAllRouted(PORT_2116, FORGE_REGISTRY, 4);
+	}
+
+	/**
+	 * The other half, and the one that is not a call at all: the port's Forge-flavoured registrars return a
+	 * MinecraftForge {@code ModConfig}, which their own copy keeps in a {@code modConfig} field on the NeoForge
+	 * one. Bridging only the method would move the failure one instruction right — a {@code NoSuchFieldError}
+	 * instead of the {@code NoSuchMethodError} — so the read is re-aimed at the bridge's manufacture.
+	 */
+	@Test
+	void theForgeFlavouredOverloadsHandBackARealMinecraftForgeConfig() throws Exception {
+		ClassNode node = shim(PORT_2116, FORGE_REGISTRY);
+		int manufactured = 0;
+		for (MethodNode m : node.methods) {
+			for (AbstractInsnNode insn : m.instructions) {
+				if (insn instanceof FieldInsnNode read && NEO_MOD_CONFIG.equals(read.owner)
+						&& "modConfig".equals(read.name)) {
+					throw new AssertionError("a ModConfig.modConfig read survived: the carrier's ModConfig is one "
+							+ "class with no Forge half, so this is a NoSuchFieldError one instruction after the "
+							+ "method it was behind");
+				}
+				if (insn instanceof MethodInsnNode call && BRIDGE.equals(call.owner)
+						&& "forgeHandle".equals(call.name)) {
+					assertEquals(Opcodes.INVOKESTATIC, call.getOpcode());
+					assertEquals("(L" + NEO_MOD_CONFIG + ";)" + FORGE_MOD_CONFIG, call.desc,
+							"the replacement must pop the NeoForge config and push a MinecraftForge one, exactly as "
+									+ "the field read did");
+					manufactured++;
+				}
+			}
+		}
+		assertEquals(2, manufactured,
+				"both returning register overloads read the Forge half back out; the two void ones do not");
+	}
+
+	@Test
+	void nothingAboutTheFramesOrTheStackMovedInThe2116Port() throws Exception {
+		assertSameShape(PORT_2116, NEO_REGISTRY);
+		assertSameShape(PORT_2116, FORGE_REGISTRY);
+	}
+
+	/** The count is per class, so a class whose overloads moved is refused even when the other one is intact. */
+	@Test
+	void a2116PortClassWhoseCallSiteCountMovedIsRefusedWhole() throws Exception {
+		byte[] original = original(PORT_2116, NEO_REGISTRY);
+		ClassNode node = new ClassNode();
+		new ClassReader(original).accept(node, 0);
+		List<MethodNode> kept = new ArrayList<>();
+		boolean dropped = false;
+		for (MethodNode m : node.methods) {
+			if (!dropped && "register".equals(m.name)) {
+				dropped = true;
+				continue;
+			}
+			kept.add(m);
+		}
+		assertTrue(dropped, "the fixture must have a register overload to drop");
+		node.methods = kept;
+		byte[] drifted = write(node);
+
+		assertSame(drifted, new PortingLayerAbiInjector().transform(NEO_REGISTRY.replace('/', '.'), drifted, null),
+				"a port this shim no longer recognises must be left exactly as it is");
+	}
+
+	@Test
+	void aForgeHalfReadThatCameLooseFromItsCallIsRefusedWhole() throws Exception {
+		ClassNode node = new ClassNode();
+		new ClassReader(original(PORT_2116, FORGE_REGISTRY)).accept(node, 0);
+		// One read more than there are registrations: the pairing this shim re-aims is no longer the whole story,
+		// and rewriting the two it does recognise would leave this one a NoSuchFieldError behind a green log line.
+		node.methods.get(0).instructions.insert(
+				new FieldInsnNode(Opcodes.GETFIELD, NEO_MOD_CONFIG, "modConfig", FORGE_MOD_CONFIG));
+		byte[] drifted = write(node);
+
+		assertSame(drifted,
+				new PortingLayerAbiInjector().transform(FORGE_REGISTRY.replace('/', '.'), drifted, null),
+				"an unpaired ModConfig.modConfig read is drift, not something to half-rewrite");
+	}
+
 	private static ClassNode shim(String entry) throws IOException {
-		byte[] out = new PortingLayerAbiInjector().transform(entry.replace('/', '.'), original(entry), null);
+		return shim(PORT, entry);
+	}
+
+	private static ClassNode shim(Path port, String entry) throws IOException {
+		byte[] out = new PortingLayerAbiInjector().transform(entry.replace('/', '.'), original(port, entry), null);
 		ClassNode node = new ClassNode();
 		new ClassReader(out).accept(node, 0);
 		return node;
 	}
 
 	private static byte[] original(String entry) throws IOException {
-		assumeTrue(Files.isRegularFile(PORT), "ForgeConfigAPIPort not staged — skipping the real-bytecode check");
-		try (ZipFile jar = new ZipFile(PORT.toFile())) {
+		return original(PORT, entry);
+	}
+
+	private static byte[] original(Path port, String entry) throws IOException {
+		assumeTrue(Files.isRegularFile(port), "ForgeConfigAPIPort not staged — skipping the real-bytecode check");
+		try (ZipFile jar = new ZipFile(port.toFile())) {
 			ZipEntry e = jar.getEntry(entry + ".class");
 			assumeTrue(e != null, entry + " absent from this build of the port");
 			try (InputStream in = jar.getInputStream(e)) {
 				return in.readAllBytes();
 			}
 		}
+	}
+
+	private static void assertAllRouted(Path port, String entry, int expected) throws Exception {
+		ClassNode node = shim(port, entry);
+		int bridged = 0;
+		for (MethodNode m : node.methods) {
+			for (AbstractInsnNode insn : m.instructions) {
+				if (insn instanceof MethodInsnNode call && TRACKER.equals(call.owner)
+						&& "registerConfig".equals(call.name)) {
+					throw new AssertionError(entry + ": a mod-id-keyed registerConfig survived: " + call.desc
+							+ " — the carrier does not have it, so this one is still a NoSuchMethodError");
+				}
+				if (insn instanceof MethodInsnNode call && BRIDGE.equals(call.owner)
+						&& "registerConfig".equals(call.name)) {
+					assertEquals(Opcodes.INVOKESTATIC, call.getOpcode());
+					assertTrue(call.desc.startsWith("(L" + TRACKER + ";"),
+							"the tracker must become argument zero — keeping the getstatic in place is what makes "
+									+ "this a one-instruction swap with no stack surgery, no frames and no maxStack "
+									+ "change");
+					bridged++;
+				}
+			}
+		}
+		assertEquals(expected, bridged, entry + ": every register overload must be routed");
+	}
+
+	private static void assertSameShape(Path port, String entry) throws Exception {
+		ClassNode before = new ClassNode();
+		new ClassReader(original(port, entry)).accept(before, 0);
+		ClassNode after = shim(port, entry);
+
+		assertEquals(before.methods.size(), after.methods.size());
+		for (int i = 0; i < before.methods.size(); i++) {
+			MethodNode was = before.methods.get(i);
+			MethodNode now = after.methods.get(i);
+			String where = entry + " " + was.name + was.desc;
+			assertEquals(was.name + was.desc, now.name + now.desc, "method order must be untouched");
+			assertEquals(was.instructions.size(), now.instructions.size(),
+					where + ": neither swap may add or remove an instruction");
+			assertEquals(was.maxStack, now.maxStack, where + ": stack depth must be unchanged");
+			assertEquals(was.maxLocals, now.maxLocals, where + ": locals must be unchanged");
+		}
+	}
+
+	private static byte[] write(ClassNode node) {
+		ClassWriter writer = new ClassWriter(0);
+		node.accept(writer);
+		return writer.toByteArray();
 	}
 
 }

@@ -62,6 +62,13 @@ import net.neoforged.fml.event.config.ModConfigEvent;
  *
  * <p>One container per ID, cached: a fresh one per call would give each of a mod's configs a different event sink
  * and a different lock.
+ *
+ * <p><b>The other half.</b> The port's 21.1.x classes also have a Forge-flavoured registry whose two remaining
+ * overloads RETURN a {@code net.minecraftforge.fml.config.ModConfig}, read back out of the NeoForge config through
+ * a {@code modConfig} field the carrier does not have. {@link #forgeHandle} is that read, and it manufactures the
+ * object over the mod's own MinecraftForge container. It is the one part of this class with a cost — the
+ * manufacture files the config in MinecraftForge's own tracker as well — and the method says so rather than
+ * hiding it.
  */
 public final class KernelConfigPortBridge {
 
@@ -70,11 +77,21 @@ public final class KernelConfigPortBridge {
 
 	private static final Map<String, ModContainer> CONTAINERS = new ConcurrentHashMap<>();
 
+	/** One MinecraftForge container per mod id — the identity a manufactured Forge config is filed under. */
+	private static final Map<String, Object> FORGE_CONTAINERS = new ConcurrentHashMap<>();
+
+	/** One MinecraftForge view per NeoForge config: a caller that keeps the handle must keep getting it back. */
+	private static final Map<ModConfig, net.minecraftforge.fml.config.ModConfig> FORGE_HANDLES =
+			new ConcurrentHashMap<>();
+
 	/** The port's own dispatcher, which turns a NeoForge config event into the Fabric callbacks mods register. */
 	private static final String EVENTS_HELPER = "fuzs.forgeconfigapiport.fabric.impl.core.ModConfigEventsHelper";
 
 	/** One line per boot, on the first event that actually lands, rather than one per mod per config. */
 	private static final AtomicBoolean ANNOUNCED = new AtomicBoolean();
+
+	/** The same, and for the same reason, on the MinecraftForge half of the bridge. */
+	private static final AtomicBoolean ANNOUNCED_FORGE = new AtomicBoolean();
 
 	static ModContainer containerFor(String modId) {
 		return CONTAINERS.computeIfAbsent(modId, id -> {
@@ -165,6 +182,79 @@ public final class KernelConfigPortBridge {
 		ModConfig config = tracker.registerConfig(type, spec, containerFor(modId), fileName);
 		KernelConfigLoad.openAtRegistration(config);
 		return config;
+	}
+
+	/**
+	 * The MinecraftForge {@code ModConfig} the port's Forge-flavoured {@code register} overloads hand back.
+	 *
+	 * <p>The port keeps the pair in one field: its own {@code net.neoforged.fml.config.ModConfig} carries a
+	 * {@code public final net.minecraftforge.fml.config.ModConfig modConfig}, filled by the port's own
+	 * {@code ConfigTracker} when the config is registered. Under Forbric the carrier takes both names, and neither
+	 * of its classes has that field — so the two registrars that return the Forge half (the {@code String, Type,
+	 * IConfigSpec} and {@code …, String} forms of {@code ForgeConfigRegistryImpl}) read a field that does not
+	 * exist, and a rewritten call site only moves the failure from a {@code NoSuchMethodError} on the method to a
+	 * {@code NoSuchFieldError} on the read behind it. This is what fills that read.
+	 *
+	 * <p>The object is manufactured, not faked: it is MinecraftForge's own class, over the mod's own MinecraftForge
+	 * {@code ModContainer} ({@link KernelForgeContainers}, the identity-only container the traditional-Forge lane
+	 * builds — a Fabric subject has no published Forge container, exactly as it has no published NeoForge one and
+	 * {@link #containerFor} manufactures that one) and the MinecraftForge spec the port's adapter wraps.
+	 *
+	 * <p><b>The cost, recorded rather than hidden.</b> MinecraftForge's {@code ModConfig} constructor files the
+	 * object in MinecraftForge's own {@code ConfigTracker}, so the kernel's Forge config pass opens the same file
+	 * with Forge's reader: one config file, two live readers and two file watchers, and one edit on disk fires
+	 * both. They read the same file, so they cannot disagree about a value, and this is the price of a config that
+	 * is genuinely both — the port registers it with NeoForge's tracker (which is what carries the values the mod
+	 * reads) and asks for the MinecraftForge handle at the same time. Allocating around the constructor to stay out
+	 * of the Forge tracker was rejected: it leaves {@code getHandler()} null and {@code getConfigData()} forever
+	 * so, which is a handle that lies instead of one that costs.
+	 */
+	public static net.minecraftforge.fml.config.ModConfig forgeHandle(ModConfig config) {
+		return FORGE_HANDLES.computeIfAbsent(config, neo -> {
+			net.minecraftforge.fml.config.ModConfig handle = new net.minecraftforge.fml.config.ModConfig(
+					net.minecraftforge.fml.config.ModConfig.Type.valueOf(neo.getType().name()),
+					forgeSpec(neo.getSpec()),
+					(net.minecraftforge.fml.ModContainer) forgeContainer(neo.getModId()),
+					neo.getFileName());
+			if (ANNOUNCED_FORGE.compareAndSet(false, true)) {
+				ForbricLog.info("[Forbric/ConfigPort] a Fabric mod took the MinecraftForge view of its config (%s) "
+						+ "— it is a real MinecraftForge ModConfig over the mod's own Forge container and filed in "
+						+ "MinecraftForge's tracker, so that file now has both ecosystems' readers and watchers on "
+						+ "it; they read the same file and cannot disagree", neo.getModId());
+			}
+			return handle;
+		});
+	}
+
+	/**
+	 * The MinecraftForge spec the port wrapped in its adapter — the adapter is a record whose one component is
+	 * exactly that spec.
+	 *
+	 * <p>Reflective because the porting layer is a MOD and the game side may not link against it. Loud on drift:
+	 * a version of the port that stops exposing the spec cannot be half-answered, because the object this feeds
+	 * is handed to the mod.
+	 */
+	private static net.minecraftforge.fml.config.IConfigSpec<?> forgeSpec(IConfigSpec spec) {
+		try {
+			return (net.minecraftforge.fml.config.IConfigSpec<?>) spec.getClass().getMethod("spec").invoke(spec);
+		} catch (Throwable drift) {
+			throw new IllegalStateException("the config porting layer wraps a MinecraftForge spec in "
+					+ spec.getClass().getName() + " and this bridge reads it back through that class's no-argument "
+					+ "spec() accessor, which is gone — the MinecraftForge view of the config cannot be built: "
+					+ Reflect.unwrap(drift));
+		}
+	}
+
+	/** The mod's MinecraftForge container, manufactured once per id — identity for the tracker, nothing else. */
+	private static Object forgeContainer(String modId) {
+		return FORGE_CONTAINERS.computeIfAbsent(modId, id -> {
+			try {
+				return KernelForgeContainers.create(id).container();
+			} catch (Throwable t) {
+				throw new IllegalStateException("could not build MinecraftForge's own ModContainer for '" + id
+						+ "', which the MinecraftForge view of its config is filed under: " + Reflect.unwrap(t));
+			}
+		});
 	}
 
 	/**

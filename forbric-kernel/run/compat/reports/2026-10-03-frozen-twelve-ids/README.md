@@ -24,11 +24,27 @@ connector 那条**无代价**(handler 仍运行在装载窗口之前)。
 | 6 OPAC `MixinOptionalExperienceOrb#onScanForEntities` | `missing: @At(INVOKE_ASSIGN) Level.getNearestPlayer in ExperienceOrb.scanForEntities` | 合并的 `scanForEntities` 走的是 NeoForge 的 `XpOrbTargetingEvent` + `Level.getEntities(EntityTypeTest,AABB,Predicate)`,`getNearestPlayer` 那条调用没了 | 查 `MergedBaseCalleeSwaps#SUBSTITUTED` 是否已有对应行;无行且语义不可等同 ⇒ 剪/钉 + 记代价 |
 | 10/11 polymer `PacketCodecsEntriesMixin`/`PacketCodecsRegistryMixin` | 目标类是 `ByteBufCodecs$22`/`$23`(匿名类编号) | 合并里的匿名类**重新编号**:内核证据逐字 `ByteBufCodecs$22 is not the class vanilla compiled at that name (vanilla's body now lives at …$16 or $18 or $4 or $5 or $6)` | `MixinAnonymousRetarget.home(...)` 只在候选**唯一**时移动;此处候选 3–5 个 ⇒ 用 handler 自己的 `@Inject` 目标描述符(`$22`→`encode(ByteBuf,Object)V`、`$23`→`encode(RegistryFriendlyByteBuf,Object)V`)在候选中挑出唯一匹配者 ⇒ 可重定位、零损失(并且同一机制会一并清掉同族的 `PacketCodecsRegistryEntry{List,}Mixin`) |
 
+## 已落地(第二轮)
+
+| 决定 | 提交 | 逐字节证据 |
+|---|---|---|
+| **id 9 的判据修正**:`require=0` 的缺席不再被记成必需损失(判定侧软掉 + 报告侧不再让 config 的 `required` 替注入器表态) | `25a2f77f` | 真实字节:cobblecoop 安装态 mixin + Cobblemon 1.8.1 ⇒ `UNFIT` → `PARTIAL`(unresolved 仍如实列出该锚点) |
+
+**影响面(四份 campaign 报告的已存 findings)**:`mixin-injector:` 行 1354,其中 `required: true` **312** 行
+(full-corpus 186 / bucket-fabric 52 / bucket-neoforge 4 / bucket-forge 70) ⇒ 这 312 行是本判据可能影响的上界;
+真正被抬高的子集是其中 handler 有效要求为 0 的那些(逐行读 `require`,或重跑重派生)。套件:`mixin.*`+`transform.*`
+失败集合在本修前后逐条相同(24 = 24)。
+
+## 环境事实(不是发现)
+
+本轮派出的九个子代理(scout×8、sonic×1)全部在 provider 处 `401 INVALID_API_KEY` 失败,零内容产出;
+本文件的全部读法与验证因此为本轮独力完成(headless,无游戏 JVM)。
+
 **id 9 的判据(可验伪)**:`MixinFit.evaluate` 里 `anyHardResolved = resolved > 0 || bound > 0 || unresolved.size() == softMisses`(第 276 行),
 `if (anchor.soft) softMisses++`(第 262 行)。若 `require=0` 真的进了 `anchor.soft`,则该 mixin 应得 FIT(或至多 PARTIAL),
 而它现在被 auto-suppress 成 UNFIT——**说明"必需要求"这条链没有把 `require=0` 读进来**,于是被算成冻结清单里的一条 required。
-修法方向(未落地,留给下一轮):让 finding 的 `required` 与 `require=0` 一致(全是可选注入器的 mixin 不构成 required 损失),
-再加一条真实字节的用例钉住;零代价、零功能损失。
+**已落地**:见下方"已落地(第二轮)"——判定侧 `MixinFit` 把 `require=0` 的未命中记为 soft(⇒ PARTIAL,不再 UNFIT ⇒ 不再 auto-suppress),
+报告侧 `FinalMixinApplications` 的 `required` 改由 `injector.minimum()` 单独决定。零代价、零功能损失。
 
 ## 复现命令(全部 headless,无游戏 JVM)
 

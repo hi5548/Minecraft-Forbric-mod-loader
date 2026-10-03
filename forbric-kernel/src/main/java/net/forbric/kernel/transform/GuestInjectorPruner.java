@@ -630,12 +630,55 @@ public final class GuestInjectorPruner implements ClassTransformer {
 
 	@Override
 	public AnchorSet anchors() {
+		return AnchorSet.of(declaredAnchors(TABLE.keySet(), ACTIVE, COSTS).toArray(new AnchorSet.Anchor[0]));
+	}
+
+	/**
+	 * Every trim entry active on this boot, as the REQUIRED anchor the audit declares for it.
+	 *
+	 * <p>This runs inside {@code TransformChain.register}, before a single subject is considered, and it once ran
+	 * the whole game into the ground: adding a trim to {@link #TABLE} without its row in {@link #COSTS} made
+	 * {@link AnchorSet.Anchor} refuse the anchor, and every boot died with
+	 * {@code an anchor without a cost cannot be reported usefully} — a table defect whose blast radius was the
+	 * launch. The cost lookup therefore has a loud fallback rather than a null ({@link #costOf}), and the table is
+	 * kept complete by {@link #entriesWithoutTheirCost} plus the unit test that reads it. Parameterised so that
+	 * test can hand back the same table with one row removed — the pre-fix state — without shipping the gap again.
+	 */
+	static List<AnchorSet.Anchor> declaredAnchors(Iterable<String> mixins, Map<String, BooleanSupplier> active,
+			Map<String, String> costs) {
 		List<AnchorSet.Anchor> anchors = new ArrayList<>();
-		for (String mixin : TABLE.keySet()) {
-			if (!ACTIVE.get(mixin).getAsBoolean()) continue;
-			anchors.add(new AnchorSet.Anchor(mixin, AnchorSet.Severity.REQUIRED, COSTS.get(mixin)));
+		for (String mixin : mixins) {
+			if (!active.get(mixin).getAsBoolean()) continue;
+			anchors.add(new AnchorSet.Anchor(mixin, AnchorSet.Severity.REQUIRED, costOf(mixin, costs)));
 		}
-		return AnchorSet.of(anchors.toArray(new AnchorSet.Anchor[0]));
+		return anchors;
+	}
+
+	/**
+	 * The cost text for a trimmed entry, or a loud placeholder when the table has none.
+	 *
+	 * <p>Never returns null or blank, because the caller is a boot path and a missing row is this table's defect,
+	 * not the game's: it must degrade to a report, not an exception. The placeholder names the mixin so the log
+	 * line and the ledger entry both say which row to add.
+	 */
+	static String costOf(String mixin, Map<String, String> costs) {
+		String cost = costs.get(mixin);
+		if (cost != null && !cost.isBlank()) return cost;
+		ForbricLog.warn("[Forbric/GuestInjectorPruner] %s is a trim entry with NO cost row — its injectors are "
+				+ "removed and nothing says what that costs. That is a defect in this table, not a game condition; "
+				+ "the boot proceeds with the cost unknown. Add its COSTS entry.", mixin);
+		return "cost unknown — " + mixin + " was trimmed with no COSTS row in GuestInjectorPruner; "
+				+ "the injector(s) are gone and what that costs is not recorded";
+	}
+
+	/** The defect {@link #declaredAnchors} guards: a {@link #TABLE} key with no usable {@link #COSTS} text. */
+	static List<String> entriesWithoutTheirCost() {
+		List<String> missing = new ArrayList<>();
+		for (String mixin : TABLE.keySet()) {
+			String cost = COSTS.get(mixin);
+			if (cost == null || cost.isBlank()) missing.add(mixin);
+		}
+		return missing;
 	}
 
 	@Override

@@ -180,17 +180,56 @@ class GuestInjectorPrunerTest {
 	@Test
 	void everyPruneEntryAnswersEveryQuestionThePassAsks() {
 		for (String mixin : GuestInjectorPruner.TABLE.keySet()) {
-			// The three the boot path reads whatever the entry's switch says: `anchors()` asks ACTIVE and COSTS for
-			// every entry, and the finding names CONFIGS.
+			// The two the boot path reads whatever the entry's switch says: `anchors()` asks ACTIVE for every entry,
+			// and the finding names CONFIGS.
 			assertNotNull(GuestInjectorPruner.ACTIVE.get(mixin), mixin + " has no activation predicate");
-			for (Map.Entry<String, Map<String, String>> table : List.of(
-					Map.entry("CONFIGS", GuestInjectorPruner.CONFIGS),
-					Map.entry("COSTS", GuestInjectorPruner.COSTS))) {
-				String text = table.getValue().get(mixin);
-				assertTrue(text != null && !text.isBlank(),
-						mixin + " has no " + table.getKey() + " text; an entry without one is a boot failure, not a gap");
-			}
+			String config = GuestInjectorPruner.CONFIGS.get(mixin);
+			assertTrue(config != null && !config.isBlank(),
+					mixin + " has no CONFIGS text; no finding can name its owner");
 		}
+		// The third is asked by the pass itself, so its completeness is too: this is the invariant `anchors()`
+		// guards at runtime, and here it is a failure before the jar is built. One expression, not two.
+		assertEquals(List.of(), GuestInjectorPruner.entriesWithoutTheirCost(),
+				"a trim entry without a cost row is a boot failure, not a gap, however loud the runtime guard is");
+	}
+
+	/**
+	 * The runtime half of that invariant: a trim whose cost row is missing must be reported as "cost unknown" and
+	 * the boot must proceed, never die in {@code TransformChain.register}. Red before the guard — {@code
+	 * AnchorSet.Anchor} rejects a null cost with {@code an anchor without a cost cannot be reported usefully}, the
+	 * exact throw that took four subjects down on {@code f54f5b10} — green after.
+	 *
+	 * <p>Runs the pass's own anchor-building over the real table with one row removed, because the pre-fix state is
+	 * "the shipped table has a gap" and reproducing it in the suite must not mean shipping the gap again. The mixin
+	 * named is a real trim entry, so the red is the red the boot actually had.
+	 */
+	@Test
+	void aTrimEntryWithNoCostRowIsReportedAndDoesNotKillTheBoot() {
+		// The real pass on the shipped table first: every ACTIVE trim entry, shadowguard's FireBlockMixin among
+		// them, declares its REQUIRED anchor with a cost and nothing throws on the boot path.
+		List<AnchorSet.Anchor> declared = new GuestInjectorPruner().anchors().anchors();
+		for (String mixin : GuestInjectorPruner.TABLE.keySet()) {
+			if (!GuestInjectorPruner.ACTIVE.get(mixin).getAsBoolean()) continue;
+			AnchorSet.Anchor anchor = declared.stream().filter(a -> a.binaryName().equals(mixin)).findFirst()
+					.orElseThrow(() -> new AssertionError("active trim entry declares no anchor: " + mixin));
+			assertEquals(AnchorSet.Severity.REQUIRED, anchor.severity());
+			assertFalse(anchor.cost().isBlank(), mixin + " declares a cost-less anchor");
+		}
+
+		// Then the same pass with the row removed — the pre-fix table — which must report, not die.
+		Map<String, String> without = new java.util.LinkedHashMap<>(GuestInjectorPruner.COSTS);
+		without.remove(GuestInjectorPruner.SHADOWGUARD_FIRE_MIXIN);
+		List<AnchorSet.Anchor> anchors = GuestInjectorPruner.declaredAnchors(
+				List.of(GuestInjectorPruner.SHADOWGUARD_FIRE_MIXIN),
+				Map.of(GuestInjectorPruner.SHADOWGUARD_FIRE_MIXIN, () -> true), without);
+
+		assertEquals(1, anchors.size(), "the entry still declares its required anchor");
+		AnchorSet.Anchor anchor = anchors.get(0);
+		assertEquals(GuestInjectorPruner.SHADOWGUARD_FIRE_MIXIN, anchor.binaryName());
+		assertEquals(AnchorSet.Severity.REQUIRED, anchor.severity());
+		assertTrue(anchor.cost().contains("cost unknown"), "the cost says what is wrong: " + anchor.cost());
+		assertTrue(anchor.cost().contains(GuestInjectorPruner.SHADOWGUARD_FIRE_MIXIN),
+				"and which row to add: " + anchor.cost());
 	}
 
 	/**

@@ -108,6 +108,17 @@ So the new depth is **not one shared cause**: four shapes — a member move (`ca
 `@Inject` that captures locals, and one MixinExtras apply-time rejection on the `$forbricneo` twin. The member moves
 are the recurring family already named in the hygiene block.
 
+Landed: `1fbc5862` stands down the five anchor/ LVT losses per-injector (EnchantRandomly, Recipe ×2,
+events-interaction ×2) with the costs recorded, and `9f5cfcdb` **retargets** the networking one — `MixinMergedTwin`
+now also strips the owner from the descriptor spelling (`Lowner;…`) and from the injector's `method` selectors, so
+the `@WrapOperation` binds inside `$forbricneo` instead of being rejected. The remaining load-gating population is
+then the balm ×4 (their own apply cluster) and kiwi ×2 (a one-off) — both singletons Main kept out of the batch.
+
+Depth note for balm (arm 10, from BalmApplyCluster's fix): the `VerifyError` gate line is gone and the class now
+loads, but balm's `cr` rose 3 → 9 — the same depth effect as arms 6→7, not a regression: the console grows 502 →
+1071 lines and the audit reaches verdicts it never got to. What that fix bought is "the class loads and the launch
+survives to the gate", not a lower count.
+
 
 ### The cleared load gate (historical)
 

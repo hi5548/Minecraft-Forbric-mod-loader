@@ -135,6 +135,24 @@ class KernelLifecycleSwapTest {
 	 * `substitution(...)` still answered {@code row=none} for a NEOFORGE guest — and only a boot could see it, because
 	 * every driver and test up to then had built its own row instead of exercising this builder.
 	 */
+	/**
+	 * The producer is handed the host class the way the TRANSFORM CHAIN names it — dotted — while the table's readers
+	 * pass ASM internal names, so the row has to be normalised at this boundary. Storing it raw was invisible in every
+	 * driver and test I had, because each of them passed the internal form itself; on a real boot the row sat in the
+	 * list with all four components matching and `substitution(...)` still answered `row=none`.
+	 */
+	@Test
+	void theRowStoresTheTargetInTheInternalFormTheReadersUse() {
+		org.objectweb.asm.tree.MethodNode host = new org.objectweb.asm.tree.MethodNode(
+				Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "main", "([Ljava/lang/String;)V", null, null);
+		MergedBaseCalleeSwaps.Substitution row = LifecycleHookInjector.substitutionRow("net.minecraft.server.Main", host,
+				TRIGGER_OWNER, "load", "()V", Ecosystem.NEOFORGE, HOOK_OWNER, "onServerModLoadingNoArg", "()V");
+		assertEquals(MAIN, row.target(), "the transform chain's dotted name must be stored as an internal name");
+		MergedBaseCalleeSwaps.kernelSubstituted(row);
+		assertTrue(MergedBaseCalleeSwaps.substitution(MAIN, "main([Ljava/lang/String;)V", TRIGGER, Ecosystem.NEOFORGE)
+				!= null, "a row published the way the pass publishes it must be findable by the reader");
+	}
+
 	@Test
 	void theRowIsKeyedByTheMethodAsTheReaderAsksForIt() {
 		MergedBaseCalleeSwaps.kernelSubstituted(row());

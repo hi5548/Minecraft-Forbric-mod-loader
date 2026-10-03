@@ -280,7 +280,13 @@ public final class LifecycleHookInjector implements ClassTransformer {
 		// Measured on a real boot: the pass published `Main.main` and the reader asked for
 		// `main([Ljava/lang/String;)V`, so `substitution(...)` answered row=none on a NEOFORGE guest while the redirect
 		// for that very call was logged twice. Taking the node rather than two strings is what makes that impossible.
-		return new MergedBaseCalleeSwaps.Substitution(hostClass, host.name + host.desc, "L" + owner + ";" + name + desc,
+		// hostClass arrives as the transform chain names classes — DOTTED (`net.minecraft.server.Main`) — while every
+		// reader of this table passes an ASM internal name (`net/minecraft/server/Main`), and `covers` compares the
+		// target with equals. Storing the dotted form made every row unfindable: on a real boot the row sat in the list
+		// with target, method, member and ecosystems all matching the ask, and `substitution(...)` still answered
+		// `row=none` — the one component that differed was this separator. Normalised here, at the boundary where the
+		// row is built, because the table's contract is internal names and this is the only producer that broke it.
+		return new MergedBaseCalleeSwaps.Substitution(hostClass.replace('.', '/'), host.name + host.desc, "L" + owner + ";" + name + desc,
 				"L" + hookOwner + ";" + hookName + hookDesc,
 				java.util.Set.of(Ecosystem.FABRIC, Ecosystem.FORGE, Ecosystem.NEOFORGE),
 				"the kernel owns the lifecycle: this pass replaced " + owner.replace('/', '.') + "." + name

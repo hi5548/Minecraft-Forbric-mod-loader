@@ -111,7 +111,11 @@ public final class MergedBaseCalleeSwaps {
 
 	/** Publishes a swap THIS kernel made, for the readers that judge or move a guest's anchor. */
 	public static void kernelSubstituted(Substitution row) {
-		KERNEL_SUBSTITUTED.add(row);
+		// Idempotent: the pass that publishes runs whenever the host class is transformed, and a boot materialises
+		// that class more than once, so the same key was published twice (visible on a real boot as the counter going
+		// 1 -> 2 around the reader's ask). Harmless for lookups — the first match wins — and removed anyway so the
+		// diagnostic's count means "rows", not "publications".
+		if (!KERNEL_SUBSTITUTED.contains(row)) KERNEL_SUBSTITUTED.add(row);
 	}
 
 	/** How many kernel-made swaps have been published so far — the reader's line and the publisher's line compare these

@@ -193,7 +193,14 @@ public final class KernelFabricLoader implements FabricLoader {
 		KernelModMetadata metadata = container.getMetadata();
 		ModContainer existing = modsById.get(metadata.getId());
 
-		if (existing != null) {
+		// `modsById` holds ids AND `provides` aliases in one map, so a hit is only a real duplicate when the
+		// container found there OWNS the id. An alias answers isModLoaded; it does not own a mod, and it must yield
+		// to the mod that does. Measured on simple-hats-collection: accessories nests owo-sentinel (id
+		// `owo-sentinel`, `provides ["owo","owo-lib"]`), which claimed `owo` first, so when the real owo-lib
+		// (id `owo`) was discovered it was read as a duplicate and DROPPED — its mixins never applied, and
+		// accessories died on `DataComponentType$Builder.endec(Endec, SerializationContext)`, a method owo-lib's
+		// ComponentTypeBuilderMixin adds. On Fabric both load: an id and an alias are different questions.
+		if (existing != null && metadata.getId().equals(existing.getMetadata().getId())) {
 			ForbricLog.warn("[Forbric/Fabric] duplicate mod id '%s' (%s and %s) — keeping the first",
 					metadata.getId(), existing, container);
 			return;

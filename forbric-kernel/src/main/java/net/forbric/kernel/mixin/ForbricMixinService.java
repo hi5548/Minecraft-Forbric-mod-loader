@@ -342,6 +342,10 @@ public final class ForbricMixinService
 		FabricBlockStateCodecMixinAdapter.adapt(node, this::mergedBaseNodeWithCode);
 		CarpetMixinAdapter.adapt(node, this::mergedBaseNodeWithCode);
 		CarpetFluidMixinAdapter.adapt(node, this::mergedBaseNodeWithCode);
+		// …and kiwi's two Ingredient codec captures, which name the RecordCodecBuilder.create call the Forge
+		// shape of those methods makes while the merged base makes the same call with the same builder function
+		// through mapCodec — see the class for the delegation that makes the two the same call.
+		KiwiIngredientCodecAnchors.adapt(node, this::mergedBaseNodeWithCode);
 		// …and an @Inject anchored on a call the merged body makes through a subtype of the same method
 		// (Decoder.parse → Codec.parse: lithostitched's Fabric load predicates) moves to that one call.
 		MixinSubtypeOwnerRetarget.adapt(node, this::mergedBaseNodeWithCode);

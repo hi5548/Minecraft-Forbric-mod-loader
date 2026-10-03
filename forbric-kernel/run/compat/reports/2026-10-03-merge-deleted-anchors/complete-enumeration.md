@@ -101,7 +101,7 @@ hygiene block above and is not repeated):
 | `item-api RecipeMixin#replaceGetRecipeRemainder` | 8 | **anchor gone** | same, `Item.getCraftingRemainingItem` |
 | `networking CustomPayloadPacketCodecMixin` (whole mixin) | 8 | **apply-time failure** | `InvalidInjectionException: @WrapOperation annotation on wrapGetCodec specifies a target class 'net/minecraft/network/protocol/common/custom/CustomPacketPayload$1', which is not supported`, on `CustomPacketPayload$1$forbricneo` — the interop-renamed twin the merge kept; MixinExtras rejects the anonymous-class target |
 | `balm FabricCropBlockMixin#randomTickPreGrow`, `#randomTickPostGrow`, `mixin` | 1 | apply-time failure | the known balm cluster (sugar `getGrowthSpeedCaptureLocals` → `VerifyError`) |
-| `kiwi Ingredient_ItemValueMixin#lychee$assignCodec`, `Ingredient_TagValueMixin#lychee$assignCodec` | 1 | **anchor gone** | `@ModifyExpressionValue` on `RecordCodecBuilder.create`; merged `<clinit>` calls `RecordCodecBuilder.mapCodec` |
+| `kiwi Ingredient_ItemValueMixin#lychee$assignCodec`, `Ingredient_TagValueMixin#lychee$assignCodec` | 1 | **callee substituted → LANDED (retarget)** | `@ModifyArg` (not `@ModifyExpressionValue`), `remap=false`, on `RecordCodecBuilder.create(Function)Codec`; Forge's base still calls it, NeoForge's/merged calls `mapCodec(Function)MapCodec` and projects it with `.codec()`, and DFU 8.0.16 defines `create(f)` as `mapCodec(f).codec()` — see [`read-kiwi-ingredient-codec.md`](read-kiwi-ingredient-codec.md) |
 
 So the new depth is **not one shared cause**: four shapes — a member move (`canEnchant`, `hasCraftingRemainingItem`,
 `RecordCodecBuilder.create→mapCodec`), a `Block.destroy` call-site removal, a local-variable-table drift on a
@@ -112,7 +112,8 @@ Landed: `1fbc5862` stands down the five anchor/ LVT losses per-injector (Enchant
 events-interaction ×2) with the costs recorded, and `9f5cfcdb` **retargets** the networking one — `MixinMergedTwin`
 now also strips the owner from the descriptor spelling (`Lowner;…`) and from the injector's `method` selectors, so
 the `@WrapOperation` binds inside `$forbricneo` instead of being rejected. The remaining load-gating population is
-then the balm ×4 (their own apply cluster) and kiwi ×2 (a one-off) — both singletons Main kept out of the batch.
+then the balm ×4 (their own apply cluster, LANDED — [`../2026-10-03-balm-cropblock-half-applied/README.md`](../2026-10-03-balm-cropblock-half-applied/README.md))
+and kiwi ×2 (LANDED — [`read-kiwi-ingredient-codec.md`](read-kiwi-ingredient-codec.md)) — the singletons Main kept out of the batch.
 
 Depth note for balm (arm 10, from BalmApplyCluster's fix): the `VerifyError` gate line is gone and the class now
 loads, but balm's `cr` rose 3 → 9 — the same depth effect as arms 6→7, not a regression: the console grows 502 →

@@ -560,7 +560,8 @@ twins), `MixinAnonymousRetarget` + `MergedBaseAnonymousDrift` (renumbered `Outer
 `MergedBaseAbsorbedCalls`, `CarrierHelpers` (table `carrier-helpers.txt`), and per-surface Fabric adapters
 (`FabricBlockBreakMixinAdapter`, `FabricEntityMixinAnchors`, `FabricClientMixinAnchors`,
 `FabricEnchantmentMixinAdapter`, `FabricMiningMixinAdapter`, `FabricSoundMixinAdapter`,
-`FabricServerLanguageMixinAdapter`). `GuestInjectorPruner` (COREMOD) trims individual injectors from a guest mixin
+`FabricServerLanguageMixinAdapter`, `KiwiIngredientCodecAnchors` — kiwi's two `Ingredient` codec captures follow
+`RecordCodecBuilder.create` onto the `mapCodec` call NeoForge's patch of those `<clinit>`s makes). `GuestInjectorPruner` (COREMOD) trims individual injectors from a guest mixin
 class where the kernel replaces their function. Several adapters read shipped tables under
 `src/main/resources/net/forbric/kernel/mixin/` (`carrier-helpers.txt`, `carrier-stubs.txt`,
 `lambda-permutations.txt`, `uncalled-methods.txt`); `CarrierHelperCensusTest` and `UncalledMethodCensusTest`

@@ -479,6 +479,27 @@ class MixinStubRebindTest {
 		return node;
 	}
 
+	/**
+	 * A row only says a method is a stub when the overload it forwards to is on THIS base. carrier-stubs.txt names a
+	 * {@code setItem(int,ItemStack,boolean)} delegate for four vanilla {@code setItem(int,ItemStack)} bodies the
+	 * 1.21.1 base never grew, and the injectors bound there were reported "attached only inside a forwarding stub"
+	 * while their host held the body itself.
+	 */
+	@Test void aRowWithNoDelegateOnTheBaseIsNotAStub() {
+		String stubDesc = "(ILnet/minecraft/world/item/ItemStack;)V";
+		String delegateDesc = "(ILnet/minecraft/world/item/ItemStack;Z)V";
+
+		ClassNode withoutDelegate = platform(m("setItem", stubDesc, false));
+		withoutDelegate.name = "net/minecraft/world/SimpleContainer";
+		assertFalse(MixinStubRebind.isStubOverBody(withoutDelegate, withoutDelegate.methods.get(0), Ecosystem.FABRIC),
+				"nothing declares the delegate on this base, so setItem holds the body and nothing forwards from it");
+
+		ClassNode withDelegate = platform(m("setItem", stubDesc, true), m("setItem", delegateDesc, false));
+		withDelegate.name = "net/minecraft/world/SimpleContainer";
+		assertTrue(MixinStubRebind.isStubOverBody(withDelegate, withDelegate.methods.get(0), Ecosystem.FABRIC),
+				"with the delegate present the row applies again");
+	}
+
 	/** A static method: a body ({@code return}), or a stub forwarding its int to {@code f(IZ)V}. */
 	private static MethodNode m(String name, String desc, boolean forwards) {
 		MethodNode method = new MethodNode(Opcodes.ACC_STATIC, name, desc, null, null);

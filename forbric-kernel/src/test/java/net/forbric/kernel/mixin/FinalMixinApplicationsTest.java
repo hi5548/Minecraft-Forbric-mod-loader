@@ -209,11 +209,12 @@ class FinalMixinApplicationsTest {
   try{config(1);remember(-1,false,List.of(FUEL));observeFuel(fuel(false));assertFalse(stubSuspected(),"the switch");}
   finally{System.clearProperty(FinalMixinApplications.STUB_HOST_PROPERTY);}
  }
- /** The final FuelValues: vanillaBurnTimes' three-argument stub calls the merged handler; with {@code alsoBody}, so does the body. */
+ /** The final FuelValues: vanillaBurnTimes' three-argument stub calls the merged handler; with {@code alsoBody}, so does the body. The two-argument delegate is always present (it is on the real base) — {@code alsoBody} only says whether IT calls the handler too. */
  private ClassNode fuel(boolean alsoBody){ClassNode n=target(false,true,"handler$000$probe","()V");n.name=FUEL.replace('.','/');
-  for(String desc:alsoBody?List.of(BURN_STUB,BURN_BODY):List.of(BURN_STUB)){MethodNode m=new MethodNode(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"vanillaBurnTimes",desc,null,null);
-   m.instructions.add(new MethodInsnNode(Opcodes.INVOKESTATIC,n.name,"handler$000$probe","()V",false));m.instructions.add(new InsnNode(Opcodes.ACONST_NULL));m.instructions.add(new InsnNode(Opcodes.ARETURN));n.methods.add(m);}
-  return n;}
+  n.methods.add(burn(BURN_STUB,true));n.methods.add(burn(BURN_BODY,alsoBody));return n;}
+ private MethodNode burn(String desc,boolean callsHandler){MethodNode m=new MethodNode(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC,"vanillaBurnTimes",desc,null,null);
+  if(callsHandler)m.instructions.add(new MethodInsnNode(Opcodes.INVOKESTATIC,FUEL.replace('.','/'),"handler$000$probe","()V",false));
+  m.instructions.add(new InsnNode(Opcodes.ACONST_NULL));m.instructions.add(new InsnNode(Opcodes.ARETURN));return m;}
  private void observeFuel(ClassNode n){ClassWriter w=new ClassWriter(0);n.accept(w);FinalMixinApplications.observe(FUEL,w.toByteArray(),(mixin,name,desc)->List.of(new FinalMixinApplications.Renamed("handler$000$probe",desc)));}
  private boolean stubSuspected(){return CompatibilityFindings.all().stream().anyMatch(f->f.id().startsWith("mixin-injector:")&&f.confidence()==CompatibilityFinding.Confidence.SUSPECTED);}
  private CompatibilityFinding injectorRow(){return CompatibilityFindings.all().stream().filter(f->f.id().startsWith("mixin-injector:")).findFirst().orElseThrow();}

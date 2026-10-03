@@ -155,8 +155,25 @@ java.util.zip.ZipException: duplicate entry: META-INF/mods.toml
 freeze 时 unbound —— 该 JSON 引用的 `cobblemon:biome` 这类由 Cobblemon 自己注册的 predicate/placement 类型
 没进注册表,于是 entry 解析失败、freeze 报 unbound。
 
-从 `reports/2026-10-03-cobblemon-forbric/per-mod/run/000-cobblemon__fabric/console.log` 读出的三条线索
-(都指向"注册这一步",不是 freeze 机制):
+**K5 已经收窄到"一个内建注册表 + 一个键"(W7Harness 的计数 + 我读的 cause 链)**:
+
+- 91 个 Cobblemon 自己的 datapack 元素解析失败,其中 **86 个**在 `worldgen/processor_list`
+  (habitats 59 + ruins 26 + 1)。同一个 jar、同一个 JDK 在参考启动上 43/43 且 0 error ⇒ 差异在**解析上下文**,
+  不是字节。
+- 每个失败的**叶子 cause 是同一个键**:
+  `Caused by: java.lang.IllegalStateException: Unknown registry key in ResourceKey[minecraft:root /
+  minecraft:worldgen/structure_processor]: cobblemon:height_range`
+  (`…/processor_list/habitats/badlands_shaded_rock.json` 等,console 1845–1912 行一带)。
+  注意这是 **vanilla 的内建注册表** `BuiltInRegistries.STRUCTURE_PROCESSOR`,不是 datapack 注册表:
+  所以问题不是"pack 没被挂载/没被扫",而是 **Cobblemon 往这个内建注册表注册 `height_range` 这一步没发生**
+  ——与"0/43 注册表"是同一件事的两个投影。
+- 因此下一次开工的第一件事是:在 `CobblemonRegistries`/其 `Registry.register(BuiltInRegistries.STRUCTURE_PROCESSOR,
+  cobblemon.id("height_range"), …)` 那条路径上,找出内核侧把这一步挡掉/吞掉的点(注意 `1386: Launching
+  Cobblemon 1.8.1` 已经打过,所以断点在其后)。
+- **不要**把 `no-cooldown-enchantment` 并进来:它是主体自己的数据写错版本(§1.3 S1),形状相同、原因不同
+  (W7Harness 亦如此判),一修未必两治。
+
+同一条 console 里另外三条线索(都指向"注册这一步",不是 freeze 机制):
 
 1. **不是"entrypoint 没跑"**:`1386:[12:52:19] Launching Cobblemon 1.8.1` —— Cobblemon 自己的初始化到了;
    它之后没有任何一条 `Registered the cobblemon:* registry`(参考启动 43 条)。所以断点在**它的注册循环**

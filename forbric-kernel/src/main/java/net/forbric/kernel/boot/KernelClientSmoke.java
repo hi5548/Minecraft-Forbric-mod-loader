@@ -136,7 +136,30 @@ public final class KernelClientSmoke {
 		}
 	}
 
+
+	/**
+	 * Says once, from inside the running client, whether vanilla ever received quick-play data.
+	 *
+	 * <p>Every client run so far has ended without entering a world: {@code joined world via quick-play} is never
+	 * logged, and the later runs show NO exception anywhere on the world-load path ({@code WorldOpenFlows} appears
+	 * only in stack traces, and it is absent), so the path is either not entered or declines silently. Reading the
+	 * probe cannot explain it — {@code probeIds} is property-gated and the not-in-world branch does nothing else —
+	 * so the question is whether {@code Minecraft} was given a {@code QuickPlayData} at all. Vanilla holds it in
+	 * {@code quickPlayLog}, set from the config the client main parsed; a null there means the harness never handed
+	 * quick-play to the game and the failure is mine, not the kernel's, while a non-null one means the game
+	 * declined and the kernel side is where to look.
+	 */
+	private static void reportQuickPlayState(Object minecraft) {
+		if (quickPlayReported) return;
+		quickPlayReported = true;
+		Object log = fieldValue(minecraft, "quickPlayLog");
+		ForbricLog.info("[Forbric/ClientSmoke] quick-play state: quickPlayLog=%s (world=%s) — null means the client "
+				+ "was never given quick-play data", log == null ? "null" : log.getClass().getSimpleName(),
+				System.getProperty(WORLD, "<quick-play>"));
+	}
+
 	private static void tick(Object minecraft) {
+		reportQuickPlayState(minecraft);
 		// -Dforbric.clientSmokeProbes=off leaves the census unarmed. It exists to isolate the probe from
 		// everything else in one launch: after the probe learned to arm for real, runs stopped reaching
 		// Minecraft.onGameLoadFinished (quick-play never attempted) where the run before it reached
@@ -231,6 +254,8 @@ public final class KernelClientSmoke {
 	private static final java.util.Map<String, Integer> forgeHeard = new java.util.concurrent.ConcurrentHashMap<>();
 	/** {@code -Dforbric.clientSmokeProbes=off} leaves the Forge connection census unarmed. */
 	private static final String PROBES = "forbric.clientSmokeProbes";
+	/** Set after the one-shot quick-play report, so it is logged once per run. */
+	private static boolean quickPlayReported;
 	private static boolean connectionProbesArmed;
 	/**
 	 * Whether arming has been attempted at all. Arming is one-shot: it either succeeds or is recorded as

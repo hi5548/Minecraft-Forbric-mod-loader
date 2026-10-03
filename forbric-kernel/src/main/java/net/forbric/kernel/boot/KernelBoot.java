@@ -861,6 +861,26 @@ public final class KernelBoot {
 					net.forbric.kernel.transform.GuestInjectorPruner.PROPERTY);
 		}
 
+		// A guest mixin's selector can name a synthetic lambda the byte-merge renumbered — the base is compiled, not
+		// remapped, so its own javac numbered the same function differently (fabric-registry-sync-v0's mixin wants
+		// $4; the merged RegistrySynchronization declares $5 with the same descriptor). Mixin resolves nothing and the
+		// injector reads as a required loss. Point the selector at the member the merged base declares when enclosing
+		// name + descriptor pick out exactly one method; a name+number that is a DIFFERENT function (fabric-item-api's
+		// EnchantmentHelperMixin, $41) is refused here and left to MergedBaseMixinCompat's stand-down.
+		if (net.forbric.kernel.transform.LambdaSelectorRetarget.enabled()) {
+			chain.register(TransformPhase.COREMOD, new net.forbric.kernel.transform.LambdaSelectorRetarget(name -> {
+				try (java.io.InputStream in = loader.getGameResourceAsStream(name + ".class")) {
+					return in == null ? null : in.readAllBytes();
+				} catch (java.io.IOException unreadable) {
+					return null;
+				}
+			}));
+		} else {
+			ForbricLog.warn("[Forbric/LambdaSelectorRetarget] -D%s=off — a guest mixin selector naming a lambda the "
+					+ "merge renumbered resolves nothing, and the mixin's injector reads as a required loss",
+					net.forbric.kernel.transform.LambdaSelectorRetarget.PROPERTY);
+		}
+
 		// Client only: NeoForge's model deserializer throws "Unknown loader" for every loader it did not register,
 		// BEFORE the vanilla cuboid deserializer that MinecraftForge's geometry loaders and fusion's model hook read,
 		// and it never reads Fabric's fabric:type at all (the two injectors that dispatched it are the pair pruned

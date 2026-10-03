@@ -545,10 +545,26 @@ public final class MixinRetarget {
 			if (MixinFit.value(at, "ordinal") instanceof Integer ordinal && ordinal > 0) continue;
 			MergedBaseCalleeSwaps.Substitution row = MergedBaseCalleeSwaps.substitution(target.name,
 					method.name + method.desc, member, ecosystem);
-			if (row == null || CarrierHelpers.occurrences(method, row.replacement()) != 1) continue;
+			// One line per candidate, because three rounds of headless drivers have each been self-consistent while
+			// the boot disagreed, and the boot is the only place this decision's inputs exist: whether a row covers the
+			// point, the ecosystem the filter saw, how many times the replacement occurs in the live method, and
+			// whether the handler captures locals the new call cannot supply. A reader can settle a disagreement in
+			// one run from these four values; nothing else about the case is invisible.
+			int occurrences = row == null ? -1 : CarrierHelpers.occurrences(method, row.replacement());
+			if (row == null || occurrences != 1) {
+				ForbricLog.info("[Forbric/Mixin] %s#%s: no move for %s in %s — row=%s ecosystem=%s occurrences=%d",
+						mixinName, handler.name, member, method.name + method.desc, row == null ? "none" : "found",
+						ecosystem, occurrences);
+				continue;
+			}
 			if (captured.length > 0) {
 				if (withLocals == null) withLocals = withLocalVariables(target.name, method, resolver);
-				if (withLocals == null || !InsertedLambdaArgumentShim.localsAtCall(row.replacement(), withLocals, captured)) continue;
+				if (withLocals == null || !InsertedLambdaArgumentShim.localsAtCall(row.replacement(), withLocals, captured)) {
+					ForbricLog.info("[Forbric/Mixin] %s#%s: no move for %s in %s — the handler captures %d local(s) the "
+							+ "new call (%s) cannot supply", mixinName, handler.name, member, method.name + method.desc,
+							captured.length, row.replacement());
+					continue;
+				}
 			}
 			MixinFit.Member callee = MixinFit.parseMember(row.replacement());
 			out.add(new Rewrite(handler.name, Element.AT_TARGET, member, row.replacement(), "the carrier substituted "

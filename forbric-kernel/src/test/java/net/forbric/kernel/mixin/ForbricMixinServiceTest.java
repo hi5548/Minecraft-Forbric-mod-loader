@@ -216,4 +216,24 @@ class ForbricMixinServiceTest {
 		assertTrue(ForbricMixinService.isRelaxedConfig("prefixed.anything.json"));
 		assertFalse(ForbricMixinService.isRelaxedConfig("unlisted.mixins.json"));
 	}
+
+	/**
+	 * The fabric-data-generation-api-v1 {@code server.MainMixin} stand-down, and the same-name trap beside it. That
+	 * mixin's only injector anchors on {@code new ServerPropertiesLoader} inside {@code Main.main}, a call site the
+	 * merge deleted (the class is absent from the merged jar; {@code DedicatedServerSettings} is constructed there
+	 * instead), so the pin is a whole-mixin removal and not a per-injector trim. It must reach THAT module's config:
+	 * fabric-registry-sync-v0 ships its own, different {@code MainMixin} in the entry above it, and a suppression
+	 * keyed by the simple name would silence the wrong one.
+	 */
+	@Test
+	void theDataGenerationMainMixinStandDownReachesItsOwnConfigAndIsLiftable() {
+		String config = "fabric-data-generation-api-v1.mixins.json";
+		assertTrue(MergedBaseMixinCompat.SUPPRESSED_MIXINS.contains(config + ":server.MainMixin"),
+				"precondition: the cluster-1 stand-down ships");
+		assertTrue(ForbricMixinService.suppressedMixinsFor(config).contains("server.MainMixin"),
+				"the shipped stand-down reaches the module's own config");
+		System.setProperty("forbric.keepMixins", config + ":server.MainMixin");
+		assertFalse(ForbricMixinService.suppressedMixinsFor(config).contains("server.MainMixin"),
+				"the kill switch still lifts it");
+	}
 }

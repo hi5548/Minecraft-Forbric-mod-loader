@@ -170,6 +170,22 @@ public final class MergedBaseMixinCompat {
 			"fabric-registry-sync-v0.mixins.json:BootstrapMixin",
 			"fabric-registry-sync-v0.mixins.json:MainMixin",
 			"fabric-registry-sync-v0.client.mixins.json:MinecraftMixin",
+			// Cluster 1: the merge rewrote Main.main wholesale, and this mixin's ONLY injector is anchored on a call
+			// site that rewrite deleted. javap of the guest (remapped, so this is the runtime selector) shows
+			// @Inject(method = "Lnet/minecraft/server/Main;main([Ljava/lang/String;)V",
+			// at = @At(value = "NEW", target = "Lnet/minecraft/server/dedicated/ServerPropertiesLoader;"),
+			// cancellable = true). On the merged base the type does not exist to construct: `unzip -l` over
+			// patched-mc-merged-1.21.1.jar lists no net/minecraft/server/dedicated/ServerPropertiesLoader.class at
+			// all, and `javap -c` of Main.main shows `new net/minecraft/server/dedicated/DedicatedServerSettings`
+			// at offset 456 (right after the ServerModLoader.load() call at 453). So the anchor can never bind and
+			// FabricDataGenHelper.run() is unreachable from the server entry point. Cost: the module's server-side
+			// datagen hook (`-Dfabric-api.datagen` from Main.main); its other entry points are separate mixins and
+			// stay. Stood down whole rather than trimmed because the mixin declares exactly this one handler — a
+			// pin costs nothing the dead anchor had not already cost, and it clears the CONFIRMED `mixin-injector`
+			// finding on every subject whose closure carries the module. Note the same-name trap this entry exists
+			// to avoid: fabric-registry-sync-v0's MainMixin above is a DIFFERENT class in a different config, and
+			// its INVOKE anchor (Util.startTimerHackThread) is present in the merged Main.main at offset 429.
+			"fabric-data-generation-api-v1.mixins.json:server.MainMixin",
 			// PORT(1.21.1): the api's loot mixin class is ReloadableRegistriesMixin here; see the entry above.
 			"fabric-loot-api-v3.mixins.json:ReloadableRegistriesMixin",
 			"fabric-creative-tab-api-v1.client.mixins.json:CreativeModeInventoryScreenMixin",

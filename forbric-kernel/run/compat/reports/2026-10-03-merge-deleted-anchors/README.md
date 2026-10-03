@@ -253,6 +253,10 @@ still intermediary, i.e. the remap pass's defect, not an anchor. Classification 
   `-Dforbric.compatibilityPolicy=continue` on both arms at equal depth.
 * **balm `FabricCropBlockMixin`** — the apply-time `InvalidInjectionException` → `VerifyError` cluster
   ([`read-balm-cropblock.md`](read-balm-cropblock.md)); a kernel apply/recovery defect, not a selector one.
+  **LANDED** as the post-Mixin `HalfAppliedMixins` repair — see
+  [`../2026-10-03-balm-cropblock-half-applied/README.md`](../2026-10-03-balm-cropblock-half-applied/README.md);
+  its equal-depth A/B is the next slice. The anchor half — the `getGrowthSpeed(Block,…) →
+  getGrowthSpeed(BlockState,…)` selector — is still open, and the read's §A/§B split is preserved there.
 
 ### Why only #1 was pinned
 

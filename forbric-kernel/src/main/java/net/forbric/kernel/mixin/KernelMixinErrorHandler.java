@@ -35,6 +35,11 @@ import net.forbric.kernel.util.ForbricLog;
  * this has a public no-argument constructor and is named by {@link #NAME} as a string. Mixin instantiates it
  * through the service's class provider, i.e. the game loader, which delegates kernel packages to the parent.
  *
+ * <p>The target class name is also handed to {@link HalfAppliedMixins}: Mixin has already merged the failing
+ * mixin's methods into that class when an injector throws, and it reports the failure instead of undoing the
+ * merge, so a member the throw caught half-rewritten is left in the bytes Mixin writes. See that class for the
+ * measured case (balm's {@code FabricCropBlockMixin}) and what is neutralised.
+ *
  * <p>Not covered: a raw {@code InjectionError} — an {@link Error}, not an {@code InvalidMixinException} — bypasses
  * every error handler, and Mixin then abandons the whole target class. An injector's OWN {@code require} (or
  * {@code allow}) produces one whatever the config says; {@link MixinLocalsCapture#softenRequirements} lowers those
@@ -63,6 +68,11 @@ public final class KernelMixinErrorHandler implements IMixinErrorHandler {
 	@Override
 	public ErrorAction onApplyError(String targetClassName, Throwable th, IMixinInfo mixin, ErrorAction action) {
 		record(mixin == null ? null : mixin.getConfig(), mixin, "failed to apply to " + targetClassName, th);
+		// Mixin has already merged this mixin's methods into the target by the time an injector throws, and it
+		// carries on with the rest of the mixin's application aborted. Forgetting which class that was leaves the
+		// half-merged members in the bytes Mixin writes, which is how one failing injector becomes a VerifyError
+		// for the whole class: see HalfAppliedMixins.
+		HalfAppliedMixins.failedToApply(targetClassName, mixin == null ? null : mixin.getClassName());
 		return action;
 	}
 

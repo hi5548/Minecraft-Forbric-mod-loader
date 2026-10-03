@@ -131,7 +131,8 @@ public final class KernelMixinBootstrap {
 		MixinWeaverSlot.install(transformer);
 		loader.setMixinTransformer((name, bytes) -> net.forbric.kernel.transform.ForgeTransferShapeAudit.certify(name,
 				conflicts.transform(name, bytes, PostMixinFixups.apply(name, net.forbric.kernel.transform.NativeCoremodParity
-						.apply(name, MixinWeaverSlot.currentOr(transformer).transformClassBytes(name, name, bytes))))));
+						.apply(name, HalfAppliedMixins.repair(name,
+								MixinWeaverSlot.currentOr(transformer).transformClassBytes(name, name, bytes)))))));
 
 		// Leave PREINIT so the registered configs are prepared and their targets become weavable.
 		gotoPhase(MixinEnvironment.Phase.INIT);

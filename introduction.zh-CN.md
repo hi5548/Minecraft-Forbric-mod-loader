@@ -253,8 +253,8 @@ Fabric 和 NeoForge 在构造函数里需要的状态正好相反，所以内核
 Mixin 后阶段（`KernelMixinBootstrap`）是固定的组合：
 
 ```
-Mixin (via MixinWeaverSlot) → NativeCoremodParity → PostMixinFixups → InterfaceDefaultConflictRepair
-                           → ForgeTransferShapeAudit.certify
+Mixin (via MixinWeaverSlot) → HalfAppliedMixins.repair → NativeCoremodParity → PostMixinFixups
+                           → InterfaceDefaultConflictRepair → ForgeTransferShapeAudit.certify
 ```
 
 按类别列出值得一提的修复（每个类是因为哪个案例写出来的，请看它的 javadoc）：
@@ -306,7 +306,7 @@ Mixin (via MixinWeaverSlot) → NativeCoremodParity → PostMixinFixups → Inte
 
 ### 7.5 归因
 
-`MixinConfigOwners` 在注册前把每个配置映射到它所属的 mod，这样 Mixin 自己报出的失败就会点名那个 mod（`-Dforbric.mixinModIdDecoration` 还会把 mod id 写进生成的 handler 名）。`KernelMixinErrorHandler` 把准备/应用阶段的失败记到该 mod 的那一行上，但不改变 Mixin 的决定。`FinalMixinApplications` 在所有阶段结束后观察每个已定义的类——某个 handler 零引用，就证明它没有挂上。当某个具名的内核修复完成了那个 mixin 做的*全部*事情时，`SupersededMixins` 不让这次失败记到该 mod 的那一行上；当该 mod 自己的配置插件本来就会拒绝这个 mixin 时，`PluginDeclinedMixins` 也这样处理；`ForeignMixinBreaks` 记录那些专门写来挂到另一个 mod 上、结果没挂上的 mixin。`MixinCompatibility` 让一个 mixin 从预检到应用始终带着同一个身份。
+`MixinConfigOwners` 在注册前把每个配置映射到它所属的 mod，这样 Mixin 自己报出的失败就会点名那个 mod（`-Dforbric.mixinModIdDecoration` 还会把 mod id 写进生成的 handler 名）。`KernelMixinErrorHandler` 把准备/应用阶段的失败记到该 mod 的那一行上，但不改变 Mixin 的决定，并把失败所落在的类交给 `HalfAppliedMixins`：它中和掉那次失败在类里留下的半合并成员——在应用中途抛出的 mixin 逐注入器被记录，而不是让整个类变成 `VerifyError`。`FinalMixinApplications` 在所有阶段结束后观察每个已定义的类——某个 handler 零引用，就证明它没有挂上。当某个具名的内核修复完成了那个 mixin 做的*全部*事情时，`SupersededMixins` 不让这次失败记到该 mod 的那一行上；当该 mod 自己的配置插件本来就会拒绝这个 mixin 时，`PluginDeclinedMixins` 也这样处理；`ForeignMixinBreaks` 记录那些专门写来挂到另一个 mod 上、结果没挂上的 mixin。`MixinCompatibility` 让一个 mixin 从预检到应用始终带着同一个身份。
 
 ## 8. 事件桥
 

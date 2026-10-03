@@ -465,8 +465,8 @@ What `KernelBoot` registers (91 call sites; some conditional):
 The post-Mixin stage (`KernelMixinBootstrap`) is a fixed composition:
 
 ```
-Mixin (via MixinWeaverSlot) → NativeCoremodParity → PostMixinFixups → InterfaceDefaultConflictRepair
-                           → ForgeTransferShapeAudit.certify
+Mixin (via MixinWeaverSlot) → HalfAppliedMixins.repair → NativeCoremodParity → PostMixinFixups
+                           → InterfaceDefaultConflictRepair → ForgeTransferShapeAudit.certify
 ```
 
 Notable repairs by family (read each class's javadoc for the case that motivated it):
@@ -570,7 +570,10 @@ re-derive the first and last from the staged jars and pin them.
 
 `MixinConfigOwners` maps each config to its mod before registration, so Mixin's own failures name the mod (and
 `-Dforbric.mixinModIdDecoration` puts the mod id into generated handler names). `KernelMixinErrorHandler` puts
-prepare/apply failures on the mod's row without changing Mixin's decision. `FinalMixinApplications` observes each
+prepare/apply failures on the mod's row without changing Mixin's decision, and hands the class a mixin failed on to
+`HalfAppliedMixins`, which neutralises the members that failure left half-merged in it — a mixin that throws mid
+application is reported per injector instead of becoming a `VerifyError` for the whole class.
+`FinalMixinApplications` observes each
 defined class after all stages — zero references to a handler prove it did not attach. `SupersededMixins` keeps a
 failure off the mod's row when a named kernel repair does *everything* that mixin did; `PluginDeclinedMixins` when
 the mod's own config plugin would have declined it; `ForeignMixinBreaks` records mixins written to attach to

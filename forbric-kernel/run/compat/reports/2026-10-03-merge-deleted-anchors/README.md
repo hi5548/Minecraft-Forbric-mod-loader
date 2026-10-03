@@ -131,7 +131,7 @@ are re-derived here only if they reappear on the current kernel; the current arm
 | 4 | `fabric-entity-events-v1` : `LivingEntityMixin` | 6 (see read 1) | 2 translation gaps (`isSleeping`@hurt+90, `broadcastEntityEvent`@die+178) **retargeted (landed)**; 2 lambda renumbers **declined (ambiguous, below)**; 2 host refactors **declined (handler ABI changed)** | **MIXED** |
 | 5 | `fabric-content-registries-v0` : `AbstractFurnaceBlockEntityMixin` | `canUseAsFuelRedirect`, `getFuelTimeRedirect` | `isFuel`/`getBurnDuration` call `ForgeHooks.getBurnTime`, not `getFuel` | **per-injector loss** (call site replaced by ForgeHooks); 3/5 anchors survive → pruner's job, not pinned |
 | 6 | `fabric-item-api-v1` : `BrewingStandBlockEntityMixin` | `hasStackRecipeRemainder`, `createStackRecipeRemainder` | `@At(NEW)` target is the raw intermediary descriptor `(Lclass_1935;)Lclass_1799;` → **retargeted (landed)**; `Item.hasCraftingRemainingItem` moved to `ItemStack.hasCraftingRemainingItem` → **declined** | **MIXED** |
-| 7 | `fabric-lifecycle-events-v1` : `WorldChunkMixin` | `onRemoveBlockEntity` | slice `from=createBlockEntity … to=Map.remove` is empty: `Map.remove`@30/47 precede `createBlockEntity`@92 | **ORDER/SHAPE CHANGE** → needs a slice retarget (two `Map.remove` sites); reported |
+| 7 | `fabric-lifecycle-events-v1` : `WorldChunkMixin` | `onRemoveBlockEntity` | member+host survive; the slice `from=createBlockEntity` is empty because `Map.remove`@30/47 precede `createBlockEntity`@92; the eviction the handler watches is the `blockEntities.remove`@30 | **RETARGETABLE-SLICE, no mechanism → per-injector stand-down LANDED (GuestInjectorPruner)** |
 
 ### Retargets landed this pass (kernel fix, one commit)
 
@@ -167,6 +167,29 @@ differently from the annotation. Two sub-cases, both fixed in `MixinNames`:
   (#7)**: same class of change — the member and its owner/position moved, so there is no string to rewrite;
   reported.
 
+### Row 7 — why it is a per-injector stand-down and not a pin or a retarget
+
+The handler is `@Redirect` on the `Map.remove` in `LevelChunk.getBlockEntity`, firing
+`ServerBlockEntityEvents.BLOCK_ENTITY_UNLOAD` when a block entity is removed from a map. The member and the host
+both survive; only the ordering changed: the merged method runs **two** `Map.remove`s (`blockEntities`@+30,
+`pendingBlockEntities`@+47) **before** `createBlockEntity`@+92, so the `@Slice(from=createBlockEntity)` is empty.
+The handler's `checkcast BlockEntity` also means only the +30 site is type-correct (the +47 value is a
+`CompoundTag`), so the intent survives at +30 and the anchor is **retargetable in principle** —
+`@At(INVOKE, target="Ljava/util/Map;remove(Ljava/lang/Object;)Ljava/lang/Object;", ordinal=1)`, or a slice
+anchored on `BlockEntity.isRemoved`. But no current transformer rewrites a `@Slice`/`ordinal` (they rewrite
+member-name selectors), and the campaign's own measured caution applies: a local selector rewrite changes the boot
+depth and therefore the whole report shape, so it has to be judged at equal depth before it ships — too much for
+one anchor inside a classification pass.
+
+So it is stood down **per-injector**, via the existing mechanism for exactly this (`GuestInjectorPruner.TABLE`,
+which removes the one injector method and keeps the mixin's other three applying), and the loss is **recorded** —
+not hidden — as a `CONFIRMED`, `required=false` finding naming it: `BLOCK_ENTITY_UNLOAD` no longer fires for the
+eviction at `getBlockEntity+30`; the Load handler and the two `setRemoved`-based unload handlers still fire. A
+whole-mixin pin would delete those three; leaving it unpruned keeps a required CONFIRMED loss that stops a STRICT
+launch for a feature that cannot work. Also recorded while measuring: the static preflight does **not** model the
+empty slice (it logged no `applies only partially` for this mixin), so `GuestInjectorPruner` on a static fit and
+the post-application audit disagree here — the audit is right.
+
 ### Why only #1 was pinned
 
 The pin list removes a **whole mixin**. #1 declares exactly the one dead handler, so the pin is a pure stand-down.
@@ -183,7 +206,7 @@ the merged base, so a pin would delete a restorable feature.
 * [`read-balm-cropblock.md`](read-balm-cropblock.md) — balm `FabricCropBlockMixin` /
   `InvalidInjectionException` → `VerifyError`.
 
-## What was landed (two commits)
+## What was landed (three commits)
 
 Commit `4b9eca4e` — the Cluster-1 stand-down:
 
@@ -193,7 +216,7 @@ Commit `4b9eca4e` — the Cluster-1 stand-down:
   `theDataGenerationMainMixinStandDownReachesItsOwnConfigAndIsLiftable`: the shipped entry reaches its own
   config's suppression set and `-Dforbric.keepMixins` still lifts it. Fails before the entry exists.
 
-Commit `HEAD` — the translation retargets:
+Commit `28a94dfc` — the translation retargets:
 
 * `forbric-kernel/src/main/java/net/forbric/kernel/mapping/MixinNames.java` — `memberName` reads a dotted-owner
   refmap key; `translateSelector` maps a bare constructor descriptor. Both with the measured shapes in the
@@ -203,6 +226,15 @@ Commit `HEAD` — the translation retargets:
   descriptor. All three **fail before the fix** (`3 tests, 0 skipped, 3 failed` on the pre-fix tree) and pass
   after.
 
+Commit `HEAD` — the row-7 per-injector stand-down:
+
+* `forbric-kernel/src/main/java/net/forbric/kernel/transform/GuestInjectorPruner.java` — the `WorldChunkMixin`
+  entry (TABLE + the CONFIGS/ACTIVE/COSTS/REASONS/DRIFT/LOSSES rows) and the class-javadoc paragraph.
+* `forbric-kernel/src/test/java/net/forbric/kernel/transform/GuestInjectorPrunerTest.java` — two synthetic-byte
+  tests (no fixture): the standalone redirect is removed while the same-named `@Inject` handler and the Load
+  handler stay, and the loss is recorded as `CONFIRMED`, `required=false`, naming
+  `ServerBlockEntityEvents.BLOCK_ENTITY_UNLOAD`; and a moved selector stands the edit down.
+
 Verified:
 
 ```
@@ -210,6 +242,9 @@ cd forbric-kernel && ./gradlew cleanTest test \
   --tests net.forbric.kernel.mapping.MixinNamesTest \
   -Pforbric.mcLibraries=<p0/mc-1.21.1>/libraries --console=plain --offline
   → test: 3 tests, 0 skipped, 0 failed        # with the mapping fixtures reachable
+cd forbric-kernel && ./gradlew cleanTest test \
+  --tests net.forbric.kernel.transform.GuestInjectorPrunerTest --console=plain --offline
+  → test: 15 tests, 13 skipped, 0 failed      # the 2 new synthetic tests run; the 13 need the staged fixtures
 cd forbric-kernel && ./gradlew test --tests 'net.forbric.kernel.mixin.*' \
   -Pforbric.mcLibraries=<p0/mc-1.21.1>/libraries --console=plain --offline
   → test: 500 tests, 191 skipped, 1 failed    # LootSupersessionProofTest, missing fixture, pre-existing

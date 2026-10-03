@@ -79,6 +79,19 @@ import net.forbric.kernel.util.ForbricLog;
  * them: the bridge does their job, and {@code FabricApiModuleLossAudit} names a mod's use of the registry when it
  * is off.
  *
+ * <p>The third entry is fabric-lifecycle-events-v1's {@code WorldChunkMixin}. Its {@code onRemoveBlockEntity(Map,
+ * Object)} {@code @Redirect} fires {@code ServerBlockEntityEvents.BLOCK_ENTITY_UNLOAD} from the {@code Map.remove}
+ * in {@code LevelChunk.getBlockEntity}, disambiguated by a {@code @Slice(from=LevelChunk.createBlockEntity)}. The
+ * merged method runs the two {@code Map.remove}s (+30 {@code blockEntities}, +47 {@code pendingBlockEntities})
+ * BEFORE {@code createBlockEntity} (+92), so the slice is empty and the redirect binds nowhere — yet the static
+ * preflight reads the mixin FIT (it does not model an empty slice), so it is the post-application audit that reports
+ * the miss, as a CONFIRMED required {@code mixin-injector} loss on every subject carrying the module. Pruning it
+ * records the same loss as a finding that asks nothing
+ * ({@code ServerBlockEntityEvents.BLOCK_ENTITY_UNLOAD} for the eviction at +30), and keeps the mixin's other three
+ * handlers — the Load handler and two {@code setRemoved}-based unload handlers — applying as written. It is not
+ * hidden debt: the finding names the cost. (Retargeting it instead needs a transform that rewrites the {@code
+ * @Slice}/ordinal, which none of the current transformers does; see the measured caution below before building one.)
+ *
  * <p><b>A lambda-selector retarget is NOT local — measured 2026-10-03, reverted.</b> A transformer that rewrote a
  * guest mixin's selectors onto the lambda the merged base declares cleared {@code SerializableRegistriesMixin}'s
  * finding, and the same subject then reported eleven more CONFIRMED {@code mixin-injector} losses plus a balm
@@ -100,6 +113,7 @@ public final class GuestInjectorPruner implements ClassTransformer {
 	static final String MODEL_MANAGER_MIXIN = "net.fabricmc.fabric.mixin.client.model.loading.ModelManagerMixin";
 	static final String MODEL_LAMBDA = "lambda$loadBlockModels$2";
 	static final String ITEM_STACK_MIXIN = "net.fabricmc.fabric.mixin.item.ItemStackMixin";
+	static final String WORLD_CHUNK_MIXIN = "net.fabricmc.fabric.mixin.event.lifecycle.server.WorldChunkMixin";
 	private static final String SHARED_INDEX = "Lcom/llamalad7/mixinextras/sugar/ref/LocalIntRef;";
 
 	/**
@@ -122,55 +136,69 @@ public final class GuestInjectorPruner implements ClassTransformer {
 			new Prune("actuallyDeserializeModel",
 					"(Ljava/lang/Object;Ljava/io/Reader;)Ljava/lang/Object;", MODEL_LAMBDA)),
 			ITEM_STACK_MIXIN, List.of(
-			new Prune("preAppendComponentTooltip", "(Lnet/minecraft/core/component/DataComponentType;Lnet/minecraft/world/item/Item$TooltipContext;"
-					+ "Lnet/minecraft/world/item/component/TooltipDisplay;Lnet/minecraft/world/item/TooltipFlag;Ljava/util/function/Consumer;"
-					+ SHARED_INDEX + ")Lnet/minecraft/core/component/DataComponentType;", "addDetailsToTooltip", true),
-			new Prune("preShouldDisplay", "(Lnet/minecraft/core/component/DataComponentType;Lnet/minecraft/world/item/Item$TooltipContext;"
-					+ "Lnet/minecraft/world/item/component/TooltipDisplay;Lnet/minecraft/world/item/TooltipFlag;Ljava/util/function/Consumer;"
-					+ SHARED_INDEX + ")Lnet/minecraft/core/component/DataComponentType;", "addDetailsToTooltip", true),
-			new Prune("preAttributeModifiers", "(Lnet/minecraft/world/item/Item$TooltipContext;Lnet/minecraft/world/item/component/TooltipDisplay;"
-					+ "Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/item/TooltipFlag;Ljava/util/function/Consumer;"
-					+ "Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;" + SHARED_INDEX + ")V", "addDetailsToTooltip", true),
-			new Prune("postTooltipsAdvanced", "(Lnet/minecraft/world/item/Item$TooltipContext;Lnet/minecraft/world/item/component/TooltipDisplay;"
-					+ "Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/item/TooltipFlag;Ljava/util/function/Consumer;"
-					+ "Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;" + SHARED_INDEX + ")V", "addDetailsToTooltip", true),
-			new Prune("postTooltipsNonAdvanced", "(ZLnet/minecraft/world/item/Item$TooltipContext;Lnet/minecraft/world/item/component/TooltipDisplay;"
-					+ "Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/item/TooltipFlag;Ljava/util/function/Consumer;"
-					+ SHARED_INDEX + ")Z", "addDetailsToTooltip", true)));
+				new Prune("preAppendComponentTooltip", "(Lnet/minecraft/core/component/DataComponentType;Lnet/minecraft/world/item/Item$TooltipContext;"
+						+ "Lnet/minecraft/world/item/component/TooltipDisplay;Lnet/minecraft/world/item/TooltipFlag;Ljava/util/function/Consumer;"
+						+ SHARED_INDEX + ")Lnet/minecraft/core/component/DataComponentType;", "addDetailsToTooltip", true),
+				new Prune("preShouldDisplay", "(Lnet/minecraft/core/component/DataComponentType;Lnet/minecraft/world/item/Item$TooltipContext;"
+						+ "Lnet/minecraft/world/item/component/TooltipDisplay;Lnet/minecraft/world/item/TooltipFlag;Ljava/util/function/Consumer;"
+						+ SHARED_INDEX + ")Lnet/minecraft/core/component/DataComponentType;", "addDetailsToTooltip", true),
+				new Prune("preAttributeModifiers", "(Lnet/minecraft/world/item/Item$TooltipContext;Lnet/minecraft/world/item/component/TooltipDisplay;"
+						+ "Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/item/TooltipFlag;Ljava/util/function/Consumer;"
+						+ "Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;" + SHARED_INDEX + ")V", "addDetailsToTooltip", true),
+				new Prune("postTooltipsAdvanced", "(Lnet/minecraft/world/item/Item$TooltipContext;Lnet/minecraft/world/item/component/TooltipDisplay;"
+						+ "Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/item/TooltipFlag;Ljava/util/function/Consumer;"
+						+ "Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;" + SHARED_INDEX + ")V", "addDetailsToTooltip", true),
+				new Prune("postTooltipsNonAdvanced", "(ZLnet/minecraft/world/item/Item$TooltipContext;Lnet/minecraft/world/item/component/TooltipDisplay;"
+						+ "Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/item/TooltipFlag;Ljava/util/function/Consumer;"
+						+ SHARED_INDEX + ")Z", "addDetailsToTooltip", true)),
+			WORLD_CHUNK_MIXIN, List.of(new Prune("onRemoveBlockEntity",
+					"(Ljava/util/Map;Ljava/lang/Object;)Ljava/lang/Object;",
+					"Lnet/minecraft/world/level/chunk/LevelChunk;getBlockEntity")));
 
 	/** The mixin config each entry is declared in, which names the owning mod on the finding. */
 	static final Map<String, String> CONFIGS = Map.of(MODEL_MANAGER_MIXIN, "fabric-model-loading-api-v1.mixins.json",
-			ITEM_STACK_MIXIN, "fabric-item-api-v1.mixins.json");
+			ITEM_STACK_MIXIN, "fabric-item-api-v1.mixins.json",
+			WORLD_CHUNK_MIXIN, "fabric-lifecycle-events-v1.mixins.json");
 
 	/** Whether an entry applies on this boot, beyond the pruner's own switch. */
 	private static final Map<String, BooleanSupplier> ACTIVE = Map.of(MODEL_MANAGER_MIXIN, () -> true,
-			ITEM_STACK_MIXIN, GuestInjectorPruner::fabricTooltipBridgeOn);
+			ITEM_STACK_MIXIN, GuestInjectorPruner::fabricTooltipBridgeOn,
+			WORLD_CHUNK_MIXIN, () -> true);
 
 	/** What is lost when an entry's class loads and is not pruned. */
 	private static final Map<String, String> COSTS = Map.of(MODEL_MANAGER_MIXIN,
 			"the whole mixin stays pinned, so every Fabric ModelLoadingPlugin -- block-state resolvers, extra "
 					+ "models, model modifiers -- is registered and never called",
 			ITEM_STACK_MIXIN, "fabric-item-api's tooltip injectors stay where the retarget put them, so the kernel's "
-					+ "tooltip bridge stands down and a Fabric mod's component tooltips are missing from normal tooltips");
+					+ "tooltip bridge stands down and a Fabric mod's component tooltips are missing from normal tooltips",
+			WORLD_CHUNK_MIXIN, "the redirect stays in the mixin, cannot attach (its @Slice matches nothing in the "
+					+ "merged order) and is reported as a required CONFIRMED loss, so a STRICT launch halts on it");
 
 	/** Why an entry's injectors cannot stay, for the log line. */
 	private static final Map<String, String> REASONS = Map.of(MODEL_MANAGER_MIXIN,
 			"NeoForge replaced CuboidModel.fromStream with UnbakedModelParser.parse at that site, so fabric's @Redirect "
 					+ "could not bind while its @ModifyArg did and re-read a consumed Reader (every block model missingno)",
 			ITEM_STACK_MIXIN, "NeoForge's ItemStack draws tooltips from its appender lists, where the kernel draws "
-					+ "Fabric's component tooltip providers now; these would have drawn them a second time, or nowhere");
+					+ "Fabric's component tooltip providers now; these would have drawn them a second time, or nowhere",
+			WORLD_CHUNK_MIXIN, "the redirect watches the Map.remove inside LevelChunk.getBlockEntity behind a "
+					+ "@Slice(from=LevelChunk.createBlockEntity), and the merged method calls BOTH Map.remove sites "
+					+ "(+30 blockEntities, +47 pendingBlockEntities) BEFORE createBlockEntity (+92), so the slice is empty");
 
 	/** What happens to an entry's mixin when a reshaped fabric-api leaves it untouched. */
 	private static final Map<String, String> DRIFT = Map.of(MODEL_MANAGER_MIXIN, "it will read PARTIAL and apply half — the state that made every block "
 					+ "model missingno",
 			ITEM_STACK_MIXIN, "it is retargeted as before and the kernel's tooltip bridge stands down; Fabric component "
-					+ "tooltip providers show only above the item id in advanced tooltips");
+					+ "tooltip providers show only above the item id in advanced tooltips",
+			WORLD_CHUNK_MIXIN, "the redirect soft-skips with Mixin's own warning, exactly as it did before this entry");
 
 	/** The finding a removed injector records, or none when a kernel repair does its job. */
 	private static final Map<String, String> LOSSES = Map.of(MODEL_MANAGER_MIXIN,
 			"the kernel removed this injector: NeoForge's UnbakedModelParser now reads block models at its call site, so "
 					+ "Fabric's fabric:type custom model formats (UnbakedModelDeserializer) are not consulted — the "
-					+ "kernel's own dispatch of them is off (-D" + ModelFormatFunnelInjector.PROPERTY + "=off)");
+					+ "kernel's own dispatch of them is off (-D" + ModelFormatFunnelInjector.PROPERTY + "=off)",
+			WORLD_CHUNK_MIXIN, "the kernel removed this injector: ServerBlockEntityEvents.BLOCK_ENTITY_UNLOAD no longer "
+					+ "fires when LevelChunk.getBlockEntity evicts a removed block entity (the blockEntities.remove at "
+					+ "+30); the mixin's Load handler and its two setRemoved-based Unload handlers still apply");
 
 	/**
 	 * The finding an entry's removed injectors record on this boot, or null when something does their job:

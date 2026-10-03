@@ -291,6 +291,60 @@ class GuestInjectorPrunerTest {
 		assertSame(drifted, new GuestInjectorPruner().transform(GuestInjectorPruner.MODEL_MANAGER_MIXIN, drifted, null));
 	}
 
+	/**
+	 * The third entry (fabric-lifecycle-events-v1's {@code WorldChunkMixin}). Its standalone {@code @Redirect} on
+	 * the {@code Map.remove} in {@code LevelChunk.getBlockEntity} cannot attach — the merged method runs both
+	 * {@code Map.remove}s before {@code createBlockEntity}, so the disambiguating slice is empty — and the static
+	 * preflight does not model that, so only the post-application audit reports it. Pruning turns it into a
+	 * confirmed finding that asks nothing, and the loss is named. Synthetic bytes: the measured shape, no fixture.
+	 */
+	@Test
+	void theWorldChunkRedirectIsPrunedIntoAConfirmedFindingThatAsksNothing() throws Exception {
+		net.forbric.api.CompatibilityFindings.reset();
+		String redirectDesc = "(Ljava/util/Map;Ljava/lang/Object;)Ljava/lang/Object;";
+		byte[] original = worldChunkMixin("Lnet/minecraft/world/level/chunk/LevelChunk;getBlockEntity"
+				+ "(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/chunk/LevelChunk$EntityCreationType;)"
+				+ "Lnet/minecraft/world/level/block/entity/BlockEntity;");
+		ClassNode before = read(original);
+		assertNotNull(methodByDesc(before, "onRemoveBlockEntity", redirectDesc), "premise: the redirect exists");
+		assertEquals(4, before.methods.size(), "premise: the redirect plus the three handlers");
+
+		byte[] pruned = new GuestInjectorPruner().transform(GuestInjectorPruner.WORLD_CHUNK_MIXIN, original, null);
+		assertNotSame(original, pruned, "the redirect must be pruned");
+		ClassNode after = read(pruned);
+		assertEquals(null, methodByDesc(after, "onRemoveBlockEntity", redirectDesc), "the standalone redirect goes");
+		assertNotNull(methodByDesc(after, "onRemoveBlockEntity",
+				"(Lnet/minecraft/world/level/block/entity/BlockEntity;"
+						+ "Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;"
+						+ "Lnet/minecraft/world/level/block/entity/BlockEntity;)V"),
+				"the @Inject handler that happens to share the name stays");
+		assertNotNull(methodByDesc(after, "onLoadBlockEntity",
+				"(Lnet/minecraft/world/level/block/entity/BlockEntity;"
+						+ "Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;"
+						+ "Lnet/minecraft/world/level/block/entity/BlockEntity;)V"),
+				"the Load handler stays");
+
+		String config = GuestInjectorPruner.CONFIGS.get(GuestInjectorPruner.WORLD_CHUNK_MIXIN);
+		var findings = net.forbric.api.CompatibilityFindings.all();
+		var finding = findings.stream().filter(f -> f.id().startsWith("mixin-injector:" + config + ":"
+				+ GuestInjectorPruner.WORLD_CHUNK_MIXIN + "#onRemoveBlockEntity" + redirectDesc)).findFirst()
+				.orElseThrow(() -> new AssertionError("no finding for the pruned redirect: " + findings));
+		assertEquals(net.forbric.api.CompatibilityFinding.Confidence.CONFIRMED, finding.confidence());
+		assertFalse(finding.required(), "a pruned injector is a loss the kernel ships, not a continue-or-quit");
+		assertTrue(finding.detail().contains("BLOCK_ENTITY_UNLOAD"), finding.detail());
+		assertTrue(net.forbric.api.CompatibilityFindings.confirmedRequired().isEmpty());
+
+		assertSame(pruned, new GuestInjectorPruner().transform(GuestInjectorPruner.WORLD_CHUNK_MIXIN, pruned, null),
+				"a second pass changes nothing");
+	}
+
+	/** The same standalone redirect, but no longer injecting into the method the entry reasons about: stand down. */
+	@Test
+	void aMovedWorldChunkSelectorLeavesTheMixinUntouched() throws Exception {
+		byte[] drifted = worldChunkMixin("Lnet/minecraft/world/level/chunk/LevelChunk;createBlockEntity");
+		assertSame(drifted, new GuestInjectorPruner().transform(GuestInjectorPruner.WORLD_CHUNK_MIXIN, drifted, null));
+	}
+
 	@Test
 	void aSecondPassChangesNothingFurther() throws Exception {
 		GuestInjectorPruner pruner = new GuestInjectorPruner();
@@ -349,6 +403,93 @@ class GuestInjectorPrunerTest {
 	private static MethodNode method(ClassNode node, String name) {
 		for (MethodNode m : node.methods) if (m.name.equals(name)) return m;
 		return null;
+	}
+
+	private static MethodNode methodByDesc(ClassNode node, String name, String desc) {
+		for (MethodNode m : node.methods) if (m.name.equals(name) && m.desc.equals(desc)) return m;
+		return null;
+	}
+
+	/**
+	 * The measured {@code WorldChunkMixin} shape as synthetic bytes: a standalone {@code @Redirect} on
+	 * {@code Map.remove} behind a {@code @Slice(from=LevelChunk.createBlockEntity)}, the {@code Load} handler, the
+	 * same-named {@code @Inject} unload handler, and an unrelated method. {@code redirectSelector} is a parameter so
+	 * a test can move it and watch the edit stand down.
+	 */
+	private static byte[] worldChunkMixin(String redirectSelector) {
+		ClassWriter writer = new ClassWriter(0);
+		writer.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, GuestInjectorPruner.WORLD_CHUNK_MIXIN, null, "java/lang/Object", null);
+
+		org.objectweb.asm.AnnotationVisitor mixin = writer.visitAnnotation("Lorg/spongepowered/asm/mixin/Mixin;", true);
+		org.objectweb.asm.AnnotationVisitor targets = mixin.visitArray("targets");
+		targets.visit(null, "net.minecraft.world.level.chunk.LevelChunk");
+		targets.visitEnd();
+		mixin.visitEnd();
+
+		org.objectweb.asm.MethodVisitor redirect = writer.visitMethod(Opcodes.ACC_PRIVATE, "onRemoveBlockEntity",
+				"(Ljava/util/Map;Ljava/lang/Object;)Ljava/lang/Object;", null, null);
+		org.objectweb.asm.AnnotationVisitor r = redirect.visitAnnotation(
+				"Lorg/spongepowered/asm/mixin/injection/Redirect;", true);
+		org.objectweb.asm.AnnotationVisitor rm = r.visitArray("method");
+		rm.visit(null, redirectSelector);
+		rm.visitEnd();
+		org.objectweb.asm.AnnotationVisitor ra = r.visitArray("at");
+		org.objectweb.asm.AnnotationVisitor at = ra.visitAnnotation(null, "Lorg/spongepowered/asm/mixin/injection/At;");
+		at.visit("value", "INVOKE");
+		at.visit("target", "Ljava/util/Map;remove(Ljava/lang/Object;)Ljava/lang/Object;");
+		at.visitEnd();
+		ra.visitEnd();
+		org.objectweb.asm.AnnotationVisitor slice = r.visitAnnotation("slice",
+				"Lorg/spongepowered/asm/mixin/injection/Slice;");
+		org.objectweb.asm.AnnotationVisitor from = slice.visitAnnotation("from",
+				"Lorg/spongepowered/asm/mixin/injection/At;");
+		from.visit("value", "INVOKE");
+		from.visit("target", "Lnet/minecraft/world/level/chunk/LevelChunk;createBlockEntity"
+				+ "(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/entity/BlockEntity;");
+		from.visitEnd();
+		slice.visitEnd();
+		r.visitEnd();
+		redirect.visitCode();
+		redirect.visitInsn(Opcodes.ACONST_NULL);
+		redirect.visitInsn(Opcodes.ARETURN);
+		redirect.visitMaxs(1, 3);
+		redirect.visitEnd();
+
+		handler(writer, "onLoadBlockEntity",
+				"Lnet/minecraft/world/level/chunk/LevelChunk;setBlockEntity(Lnet/minecraft/world/level/block/entity/BlockEntity;)V");
+		handler(writer, "onRemoveBlockEntity",
+				"Lnet/minecraft/world/level/chunk/LevelChunk;removeBlockEntity(Lnet/minecraft/core/BlockPos;)V");
+
+		org.objectweb.asm.MethodVisitor unrelated = writer.visitMethod(Opcodes.ACC_PRIVATE, "unrelated", "()V", null, null);
+		unrelated.visitCode();
+		unrelated.visitInsn(Opcodes.RETURN);
+		unrelated.visitMaxs(0, 1);
+		unrelated.visitEnd();
+
+		writer.visitEnd();
+		return writer.toByteArray();
+	}
+
+	private static void handler(ClassWriter writer, String name, String selector) {
+		org.objectweb.asm.MethodVisitor m = writer.visitMethod(Opcodes.ACC_PRIVATE, name,
+				"(Lnet/minecraft/world/level/block/entity/BlockEntity;"
+						+ "Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;"
+						+ "Lnet/minecraft/world/level/block/entity/BlockEntity;)V", null, null);
+		org.objectweb.asm.AnnotationVisitor inject = m.visitAnnotation(
+				"Lorg/spongepowered/asm/mixin/injection/Inject;", true);
+		org.objectweb.asm.AnnotationVisitor methods = inject.visitArray("method");
+		methods.visit(null, selector);
+		methods.visitEnd();
+		org.objectweb.asm.AnnotationVisitor ats = inject.visitArray("at");
+		org.objectweb.asm.AnnotationVisitor at = ats.visitAnnotation(null, "Lorg/spongepowered/asm/mixin/injection/At;");
+		at.visit("value", "RETURN");
+		at.visitEnd();
+		ats.visitEnd();
+		inject.visitEnd();
+		m.visitCode();
+		m.visitInsn(Opcodes.RETURN);
+		m.visitMaxs(0, 4);
+		m.visitEnd();
 	}
 
 	private static boolean isInjector(MethodNode m) {

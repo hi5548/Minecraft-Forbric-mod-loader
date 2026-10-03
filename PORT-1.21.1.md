@@ -93,6 +93,21 @@ java -jar forbric-kernel-installer-0.3.2-beta.jar --dir "$HOME/Library/Applicati
 
 被撤回而不是被替换的数据也一律标注（例如两批在 JDK 25 上测得的运行）。
 
+### 已知不生效的 Fabric API 功能（已记录损失）
+
+这些是**内核侧已记录**的损失——启动不再被它们拦住，但对应的 Fabric API 功能在 1.21.1 上不生效：
+
+| 功能 | 影响 |
+|---|---|
+| `ColorProviderRegistry`（方块/物品自定义颜色） | 注册与读取均失效；原版颜色路径不受影响 |
+| `FluidRenderHandlerRegistry`（自定义流体外观：染色/贴图/覆盖层） | 不生效，改由 NeoForge 的 FluidType 路径渲染 |
+| `ParticleRenderEvents.ALLOW_BLOCK_DUST_TINT` | 不再被查询 |
+| mod 提供自定义 `AudioStream` | `FabricSoundInstance.getAudioStream` 不被 `SoundEngine.play` 查询 |
+| 客户端 `UseEntityCallback` | 不触发（同一 mixin 的其余注入器仍正常） |
+| Indigo 的 per-block 钩子（区块内自定义几何） | Fabric mod 在区块内的自定义几何可能渲染错误或不渲染 |
+
+原因分两类：合并时**字段名保住、类型变了**（`IdMapper` → `Map<…>`），或**调用点被另一家改写**（`renderBatched` 被加宽成 9 参）。两者都不是"锚点拼写"类问题，因此无法按已有机制重定位，只能按代价退出。
+
 ### 已知限制与未覆盖
 
 - **纯客户端方向未深度验证**：已验证客户端能进世界（quick-play）、能截图、能干净退出；更长的游戏内行为没有系统测过。
@@ -212,6 +227,25 @@ defect**.
 3. **`world=true` before any `cr` counts** — a `cr=0` from a boot that never reached the world is no evidence.
 
 Data that was withdrawn rather than replaced is labelled as such (for example two runs measured on JDK 25).
+
+### Known inert Fabric APIs (recorded losses)
+
+These are the kernel's **recorded** losses — they no longer stop a launch, but the Fabric API feature
+itself does not take effect on 1.21.1:
+
+| Feature | Effect |
+|---|---|
+| `ColorProviderRegistry` (custom block/item colours) | registration and lookup both inert; vanilla's own colour path is untouched |
+| `FluidRenderHandlerRegistry` (custom fluid appearance: tint/sprites/overlay) | inert; NeoForge's FluidType path renders instead |
+| `ParticleRenderEvents.ALLOW_BLOCK_DUST_TINT` | no longer consulted |
+| a mod-supplied `AudioStream` | `FabricSoundInstance.getAudioStream` is not consulted by `SoundEngine.play` |
+| client-side `UseEntityCallback` | does not fire (the same mixin's other injectors still bind) |
+| Indigo's per-block hook (in-chunk custom geometry) | a Fabric mod's in-chunk custom geometry may render wrong or not at all |
+
+Two causes: the merge **kept a field's name but changed its type** (`IdMapper` → `Map<…>`), or **another
+family rewrote the call site** (`renderBatched` widened to nine arguments). Neither is a selector-spelling
+problem, so neither can be retargeted with the existing machinery — they are stood down with their cost
+recorded instead.
 
 ### Known limits and what is not covered
 

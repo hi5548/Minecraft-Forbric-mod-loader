@@ -399,6 +399,50 @@ compile(…, SectionBufferBuilderPack, java/util/List)                          
    `it.unimi.dsi.fastutil` 抛 `ClassNotFoundException`，我把那条失败读成了噪声——它与"`evidence: []`"、
    "浅层的 `world`"同族：仪器自己的缺口被当成了无关项。
 
+## 11. 验收：世界深度、`strict=true`、集合为空（已量）
+
+`4bf7d90f`（内核 sha256 `9255d22db62f5d35eee67dadb9b3d66ae0d24ed30f87439772d25a7f679480be`），
+报告在 `reports/2026-10-04-client-standdown/`：
+
+```
+run=PASS  exit=0  world=true  frames=1  stopped=true  killed=false  mod=OK
+strict=TRUE   confirmed_required=0   seconds=29   java=jdk-21
+joined world via quick-play: W7Client
+clean disconnect observed; stopping client
+```
+
+四条预先登记全部成立：①那一条 id 只在记录里出现，形如 `required=False, confidence=CONFIRMED`；
+②`confirmedRequired: 0`、枚举 0；③`world=true` 且 `joined world via quick-play: W7Client`；
+④`pruned 1 injector(s) from …indigo.renderer.SectionBuilderMixin` ×1，且 `retargeted Indigo` ×0
+（撤回的机制在控制台里彻底消失）。
+
+**这次启动本身就是七张表的证明**：一条缺 COSTS 行的 prune 会让 `declaredAnchors` 直接把启动打死，
+所以一个带着这一行、并且真的进了世界的运行，等于 `EXTRA_TABLE/CONFIGS/ACTIVE/COSTS/REASONS/DRIFT/LOSSES`
+七张都齐——比逐张 grep 更硬的仪器。
+
+**证伪条款的落地读数（这一步不能只看计数）**：控制台里确有 `VerifyError` ×1 与 `ClassCastException` ×4，
+**没有一条是"撤回没生效"**。那条 `VerifyError` 是剪枝行自己的原因文本；四条 CCE 里两条是 `MergedBaseCompat`
+的路由提示，第四条是配置库里被捕获的非致命转换（`SimpleCommentedConfig → CommentedFileConfig`），
+**没有 crash report、运行照常走到干净停机**。所以撤回生效，这里没有我该修的东西。
+
+**验收结论，按两支分别说：**
+
+1. **"fabric-api 客户端的 `CONFIRMED required` 集合为空"——已量，且是世界深度**：`strict=true`、
+   `world=true`、`PASS`、`confirmed_required=0`，控制台逐字如上。这是本次战役第一条 strict 客户端行。
+2. **"默认 `ask` 策略下客户端能起得来"——仍未直接测**：这一行跑在 `continue` 下。策略门的规则是
+   以 `confirmedRequired` 为输入（>0 则停），本行给它的输入是 0，所以按已记录的规则它不该停；
+   但**"不该停"是推断，不是读数**——要把它变成读数，需要一条默认策略的启动。这一条留给下一次，
+   不改写成本次已成立的结论。
+
+**四条世代形状**（同一缺陷类的四种脸，每一种都是靠一次启动而不是靠 diff 看到的）：
+类名（`LevelChunkMixin → WorldChunkMixin`，A/B 之前那一类）、拼写（owner 限定 vs 裸名，B）、
+**被加宽的签名**（7 参 → 9 参，Indigo）、以及字段被换类型（`IdMapper → Map`，颜色族，带账退出）。
+把它们写下来，是为了下一次是被"找"到而不是被"发现"。
+
+另：本行 `killed=false`/29 s，对照崩溃那次 `killed=true`/18 s 与之前三个停在 TitleScreen 的窗口——
+harness 现在能区分"跑完"与"停到被回收"，这正是测量与一团乱麻之间的差别。
+
+
 
 
 

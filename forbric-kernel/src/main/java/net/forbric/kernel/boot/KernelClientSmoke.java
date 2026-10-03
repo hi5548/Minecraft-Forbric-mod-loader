@@ -113,6 +113,9 @@ public final class KernelClientSmoke {
 	private static boolean probed;
 	private static final java.util.Set<Integer> shotsTaken = new java.util.HashSet<>();
 	private static boolean idsLoggedBeforeConnect;
+	private static Object lastScreen;
+	private static boolean screenReported;
+	private static int screenChanges;
 
 	private KernelClientSmoke() {
 	}
@@ -158,8 +161,38 @@ public final class KernelClientSmoke {
 				System.getProperty(WORLD, "<quick-play>"));
 	}
 
+	/**
+	 * The current screen, logged once per change. A run that never enters a world otherwise leaves the two
+	 * branches — "the quick-play chain ran and the game declined" versus "the chain never ran" —
+	 * indistinguishable in the log (both are just an absence of {@code joined world via quick-play}). The screen
+	 * is the one field that separates them in a single run: a null here means nothing was ever put in front of the
+	 * game, while a named screen (an accessibility onboarding overlay, a loading overlay, the title screen) names
+	 * exactly what the client is sitting on. Smoke-gated and read reflectively like every other hook.
+	 */
+	private static void reportScreen(Object minecraft) {
+		Object screen = fieldValue(minecraft, "screen");
+		if (screenReported && screen == lastScreen) return;
+		screenReported = true;
+		lastScreen = screen;
+		if (screenChanges++ < 24) {
+			ForbricLog.info("[Forbric/ClientSmoke] screen change -> %s",
+					screen == null ? "null" : screen.getClass().getName());
+		}
+	}
+
+
+	/**
+	 * Says which screen the client is actually showing, whenever it changes, a bounded number of times.
+	 *
+	 * <p>This is the split four runs could not make. With the loading wrapper neutralised and quick-play data present
+	 * ({@code quickPlayLog=QuickPlayLog}), the client still logs no world and no exception — and two very different
+	 * states look identical in a log: the title screen means vanilla's screen chain RAN and quick-play declined,
+	 * while the loading overlay (or a null screen) means the chain never ran at all. One line per screen change
+	 * separates them, and it costs a comparison rather than a launch.
+	 */
 	private static void tick(Object minecraft) {
 		reportQuickPlayState(minecraft);
+		reportScreen(minecraft);
 		// -Dforbric.clientSmokeProbes=off leaves the census unarmed. It exists to isolate the probe from
 		// everything else in one launch: after the probe learned to arm for real, runs stopped reaching
 		// Minecraft.onGameLoadFinished (quick-play never attempted) where the run before it reached
@@ -256,6 +289,11 @@ public final class KernelClientSmoke {
 	private static final String PROBES = "forbric.clientSmokeProbes";
 	/** Set after the one-shot quick-play report, so it is logged once per run. */
 	private static boolean quickPlayReported;
+	/** The last screen class reported, and how many distinct ones have been logged (bounded). Named apart from the
+	 * existing {@code lastScreen} field, which the world-tracking path owns and holds an Object. */
+	private static String reportedScreen;
+	private static int screensReported;
+	private static final int SCREEN_REPORT_LIMIT = 8;
 	private static boolean connectionProbesArmed;
 	/**
 	 * Whether arming has been attempted at all. Arming is one-shot: it either succeeds or is recorded as

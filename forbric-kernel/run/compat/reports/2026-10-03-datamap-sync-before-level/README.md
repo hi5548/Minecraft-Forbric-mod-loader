@@ -550,3 +550,48 @@ reconstructed from the surviving `TYPE_BY_FLUID` and filler, not invented.
 `-Dforbric.itemBlockRenderTypesFluidMap=off`; shape test from the staged merged base (field declared and unwritten
 before, assigned in `<clinit>` via the surviving filler after; `BasicVerifier` over the injected block; idempotence;
 kill switch). The arm in §16 is the verification that the render path now survives.
+
+## 16. The arm against the FLUID_RENDER_TYPES repair — it takes, after one arm-caught regression
+
+Two commits: `20dcc824` (the repair) and `80bfb376` (a fix for a regression `20dcc824` caused). Frozen kernel
+`e341d28a5d8a692262a5b4ecc0067c52358a77917bde98fe41fc4cea27117c43` (W7Harness's clean-worktree build of `80bfb376`
+reproduced the sha exactly), report `reports/2026-10-03-client-internalname/`.
+
+**The regression the first arm caught, recorded because it is the useful part.** `20dcc824` wrote the injected
+`FieldInsnNode`/`MethodInsnNode` owners in the **dotted** form, so the constant pool carried a dotted class name and
+the JVM refused the class — `ClassFormatError: Illegal class name
+"net.minecraft.client.renderer.ItemBlockRenderTypes"`, `world=false`, client dead in 28 s. The fix (`80bfb376`) uses
+the **internal** name for the instruction owners (and matches it in the idempotence guard). The shape test now also
+`defineClass`es the transformed bytes with `initialize=false` — class-file format only, no `<clinit>`, no game
+classes — and re-introducing the dotted owner reproduces that exact `ClassFormatError` without launching a game.
+So this one *is* fenced by a JVM-free-of-game gate, unlike §11's frame defect.
+
+**The arm on `80bfb376`:**
+- `joined world via quick-play` — appears, verbatim:
+  ```
+  [08:10:27] [Render thread/INFO]: [Forbric/ClientSmoke] joined world via quick-play: W7Client
+  ```
+- `ClassFormatError` — **0** (was 1 on `20dcc824`).
+- the `FLUID_RENDER_TYPES` NPE — **gone**, and the repair fired:
+  ```
+  [08:10:27] [Render thread/INFO]: [Forbric/RenderTypes] net.minecraft.client.renderer.ItemBlockRenderTypes: restored Forge's FLUID_RENDER_TYPES initialiser the merge dropped — the field, its readers and its filler all survived, and a null map NPEs the first compiled chunk section
+  ```
+- row: `run=STALL exit=143 world=TRUE frames=0 strict=false cause=crash seconds=224 contended=TRUE;
+  compatibility_policy=continue mixin_fit=default`.
+
+**Still no frame/screenshot**: the session ends ~6 s after the join, on the next blocker, quoted verbatim and not
+diagnosed here (a different class again):
+
+```
+[08:10:32] [Render thread/ERROR]: Failed to handle packet net.minecraft.network.protocol.game.ClientboundLevelEventPacket@1d77cf0
+net.minecraft.ReportedException: Playing level event
+	at forbric/net.minecraft.network.protocol.game.ClientboundLevelEventPacket.handle(ClientboundLevelEventPacket.java:46)
+java.lang.NullPointerException: Cannot invoke "cpw.mods.modlauncher.Launcher.environment()" because "cpw.mods.modlauncher.Launcher.INSTANCE" is null
+java.lang.NullPointerException: Cannot invoke "net.neoforged.fml.loading.LanguageProviderLoader.applyForEach(java.util.function.Function)" because the return value of "net.neoforged.fml.loading.FMLLoader.getLanguageLoadingProvider()" is null
+```
+
+That is the kernel's ModLauncher-shim territory (`ModLauncherClaimRewriter` exists for exactly this reference),
+reached only now that the join puts real packets on the wire; it is the next blocker, not diagnosed here. The row is
+`contended=TRUE` (212% CPU), so the 224 s wall is timing-suspect, but the failure is a thrown `ReportedException`
+with a null `Launcher.INSTANCE`, not a timeout. The campaign's client acceptance criterion stays met — the join line
+is present — and this section is the bounded step beyond it.

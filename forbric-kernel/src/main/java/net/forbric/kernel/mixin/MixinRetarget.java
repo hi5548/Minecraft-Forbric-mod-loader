@@ -77,6 +77,15 @@ import net.forbric.kernel.util.ForbricLog;
  */
 public final class MixinRetarget {
 	public static final String PROPERTY = "forbric.mixinRetarget";
+
+	/**
+	 * Prints the substitution decision's four inputs (row, ecosystem, occurrences, captures) for every point a table
+	 * row could cover. OFF by default, and deliberately so after a measurement problem: with the line ON, one subject's
+	 * `cr` moved 2 -> 1 across a commit whose only diff was the line itself, and two runs of the same bytes agreed with
+	 * each other — so either emitting it perturbs the run or the finding set is not a pure function of the bytes.
+	 * Gating it lets the SAME sha be run with it off and on, which separates those two.
+	 */
+	public static final String DIAGNOSE_PROPERTY = "forbric.mixinRetarget.diagnose";
 	/** {@code -Dforbric.mixinRetarget.split=off}: R3 refuses two fits again, dispatcher or not (R4 off). */
 	static final String SPLIT_PROPERTY = "forbric.mixinRetarget.split";
 	/**
@@ -550,9 +559,10 @@ public final class MixinRetarget {
 			// point, the ecosystem the filter saw, how many times the replacement occurs in the live method, and
 			// whether the handler captures locals the new call cannot supply. A reader can settle a disagreement in
 			// one run from these four values; nothing else about the case is invisible.
+			boolean diagnose = "on".equalsIgnoreCase(System.getProperty(DIAGNOSE_PROPERTY, "off"));
 			int occurrences = row == null ? -1 : CarrierHelpers.occurrences(method, row.replacement());
 			if (row == null || occurrences != 1) {
-				ForbricLog.info("[Forbric/Mixin] %s#%s: no move for %s in %s — row=%s ecosystem=%s occurrences=%d",
+				if (diagnose) ForbricLog.info("[Forbric/Mixin] %s#%s: no move for %s in %s — row=%s ecosystem=%s occurrences=%d",
 						mixinName, handler.name, member, method.name + method.desc, row == null ? "none" : "found",
 						ecosystem, occurrences);
 				continue;
@@ -560,7 +570,7 @@ public final class MixinRetarget {
 			if (captured.length > 0) {
 				if (withLocals == null) withLocals = withLocalVariables(target.name, method, resolver);
 				if (withLocals == null || !InsertedLambdaArgumentShim.localsAtCall(row.replacement(), withLocals, captured)) {
-					ForbricLog.info("[Forbric/Mixin] %s#%s: no move for %s in %s — the handler captures %d local(s) the "
+					if (diagnose) ForbricLog.info("[Forbric/Mixin] %s#%s: no move for %s in %s — the handler captures %d local(s) the "
 							+ "new call (%s) cannot supply", mixinName, handler.name, member, method.name + method.desc,
 							captured.length, row.replacement());
 					continue;

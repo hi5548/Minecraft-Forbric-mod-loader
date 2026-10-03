@@ -114,8 +114,13 @@ public final class ClassTweakerTransformer implements ClassTransformer {
 
 		if (applied == 0) return null;
 
-		ForbricLog.info("[Forbric/Access] merged %d class tweaker(s) in namespace '%s' over %d target class(es)",
-				applied, namespace, tweaker.getTargets().size());
+		// The declaring jars belong in the line: this pass is silent when it matches nothing, and the first
+		// IllegalAccessError it let through was invisible for hours because the line named only a count.
+		java.util.Set<String> declaringJars = new java.util.LinkedHashSet<>();
+		for (File file : files) if (file.source() != null) declaringJars.add(file.source());
+		ForbricLog.info("[Forbric/Access] merged %d class tweaker(s) in namespace '%s' over %d target class(es), "
+				+ "declared by %s", applied, namespace, tweaker.getTargets().size(),
+				declaringJars.isEmpty() ? "an unnamed source" : String.join(", ", declaringJars));
 		return new ClassTweakerTransformer(tweaker, generatedSink, sources);
 	}
 

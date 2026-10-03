@@ -323,7 +323,7 @@ public final class KernelBoot {
 		forgeMixinDecls.addAll(discoverForgeMixinConfigs(runtimeJars, "runtime jar"));
 
 		// Fabric mods (+ extracted JiJ children). Also Mojmap on this game version. Creates the FabricLoader.
-		List<Path> fabricJars = KernelFabricEcosystem.build(fabricScan, side.envType, gameDir, gameVersion,
+		List<Path> fabricJarsDiscovered = KernelFabricEcosystem.build(fabricScan, side.envType, gameDir, gameVersion,
 				gameArgs.toArray(new String[0]), dupes, gameJar);
 
 		// W2: rename every Fabric guest — each jar the loader will define classes from, the extracted JiJ children
@@ -335,8 +335,12 @@ public final class KernelBoot {
 		List<Path> remapClasspath = new ArrayList<>(runtimeJars);
 		remapClasspath.addAll(minecraftLibraries);
 		if (gameJar != null) remapClasspath.add(gameJar);
-		fabricJars = FabricGuestRemapper.remapAll(fabricJars, guestMappings,
+		List<Path> fabricJars = FabricGuestRemapper.remapAll(fabricJarsDiscovered, guestMappings,
 				gameDir.resolve(".forbric-kernel").resolve("remap"), remapClasspath);
+		// The class loader gets `fabricJars` (identity, not a URL). Readers that open a mod's jar for RESOURCES --
+		// the access widener today -- must open the same file, or they read the pre-remap original and see
+		// intermediary names the runtime does not have. See KernelFabricEcosystem.jarToRead.
+		KernelFabricEcosystem.useRemappedJars(fabricJarsDiscovered, fabricJars);
 
 		// Game-side bundled libraries (MixinExtras) and the kernel's own runtime jar. The latter also carries
 		// the kernel's client assets -- the Mods button's icon lives in it -- so its extracted path is handed to

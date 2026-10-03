@@ -289,6 +289,32 @@ public final class KernelFabricEcosystem {
 		return files;
 	}
 
+	/**
+	 * The remapped copy of each discovered jar, so a reader that opens a mod's jar opens the SAME jar the class
+	 * loader defines its classes from.
+	 *
+	 * <p>Before this, {@link #accessWidenerFiles()} opened {@code container.getJar()} — the pre-remap original —
+	 * while the loader was handed the remapped list. Every fabric access widener was therefore merged in the
+	 * intermediary namespace, widened nothing, and the first member a now-applied mixin reached threw:
+	 * {@code IllegalAccessError: Bootstrap tried to access private BuiltInRegistries.createContents()}.
+	 */
+	private static volatile Map<Path, Path> remappedJars = Map.of();
+
+	/** Records {@code remapAll}'s input→output alignment (one output per input, in order). */
+	public static void useRemappedJars(List<Path> originals, List<Path> remapped) {
+		Map<Path, Path> map = new LinkedHashMap<>();
+		for (int i = 0; i < originals.size() && i < remapped.size(); i++) {
+			map.put(originals.get(i).toAbsolutePath().normalize(), remapped.get(i));
+		}
+		remappedJars = map;
+	}
+
+	/** The jar a mod's resources must be read from: the remapped copy the class loader uses, else the jar it named. */
+	static Path jarToRead(Path containerJar) {
+		if (containerJar == null) return null;
+		return remappedJars.getOrDefault(containerJar.toAbsolutePath().normalize(), containerJar);
+	}
+
 	/** {@link #accessWideners()} with each file's jar name beside it, for the access census. */
 	public static List<net.forbric.kernel.access.ClassTweakerTransformer.File> accessWidenerFiles() {
 		if (loader == null) return List.of();
@@ -302,7 +328,8 @@ public final class KernelFabricEcosystem {
 			String path = container.getMetadata().getAccessWidener();
 			if (path == null || path.isEmpty()) continue;
 
-			try (java.util.jar.JarFile jar = new java.util.jar.JarFile(container.getJar().toFile())) {
+			Path jarPath = jarToRead(container.getJar());
+			try (java.util.jar.JarFile jar = new java.util.jar.JarFile(jarPath.toFile())) {
 				java.util.zip.ZipEntry entry = jar.getEntry(path);
 
 				if (entry == null) {
@@ -313,11 +340,11 @@ public final class KernelFabricEcosystem {
 
 				try (java.io.InputStream in = jar.getInputStream(entry)) {
 					files.add(new net.forbric.kernel.access.ClassTweakerTransformer.File(
-							container.getJar().getFileName().toString(), in.readAllBytes()));
+							jarPath.getFileName().toString(), in.readAllBytes()));
 				}
 			} catch (Exception e) {
-				ForbricLog.warn("[Forbric/Access] could not read accessWidener of %s: %s",
-						container.getMetadata().getId(), String.valueOf(e));
+				ForbricLog.warn("[Forbric/Access] could not read accessWidener of %s from %s: %s",
+						container.getMetadata().getId(), jarPath, String.valueOf(e));
 			}
 		}
 

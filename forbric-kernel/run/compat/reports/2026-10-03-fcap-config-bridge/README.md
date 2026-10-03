@@ -1,4 +1,4 @@
-# FCAP 的 `ConfigTracker`:21.1.1 线的四个重载里两条一行改写、两条要造一个真 Forge `ModConfig`
+# FCAP 的 `ConfigTracker`:1.21.1 线的四个重载里两条一行改写、两条要造一个真 Forge `ModConfig`
 
 范围:延后条目 K4(`forbric-kernel/run/compat/reports/2026-10-03-bucket-residue/README.md` §1.2),
 主体 `no-smithing-template-refabriced`(fabric),存盘 cause `nosuchmethod
@@ -12,8 +12,8 @@ FCAP:`ForgeConfigAPIPort-v21.1.6-1.21.1-Fabric.jar`,sha256
 
 ## 1. 形状(全部 javap 真字节,不引源码)
 
-FCAP 自带一整套 `net.neoforged.fml.config.*`(它的 21.1.6 里是 26.2 形状的 NeoForge 副本),
-其中两个类与载体**同名**、但形状不同 —— 而 `net.neoforged.` 是 `ALWAYS_GAME`(`DelegationPolicy`),
+FCAP 自带一整套 `net.neoforged.fml.config.*`(它自己编的 NeoForge 配置 API 副本,21.1.6 里这份副本仍是
+老形状),其中两个类与载体**同名**、但形状不同 —— 而 `net.neoforged.` 是 `ALWAYS_GAME`(`DelegationPolicy`),
 所以载体的那份赢,FCAP 的副本永不加载:
 
 | | 载体(实跑的那份) | FCAP 自带的副本 |

@@ -130,7 +130,7 @@ are re-derived here only if they reappear on the current kernel; the current arm
 | 3 | `fabric-data-attachment-api-v1` : `EntityMixin` | `readEntityAttachments`, `writeEntityAttachments` | `load`→`readAdditionalSaveData`@635; `saveWithoutId`→`addAdditionalSaveData`@496 | **TRANSLATION GAP → retargeted (landed, kernel fix)** |
 | 4 | `fabric-entity-events-v1` : `LivingEntityMixin` | 6 (see read 1) | 2 translation gaps (`isSleeping`@hurt+90, `broadcastEntityEvent`@die+178) **retargeted (landed)**; 2 lambda renumbers **declined (ambiguous, below)**; 2 host refactors **declined (handler ABI changed)** | **MIXED** |
 | 5 | `fabric-content-registries-v0` : `AbstractFurnaceBlockEntityMixin` | `canUseAsFuelRedirect`, `getFuelTimeRedirect` | `isFuel`/`getBurnDuration` call `ForgeHooks.getBurnTime`, not `getFuel` | **per-injector loss** (call site replaced by ForgeHooks); 3/5 anchors survive → pruner's job, not pinned |
-| 6 | `fabric-item-api-v1` : `BrewingStandBlockEntityMixin` | `hasStackRecipeRemainder`, `createStackRecipeRemainder` | `@At(NEW)` target is the raw intermediary descriptor `(Lclass_1935;)Lclass_1799;` → **retargeted (landed)**; `Item.hasCraftingRemainingItem` moved to `ItemStack.hasCraftingRemainingItem` → **declined** | **MIXED** |
+| 6 | `fabric-item-api-v1` : `BrewingStandBlockEntityMixin` | `hasStackRecipeRemainder`, `createStackRecipeRemainder` | `@At(NEW)` descriptor `(Lclass_1935;)Lclass_1799;` translated (landed), but merged `doBrew` constructs no `ItemStack`; `Item.hasCraftingRemainingItem` moved to `ItemStack.hasCraftingRemainingItem`; only `captureItemStack` (`ItemStack.shrink`) binds | **MIXED → per-injector stand-down LANDED (GuestInjectorPruner)** |
 | 7 | `fabric-lifecycle-events-v1` : `WorldChunkMixin` | `onRemoveBlockEntity` | member+host survive; the slice `from=createBlockEntity` is empty because `Map.remove`@30/47 precede `createBlockEntity`@92; the eviction the handler watches is the `blockEntities.remove`@30 | **RETARGETABLE-SLICE, no mechanism → per-injector stand-down LANDED (GuestInjectorPruner)** |
 
 ### Retargets landed this pass (kernel fix, one commit)
@@ -190,6 +190,56 @@ launch for a feature that cannot work. Also recorded while measuring: the static
 empty slice (it logged no `applies only partially` for this mixin), so `GuestInjectorPruner` on a static fit and
 the post-application audit disagree here — the audit is right.
 
+### Row 6 — BrewingStand, and what the NEW-descriptor retarget did and did not fix
+
+The descriptor retarget **did** land the spelling: `@WrapOperation(method=doBrew, at=@At(value="NEW",
+target="(Lnet/minecraft/class_1935;)Lclass_1799;"))` now translates to
+`(Lnet/minecraft/world/level/ItemLike;)Lnet/minecraft/world/item/ItemStack;` (it moved from CONFIRMED-required
+to SUSPECTED). But the merged `BrewingStandBlockEntity.doBrew` **never constructs an `ItemStack`** and never calls
+`Item.hasCraftingRemainingItem`:
+
+```
+doBrew(Level, BlockPos, NonNullList):
+   65: invokevirtual  // ItemStack.hasCraftingRemainingItem:()Z
+   72: invokevirtual  // ItemStack.getCraftingRemainingItem:()Lnet/minecraft/world/item/ItemStack;
+   79: invokevirtual  // ItemStack.shrink:(I)V
+   (no `new ItemStack(ItemLike)`, no `Item.hasCraftingRemainingItem`)
+```
+
+So `hasStackRecipeRemainder` (`@Redirect` on `Item.hasCraftingRemainingItem`) and `createStackRecipeRemainder`
+(`@WrapOperation` on the `new ItemStack(ItemLike)`) are both **genuinely gone** — the owner moved to `ItemStack`
+and the constructor call was replaced by a query — and neither is annotation-retargetable (the handler ABIs
+differ). Per-injector stand-down landed in `GuestInjectorPruner` (both removed; `captureItemStack`, the
+`ItemStack.shrink` inject, stays), with both losses recorded: fabric-item-api's crafting-remainder substitution no
+longer applies to the brewing stand.
+
+### Three mixins not on the original table — already resolved
+
+The current report (`reports/2026-10-03-cluster1-verdicts`, kernel `ad7feb03` ⊇ `28a94dfc`) carries **no**
+finding for any of `recipe-api ingredient.EncoderHandlerMixin`, `resource-loader SimpleResourceReloadMixin`,
+`resource-loader TestServerMixin`. They were real in the earlier `bucket-probe` consoles, but as the **pre-remap**
+`@Mixin target net.minecraft.class_2545 / class_4014 / class_6306 was not found` — the guest's `@Mixin` target was
+still intermediary, i.e. the remap pass's defect, not an anchor. Classification against the merged base:
+
+| mixin | anchor | refmap / merged base | verdict |
+|---|---|---|---|
+| `recipe-api ingredient.EncoderHandlerMixin` (→ `net.minecraft.network.PacketEncoder`) | `@Inject` at INVOKE `StreamCodec.encode(Object,Object)V`; `@Inject` at INVOKE `Packet.isWritingErrorSkippable()Z` | `PacketEncoder.encode` calls `StreamCodec.encode`@+19; the refmap maps the dotted key `net/minecraft/network/packet/Packet.isWritingErrorSkippable()Z` → `…protocol/Packet;isSkippable()Z`, present at `+155` | **translation gap (dotted key) → fixed by 28a94dfc** |
+| `resource-loader SimpleResourceReloadMixin` (→ `SimpleReloadInstance`) | `@ModifyArg` at INVOKE `SimpleReloadInstance.of(…)`; `@Redirect` at NEW `(Lclass_3300;…)Lclass_4010;` | `create` calls `of`@+25 and `new ProfiledReloadInstance`@+5 | **translation gap (bare descriptor) → fixed by 28a94dfc** |
+| `resource-loader TestServerMixin` (→ `GameTestServer`) | `@Redirect` at NEW `(Lnet/minecraft/class_5359;)`-family descriptor | `GameTestServer.create` does `new DataPackConfig(List,List)`@+27 | **translation gap (bare descriptor) → fixed by 28a94dfc** |
+
+### Queued for the next pass (new mechanisms, each needs an equal-depth A/B before it ships)
+
+* **entity-events host refactors.** `setOccupiedState` and `onGetSleepingDirection` need their handler re-shaped to
+  the new call sites (`Level.setBlock(BlockPos,BlockState,I)Z` → `BlockState.setBedOccupied(Level,BlockPos,LivingEntity,Z)V`;
+  `BedBlock.getBedOrientation(BlockGetter,BlockPos)Direction` → `BlockState.getBedDirection(LevelReader,BlockPos)Direction`).
+  A member-name transformer cannot do it.
+* **A slice/ordinal-rewriting transformer**, which would let row 7 (and the two `Map.remove`-style disambiguations)
+  retarget instead of standing down. `GuestInjectorPruner`'s javadoc already records the caution: a local selector
+  rewrite changes the boot depth and therefore the whole report shape, so it must be judged with
+  `-Dforbric.compatibilityPolicy=continue` on both arms at equal depth.
+* **balm `FabricCropBlockMixin`** — the apply-time `InvalidInjectionException` → `VerifyError` cluster
+  ([`read-balm-cropblock.md`](read-balm-cropblock.md)); a kernel apply/recovery defect, not a selector one.
+
 ### Why only #1 was pinned
 
 The pin list removes a **whole mixin**. #1 declares exactly the one dead handler, so the pin is a pure stand-down.
@@ -206,7 +256,7 @@ the merged base, so a pin would delete a restorable feature.
 * [`read-balm-cropblock.md`](read-balm-cropblock.md) — balm `FabricCropBlockMixin` /
   `InvalidInjectionException` → `VerifyError`.
 
-## What was landed (three commits)
+## What was landed (four commits)
 
 Commit `4b9eca4e` — the Cluster-1 stand-down:
 
@@ -226,7 +276,7 @@ Commit `28a94dfc` — the translation retargets:
   descriptor. All three **fail before the fix** (`3 tests, 0 skipped, 3 failed` on the pre-fix tree) and pass
   after.
 
-Commit `HEAD` — the row-7 per-injector stand-down:
+Commit `0ce5598b` — the row-7 per-injector stand-down:
 
 * `forbric-kernel/src/main/java/net/forbric/kernel/transform/GuestInjectorPruner.java` — the `WorldChunkMixin`
   entry (TABLE + the CONFIGS/ACTIVE/COSTS/REASONS/DRIFT/LOSSES rows) and the class-javadoc paragraph.
@@ -234,6 +284,13 @@ Commit `HEAD` — the row-7 per-injector stand-down:
   tests (no fixture): the standalone redirect is removed while the same-named `@Inject` handler and the Load
   handler stay, and the loss is recorded as `CONFIRMED`, `required=false`, naming
   `ServerBlockEntityEvents.BLOCK_ENTITY_UNLOAD`; and a moved selector stands the edit down.
+
+Commit `HEAD` — the row-6 per-injector stand-down:
+
+* `GuestInjectorPruner` — the `BrewingStandBlockEntityMixin` entry (both dead injectors removed,
+  `captureItemStack` kept) and its javadoc paragraph.
+* `GuestInjectorPrunerTest` — one more synthetic test asserting both are removed, the working injector stays, and
+  each loss is recorded as `CONFIRMED`, `required=false`.
 
 Verified:
 
@@ -244,7 +301,7 @@ cd forbric-kernel && ./gradlew cleanTest test \
   → test: 3 tests, 0 skipped, 0 failed        # with the mapping fixtures reachable
 cd forbric-kernel && ./gradlew cleanTest test \
   --tests net.forbric.kernel.transform.GuestInjectorPrunerTest --console=plain --offline
-  → test: 15 tests, 13 skipped, 0 failed      # the 2 new synthetic tests run; the 13 need the staged fixtures
+  → test: 16 tests, 13 skipped, 0 failed      # the 3 new synthetic tests run; the 13 need the staged fixtures
 cd forbric-kernel && ./gradlew test --tests 'net.forbric.kernel.mixin.*' \
   -Pforbric.mcLibraries=<p0/mc-1.21.1>/libraries --console=plain --offline
   → test: 500 tests, 191 skipped, 1 failed    # LootSupersessionProofTest, missing fixture, pre-existing

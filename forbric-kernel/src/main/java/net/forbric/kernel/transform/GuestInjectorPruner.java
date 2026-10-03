@@ -92,6 +92,16 @@ import net.forbric.kernel.util.ForbricLog;
  * hidden debt: the finding names the cost. (Retargeting it instead needs a transform that rewrites the {@code
  * @Slice}/ordinal, which none of the current transformers does; see the measured caution below before building one.)
  *
+ * <p>The fourth entry is fabric-item-api-v1's {@code BrewingStandBlockEntityMixin}. Its {@code captureItemStack}
+ * still binds (the merged {@code doBrew} calls {@code ItemStack.shrink}), but its other two injectors cannot:
+ * {@code hasStackRecipeRemainder} {@code @Redirect}s {@code Item.hasCraftingRemainingItem()} while the merged
+ * {@code doBrew} calls {@code ItemStack.hasCraftingRemainingItem()} (the owner moved; the handler's {@code Item}
+ * parameter no longer matches), and {@code createStackRecipeRemainder} {@code @WrapOperation}s the
+ * {@code new ItemStack(ItemLike)} construction which the merged {@code doBrew} never performs (it calls
+ * {@code ItemStack.getCraftingRemainingItem()}). Both are required losses that halt a STRICT launch for a feature
+ * that cannot work; pruning them records each as a finding that asks nothing, with the cost named, and leaves the
+ * working {@code captureItemStack} in place.
+ *
  * <p><b>A lambda-selector retarget is NOT local — measured 2026-10-03, reverted.</b> A transformer that rewrote a
  * guest mixin's selectors onto the lambda the merged base declares cleared {@code SerializableRegistriesMixin}'s
  * finding, and the same subject then reported eleven more CONFIRMED {@code mixin-injector} losses plus a balm
@@ -114,6 +124,7 @@ public final class GuestInjectorPruner implements ClassTransformer {
 	static final String MODEL_LAMBDA = "lambda$loadBlockModels$2";
 	static final String ITEM_STACK_MIXIN = "net.fabricmc.fabric.mixin.item.ItemStackMixin";
 	static final String WORLD_CHUNK_MIXIN = "net.fabricmc.fabric.mixin.event.lifecycle.server.WorldChunkMixin";
+	static final String BREWING_STAND_MIXIN = "net.fabricmc.fabric.mixin.item.BrewingStandBlockEntityMixin";
 	private static final String SHARED_INDEX = "Lcom/llamalad7/mixinextras/sugar/ref/LocalIntRef;";
 
 	/**
@@ -153,17 +164,27 @@ public final class GuestInjectorPruner implements ClassTransformer {
 						+ SHARED_INDEX + ")Z", "addDetailsToTooltip", true)),
 			WORLD_CHUNK_MIXIN, List.of(new Prune("onRemoveBlockEntity",
 					"(Ljava/util/Map;Ljava/lang/Object;)Ljava/lang/Object;",
-					"Lnet/minecraft/world/level/chunk/LevelChunk;getBlockEntity")));
+					"Lnet/minecraft/world/level/chunk/LevelChunk;getBlockEntity")),
+			BREWING_STAND_MIXIN, List.of(
+					new Prune("hasStackRecipeRemainder", "(Lnet/minecraft/world/item/Item;)Z",
+							"Lnet/minecraft/world/level/block/entity/BrewingStandBlockEntity;doBrew"),
+					new Prune("createStackRecipeRemainder",
+							"(Lnet/minecraft/world/level/ItemLike;"
+									+ "Lcom/llamalad7/mixinextras/injector/wrapoperation/Operation;)"
+									+ "Lnet/minecraft/world/item/ItemStack;",
+							"Lnet/minecraft/world/level/block/entity/BrewingStandBlockEntity;doBrew")));
 
 	/** The mixin config each entry is declared in, which names the owning mod on the finding. */
 	static final Map<String, String> CONFIGS = Map.of(MODEL_MANAGER_MIXIN, "fabric-model-loading-api-v1.mixins.json",
 			ITEM_STACK_MIXIN, "fabric-item-api-v1.mixins.json",
-			WORLD_CHUNK_MIXIN, "fabric-lifecycle-events-v1.mixins.json");
+			WORLD_CHUNK_MIXIN, "fabric-lifecycle-events-v1.mixins.json",
+			BREWING_STAND_MIXIN, "fabric-item-api-v1.mixins.json");
 
 	/** Whether an entry applies on this boot, beyond the pruner's own switch. */
 	private static final Map<String, BooleanSupplier> ACTIVE = Map.of(MODEL_MANAGER_MIXIN, () -> true,
 			ITEM_STACK_MIXIN, GuestInjectorPruner::fabricTooltipBridgeOn,
-			WORLD_CHUNK_MIXIN, () -> true);
+			WORLD_CHUNK_MIXIN, () -> true,
+			BREWING_STAND_MIXIN, () -> true);
 
 	/** What is lost when an entry's class loads and is not pruned. */
 	private static final Map<String, String> COSTS = Map.of(MODEL_MANAGER_MIXIN,
@@ -172,7 +193,10 @@ public final class GuestInjectorPruner implements ClassTransformer {
 			ITEM_STACK_MIXIN, "fabric-item-api's tooltip injectors stay where the retarget put them, so the kernel's "
 					+ "tooltip bridge stands down and a Fabric mod's component tooltips are missing from normal tooltips",
 			WORLD_CHUNK_MIXIN, "the redirect stays in the mixin, cannot attach (its @Slice matches nothing in the "
-					+ "merged order) and is reported as a required CONFIRMED loss, so a STRICT launch halts on it");
+					+ "merged order) and is reported as a required CONFIRMED loss, so a STRICT launch halts on it",
+			BREWING_STAND_MIXIN, "the two injectors stay in the mixin, cannot attach (the merged doBrew calls "
+					+ "ItemStack.hasCraftingRemainingItem and constructs no ItemStack) and are reported as required "
+					+ "losses, so a STRICT launch halts on them");
 
 	/** Why an entry's injectors cannot stay, for the log line. */
 	private static final Map<String, String> REASONS = Map.of(MODEL_MANAGER_MIXIN,
@@ -182,14 +206,19 @@ public final class GuestInjectorPruner implements ClassTransformer {
 					+ "Fabric's component tooltip providers now; these would have drawn them a second time, or nowhere",
 			WORLD_CHUNK_MIXIN, "the redirect watches the Map.remove inside LevelChunk.getBlockEntity behind a "
 					+ "@Slice(from=LevelChunk.createBlockEntity), and the merged method calls BOTH Map.remove sites "
-					+ "(+30 blockEntities, +47 pendingBlockEntities) BEFORE createBlockEntity (+92), so the slice is empty");
+					+ "(+30 blockEntities, +47 pendingBlockEntities) BEFORE createBlockEntity (+92), so the slice is empty",
+			BREWING_STAND_MIXIN, "the merged doBrew calls ItemStack.hasCraftingRemainingItem()/getCraftingRemainingItem() "
+					+ "(the owner moved Item->ItemStack, and the handler's Item parameter no longer matches) and never "
+					+ "constructs an ItemStack through the (ItemLike)ItemStack ctor the @WrapOperation wraps");
 
 	/** What happens to an entry's mixin when a reshaped fabric-api leaves it untouched. */
 	private static final Map<String, String> DRIFT = Map.of(MODEL_MANAGER_MIXIN, "it will read PARTIAL and apply half — the state that made every block "
 					+ "model missingno",
 			ITEM_STACK_MIXIN, "it is retargeted as before and the kernel's tooltip bridge stands down; Fabric component "
 					+ "tooltip providers show only above the item id in advanced tooltips",
-			WORLD_CHUNK_MIXIN, "the redirect soft-skips with Mixin's own warning, exactly as it did before this entry");
+			WORLD_CHUNK_MIXIN, "the redirect soft-skips with Mixin's own warning, exactly as it did before this entry",
+			BREWING_STAND_MIXIN, "the two injectors soft-skip with Mixin's own warnings, exactly as they did before "
+					+ "this entry, and only captureItemStack binds");
 
 	/** The finding a removed injector records, or none when a kernel repair does its job. */
 	private static final Map<String, String> LOSSES = Map.of(MODEL_MANAGER_MIXIN,
@@ -198,7 +227,11 @@ public final class GuestInjectorPruner implements ClassTransformer {
 					+ "kernel's own dispatch of them is off (-D" + ModelFormatFunnelInjector.PROPERTY + "=off)",
 			WORLD_CHUNK_MIXIN, "the kernel removed this injector: ServerBlockEntityEvents.BLOCK_ENTITY_UNLOAD no longer "
 					+ "fires when LevelChunk.getBlockEntity evicts a removed block entity (the blockEntities.remove at "
-					+ "+30); the mixin's Load handler and its two setRemoved-based Unload handlers still apply");
+					+ "+30); the mixin's Load handler and its two setRemoved-based Unload handlers still apply",
+			BREWING_STAND_MIXIN, "the kernel removed this injector: fabric-item-api's crafting-remainder substitution no "
+					+ "longer applies to the brewing stand (doBrew calls ItemStack.hasCraftingRemainingItem and "
+					+ "getCraftingRemainingItem directly); the mixin's captureItemStack (the ItemStack.shrink inject) "
+					+ "still binds");
 
 	/**
 	 * The finding an entry's removed injectors record on this boot, or null when something does their job:

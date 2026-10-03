@@ -345,6 +345,47 @@ class GuestInjectorPrunerTest {
 		assertSame(drifted, new GuestInjectorPruner().transform(GuestInjectorPruner.WORLD_CHUNK_MIXIN, drifted, null));
 	}
 
+	/**
+	 * The fourth entry (fabric-item-api-v1's {@code BrewingStandBlockEntityMixin}). The merged {@code doBrew}
+	 * moved the crafting-remainder query from {@code Item} to {@code ItemStack} and constructs no {@code ItemStack},
+	 * so only {@code captureItemStack} (the {@code ItemStack.shrink} inject) can bind. Synthetic bytes.
+	 */
+	@Test
+	void theBrewingStandPairIsPrunedAndItsWorkingInjectorStays() throws Exception {
+		net.forbric.api.CompatibilityFindings.reset();
+		byte[] original = brewingStandMixin();
+		ClassNode before = read(original);
+		assertNotNull(methodByDesc(before, "hasStackRecipeRemainder", "(Lnet/minecraft/world/item/Item;)Z"));
+		assertEquals(3, before.methods.size(), "premise: one working injector and the two that cannot bind");
+
+		byte[] pruned = new GuestInjectorPruner().transform(GuestInjectorPruner.BREWING_STAND_MIXIN, original, null);
+		assertNotSame(original, pruned);
+		ClassNode after = read(pruned);
+		assertEquals(null, methodByDesc(after, "hasStackRecipeRemainder", "(Lnet/minecraft/world/item/Item;)Z"));
+		assertEquals(null, methodByDesc(after, "createStackRecipeRemainder",
+				"(Lnet/minecraft/world/level/ItemLike;"
+						+ "Lcom/llamalad7/mixinextras/injector/wrapoperation/Operation;)"
+						+ "Lnet/minecraft/world/item/ItemStack;"));
+		assertNotNull(methodByDesc(after, "captureItemStack",
+				"(Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;Lnet/minecraft/core/NonNullList;"
+						+ "Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;"
+						+ "Lnet/minecraft/world/item/ItemStack;)V"), "the ItemStack.shrink inject stays");
+
+		String config = GuestInjectorPruner.CONFIGS.get(GuestInjectorPruner.BREWING_STAND_MIXIN);
+		var findings = net.forbric.api.CompatibilityFindings.all();
+		for (String gone : List.of("hasStackRecipeRemainder", "createStackRecipeRemainder")) {
+			var finding = findings.stream().filter(f -> f.id().startsWith("mixin-injector:" + config + ":"
+					+ GuestInjectorPruner.BREWING_STAND_MIXIN + "#" + gone + "(")).findFirst()
+					.orElseThrow(() -> new AssertionError("no finding for pruned " + gone + ": " + findings));
+			assertEquals(net.forbric.api.CompatibilityFinding.Confidence.CONFIRMED, finding.confidence(), gone);
+			assertFalse(finding.required(), gone);
+			assertTrue(finding.detail().contains("crafting-remainder"), finding.detail());
+		}
+		assertTrue(net.forbric.api.CompatibilityFindings.confirmedRequired().isEmpty());
+		assertSame(pruned, new GuestInjectorPruner().transform(GuestInjectorPruner.BREWING_STAND_MIXIN, pruned, null),
+				"a second pass changes nothing");
+	}
+
 	@Test
 	void aSecondPassChangesNothingFurther() throws Exception {
 		GuestInjectorPruner pruner = new GuestInjectorPruner();
@@ -489,6 +530,66 @@ class GuestInjectorPrunerTest {
 		m.visitCode();
 		m.visitInsn(Opcodes.RETURN);
 		m.visitMaxs(0, 4);
+		m.visitEnd();
+	}
+
+	/** The measured {@code BrewingStandBlockEntityMixin} shape: the working shrink inject plus the two that cannot bind. */
+	private static byte[] brewingStandMixin() {
+		ClassWriter writer = new ClassWriter(0);
+		writer.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, GuestInjectorPruner.BREWING_STAND_MIXIN, null, "java/lang/Object", null);
+
+		org.objectweb.asm.AnnotationVisitor mixin = writer.visitAnnotation("Lorg/spongepowered/asm/mixin/Mixin;", true);
+		org.objectweb.asm.AnnotationVisitor targets = mixin.visitArray("targets");
+		targets.visit(null, "net.minecraft.world.level.block.entity.BrewingStandBlockEntity");
+		targets.visitEnd();
+		mixin.visitEnd();
+
+		String doBrew = "Lnet/minecraft/world/level/block/entity/BrewingStandBlockEntity;doBrew"
+				+ "(Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;"
+				+ "Lnet/minecraft/core/NonNullList;)V";
+		injector(writer, "captureItemStack",
+				"(Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;Lnet/minecraft/core/NonNullList;"
+						+ "Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;"
+						+ "Lnet/minecraft/world/item/ItemStack;)V",
+				"Lorg/spongepowered/asm/mixin/injection/Inject;", doBrew, "INVOKE",
+				"Lnet/minecraft/world/item/ItemStack;shrink(I)V");
+		injector(writer, "hasStackRecipeRemainder", "(Lnet/minecraft/world/item/Item;)Z",
+				"Lorg/spongepowered/asm/mixin/injection/Redirect;", doBrew, "INVOKE",
+				"Lnet/minecraft/world/item/Item;hasCraftingRemainingItem()Z");
+		injector(writer, "createStackRecipeRemainder",
+				"(Lnet/minecraft/world/level/ItemLike;"
+						+ "Lcom/llamalad7/mixinextras/injector/wrapoperation/Operation;)"
+						+ "Lnet/minecraft/world/item/ItemStack;",
+				"Lcom/llamalad7/mixinextras/injector/wrapoperation/WrapOperation;", doBrew, "NEW",
+				"(Lnet/minecraft/class_1935;)Lnet/minecraft/class_1799;");
+
+		writer.visitEnd();
+		return writer.toByteArray();
+	}
+
+	/** One injector method: a single {@code @At(value, target)} and a body matching the return type. */
+	private static void injector(ClassWriter writer, String name, String desc, String annotation, String selector,
+			String atValue, String atTarget) {
+		org.objectweb.asm.MethodVisitor m = writer.visitMethod(Opcodes.ACC_PRIVATE, name, desc, null, null);
+		org.objectweb.asm.AnnotationVisitor a = m.visitAnnotation(annotation, true);
+		org.objectweb.asm.AnnotationVisitor methods = a.visitArray("method");
+		methods.visit(null, selector);
+		methods.visitEnd();
+		org.objectweb.asm.AnnotationVisitor ats = a.visitArray("at");
+		org.objectweb.asm.AnnotationVisitor at = ats.visitAnnotation(null, "Lorg/spongepowered/asm/mixin/injection/At;");
+		at.visit("value", atValue);
+		at.visit("target", atTarget);
+		at.visitEnd();
+		ats.visitEnd();
+		a.visitEnd();
+		m.visitCode();
+		String ret = desc.substring(desc.lastIndexOf(')') + 1);
+		switch (ret) {
+			case "V" -> m.visitInsn(Opcodes.RETURN);
+			case "Z" -> { m.visitInsn(Opcodes.ICONST_0); m.visitInsn(Opcodes.IRETURN); }
+			default -> { m.visitInsn(Opcodes.ACONST_NULL); m.visitInsn(Opcodes.ARETURN); }
+		}
+		m.visitMaxs(1, desc.startsWith("(") ? 1 + desc.substring(1, desc.indexOf(')')).length() : 1);
 		m.visitEnd();
 	}
 

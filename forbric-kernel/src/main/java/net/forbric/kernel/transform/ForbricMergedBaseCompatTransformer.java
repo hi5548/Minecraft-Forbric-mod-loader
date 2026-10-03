@@ -184,8 +184,10 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 				"a picture-in-picture renderer registered the vanilla way never draws"));
 		out.add(fixed("keepForgeOutboundProtocolCurrent", "net/minecraft/network/Connection",
 				"MinecraftForge's channels pick their packet type from a protocol field nothing writes — Forge networking sends the wrong packet type"));
-		out.add(fixed("surviveTheMissingForgeModelDataManager", "net/minecraft/client/renderer/extract/LevelExtractor",
-				"the block-breaking overlay crashes the render frame on MinecraftForge's absent model-data manager"));
+		out.add(scanned("surviveTheMissingForgeModelDataManager",
+				"any client class that dereferences MinecraftForge's ModelDataManager.getAt/getAtOrEmpty — the merged "
+						+ "level offers only NeoForge's differently-typed accessor, so Forge's falls through to an "
+						+ "interface default that is null"));
 		out.add(fixed("dropTheWindowTitlesLoaderBrand", "net/minecraft/client/Minecraft",
 				"the window title carries another loader's brand"));
 		out.add(fixed("keepTheSaveOffTheTeardownsFailurePath", INTEGRATED_SERVER,
@@ -3447,46 +3449,65 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 	 * is not tracking — {@code ModelData.EMPTY} — which is what the overlay would have drawn with anyway. A mod's
 	 * dynamic model data still reaches the block itself through NeoForge's manager, which the level does have; only
 	 * the break overlay draws with defaults.
+	 *
+	 * <p>It scans by shape rather than naming a class: the same lookup is on the render path too — 1.21.1's
+	 * {@code BlockModelShaper.getTexture} asks for the manager and calls {@code getAt(BlockPos)}, and the destroy-block
+	 * particle that follows dies the same way. The {@code getAt(SectionPos)} that returns a {@code Map} is left alone;
+	 * only the {@code ModelData}-returning overloads are replaced.
 	 */
 	private static boolean surviveTheMissingForgeModelDataManager(ClassNode node) {
-		if (!"net/minecraft/client/renderer/extract/LevelExtractor".equals(node.name)) return false;
-
 		boolean changed = false;
 		for (MethodNode m : node.methods) {
 			List<MethodInsnNode> lookups = new ArrayList<>();
 			for (AbstractInsnNode insn = m.instructions.getFirst(); insn != null; insn = insn.getNext()) {
 				if (insn.getOpcode() == Opcodes.INVOKEVIRTUAL && insn instanceof MethodInsnNode call
-						&& FORGE_MODEL_DATA_MANAGER.equals(call.owner) && "getAtOrEmpty".equals(call.name)) {
+						&& FORGE_MODEL_DATA_MANAGER.equals(call.owner)
+						&& ("getAt".equals(call.name) || "getAtOrEmpty".equals(call.name))
+						&& call.desc.endsWith(")L" + FORGE_MODEL_DATA + ";")) {
 					lookups.add(call);
 				}
 			}
 			for (MethodInsnNode lookup : lookups) {
-				// The receiver expression, exactly: ALOAD this; GETFIELD level; INVOKEVIRTUAL getModelDataManager;
-				// then the position argument. Anything else means the method was rewritten upstream — leave it be.
+				// The expression is <level>; getModelDataManager; <position>; getAt/getAtOrEmpty. <level> is a local
+				// (ALOAD n) in the render classes and `this`/field in the overlay, so both are accepted; the
+				// descriptor check above keeps out a same-named lookup that returns something other than
+				// MinecraftForge's ModelData (SectionCompiler's getAt(SectionPos) returns a Map).
 				AbstractInsnNode pos = previousRealInsn(lookup);
 				AbstractInsnNode manager = previousRealInsn(pos);
-				AbstractInsnNode level = previousRealInsn(manager);
-				AbstractInsnNode self = previousRealInsn(level);
 				if (pos == null || pos.getOpcode() != Opcodes.ALOAD
-						|| !(manager instanceof MethodInsnNode get) || !"getModelDataManager".equals(get.name)
-						|| level == null || level.getOpcode() != Opcodes.GETFIELD
-						|| self == null || self.getOpcode() != Opcodes.ALOAD) {
+						|| !(manager instanceof MethodInsnNode get) || !"getModelDataManager".equals(get.name)) {
 					continue;
 				}
-				// The constant goes in where the receiver expression began, BEFORE the five are unlinked: a removed
+				AbstractInsnNode receiver = previousRealInsn(manager);
+				if (receiver == null) continue;
+				AbstractInsnNode start = receiver;
+				List<AbstractInsnNode> dead = new ArrayList<>();
+				if (receiver.getOpcode() == Opcodes.GETFIELD) {
+					AbstractInsnNode before = previousRealInsn(receiver);
+					if (before == null || before.getOpcode() != Opcodes.ALOAD) continue;
+					start = before;
+					dead.add(before);
+				} else if (receiver.getOpcode() != Opcodes.ALOAD) {
+					continue;
+				}
+				dead.add(receiver);
+				dead.add(manager);
+				dead.add(pos);
+				dead.add(lookup);
+				// The constant goes in where the receiver expression began, BEFORE the nodes are unlinked: a removed
 				// node's neighbours are no longer a usable anchor.
-				m.instructions.insertBefore(self,
+				m.instructions.insertBefore(start,
 						new FieldInsnNode(Opcodes.GETSTATIC, FORGE_MODEL_DATA, "EMPTY", "L" + FORGE_MODEL_DATA + ";"));
-				for (AbstractInsnNode dead : new AbstractInsnNode[] {self, level, manager, pos, lookup}) {
-					m.instructions.remove(dead);
+				for (AbstractInsnNode insn : dead) {
+					m.instructions.remove(insn);
 				}
 				changed = true;
 			}
 		}
 		if (!changed) return false;
-		ForbricLog.warn("[Forbric/MergedBaseCompat] the block-breaking overlay no longer asks for MinecraftForge's "
-				+ "model-data manager — NeoForge won the level's accessor, so Forge's returned null and every frame "
-				+ "drawn while a block was being broken crashed the game");
+		ForbricLog.warn("[Forbric/MergedBaseCompat] %s no longer asks for MinecraftForge's model-data manager — "
+				+ "NeoForge won the level's accessor, so Forge's call lands on an interface default that is null and "
+				+ "the lookup NPEs; it uses Forge's own empty model data instead", node.name);
 		return true;
 	}
 

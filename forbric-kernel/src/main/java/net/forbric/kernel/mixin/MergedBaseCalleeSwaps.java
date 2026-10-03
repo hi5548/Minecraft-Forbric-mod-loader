@@ -96,6 +96,29 @@ public final class MergedBaseCalleeSwaps {
 			String because) {
 	}
 
+	/**
+	 * <p>A third source, {@link #KERNEL_SUBSTITUTED}, is filled at RUNTIME by the pass that makes the swap. When THIS
+	 * kernel replaces a call the base still carries — {@code LifecycleHookInjector} redirecting a loader trigger onto
+	 * the kernel's own hook, because the kernel owns the lifecycle — a guest anchored on the original call is not
+	 * reporting a merge loss: it is reporting ours, and leaving its anchor on a call that is no longer there loses a
+	 * hook that used to work. Publishing the swap lets {@link MixinRetarget} move that anchor onto the hook, which is
+	 * the same program point, where the census would otherwise count a loss this kernel caused. Measured on Sinytra
+	 * Connector's {@code boot.ServerMainMixin#earlyInit}: {@code 1/2 anchors resolve, missing: @At(INVOKE)
+	 * net.neoforged.neoforge.server.loading.ServerModLoader.load in Main.main} on every subject, while the console's
+	 * own lifecycle line named that call as the one this pass had just retargeted.
+	 */
+	private static final List<Substitution> KERNEL_SUBSTITUTED = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+	/** Publishes a swap THIS kernel made, for the readers that judge or move a guest's anchor. */
+	public static void kernelSubstituted(Substitution row) {
+		KERNEL_SUBSTITUTED.add(row);
+	}
+
+	/** Drops the published swaps. For tests: the list is process-wide because the pass that fills it is. */
+	public static void forgetKernelSubstitutions() {
+		KERNEL_SUBSTITUTED.clear();
+	}
+
 	public static final List<Substitution> SUBSTITUTED = List.of(
 			new Substitution("net/minecraft/client/resources/model/ModelManager",
 					"lambda$loadBlockModels$2(Ljava/util/Map$Entry;)Lcom/mojang/datafixers/util/Pair;",
@@ -125,12 +148,21 @@ public final class MergedBaseCalleeSwaps {
 		MixinFit.Member want = MixinFit.parseMember(anchor);
 		if (want == null) return null;
 		for (Substitution row : SUBSTITUTED) {
-			if (!row.target().equals(target) || !row.method().equals(method) || !row.ecosystems().contains(ecosystem)) continue;
-			MixinFit.Member have = MixinFit.parseMember(row.member());
-			if (want.name().equals(have.name()) && (want.owner() == null || want.owner().equals(have.owner()))
-					&& (want.desc() == null || want.desc().equals(have.desc()))) return row;
+			if (covers(row, target, method, ecosystem, want)) return row;
+		}
+		// Kernel-made swaps last: a carrier row for the same point is the one the mods were compiled against.
+		for (Substitution row : KERNEL_SUBSTITUTED) {
+			if (covers(row, target, method, ecosystem, want)) return row;
 		}
 		return null;
+	}
+
+	/** Whether {@code row} is about this anchor: same target, same method, an ecosystem the mod belongs to, same member. */
+	private static boolean covers(Substitution row, String target, String method, Ecosystem ecosystem, MixinFit.Member want) {
+		if (!row.target().equals(target) || !row.method().equals(method) || !row.ecosystems().contains(ecosystem)) return false;
+		MixinFit.Member have = MixinFit.parseMember(row.member());
+		return want.name().equals(have.name()) && (want.owner() == null || want.owner().equals(have.owner()))
+				&& (want.desc() == null || want.desc().equals(have.desc()));
 	}
 
 	/** The row for a miss of {@code owner.vanillaName desc} inside {@code target.method}, or null. */

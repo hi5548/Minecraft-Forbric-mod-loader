@@ -27,6 +27,7 @@ import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.VarInsnNode;
 
 import net.forbric.api.Ecosystem;
+import net.forbric.kernel.mixin.MergedBaseCalleeSwaps;
 import net.forbric.api.ForeignType;
 import net.forbric.kernel.util.ForbricLog;
 
@@ -116,7 +117,12 @@ public final class LifecycleHookInjector implements ClassTransformer {
 	 * descriptor carries arguments the hook does not want. When {@code popSlots == 0} the descriptor is kept and it
 	 * is a plain owner+name swap (the argument stays on the stack for a matching hook signature).
 	 */
-	private record Trigger(String owner, String name, String desc, String hookName, int popSlots) {}
+	/**
+	 * @param owner     the class holding the genuine loader call, in the family {@code ecosystem} belongs to
+	 * @param ecosystem the family whose jar makes that call — also the family a guest was compiled against when its
+	 *                  anchor names {@code owner}, which is how {@link MergedBaseCalleeSwaps#substitution} filters
+	 */
+	private record Trigger(String owner, String name, String desc, String hookName, int popSlots, Ecosystem ecosystem) {}
 
 	// Server triggers, both families. One descriptor arm matches a given merged base, so a base that carries both
 	// families' calls still triggers exactly once (the caller also marks the method after the first redirect).
@@ -128,9 +134,9 @@ public final class LifecycleHookInjector implements ClassTransformer {
 	// new DedicatedServerSettings(...). Without this arm the anchor reads as "gone" on 1.21.1 and the kernel
 	// (correctly) refuses to boot rather than let the genuine lifecycle run. popSlots 0: no-arg trigger, no-arg hook.
 	private static final Trigger[] SERVER_TRIGGERS = {
-			new Trigger(ForeignType.SERVER_MOD_LOADER.internal(Ecosystem.NEOFORGE), "load", "(Z)V", "onServerModLoading", 0),
-			new Trigger(ForeignType.SERVER_MOD_LOADER.internal(Ecosystem.NEOFORGE), "load", "()V", "onServerModLoadingNoArg", 0),
-			new Trigger(ForeignType.SERVER_MOD_LOADER.internal(Ecosystem.FORGE), "load", "()V", "onServerModLoadingNoArg", 0),
+			new Trigger(ForeignType.SERVER_MOD_LOADER.internal(Ecosystem.NEOFORGE), "load", "(Z)V", "onServerModLoading", 0, Ecosystem.NEOFORGE),
+			new Trigger(ForeignType.SERVER_MOD_LOADER.internal(Ecosystem.NEOFORGE), "load", "()V", "onServerModLoadingNoArg", 0, Ecosystem.NEOFORGE),
+			new Trigger(ForeignType.SERVER_MOD_LOADER.internal(Ecosystem.FORGE), "load", "()V", "onServerModLoadingNoArg", 0, Ecosystem.FORGE),
 	};
 
 	// Client trigger: ClientModLoader.begin()V in net.minecraft.client.main.Main.main — the EXACT client analogue of
@@ -145,8 +151,8 @@ public final class LifecycleHookInjector implements ClassTransformer {
 	// to a point never reached. Redirecting begin() here mirrors the proven server path and reaches the window.)
 	private static final String BEGIN = "begin";
 	private static final Trigger[] CLIENT_TRIGGERS = {
-			new Trigger(ForeignType.CLIENT_MOD_LOADER.internal(Ecosystem.NEOFORGE), BEGIN, "()V", "onClientModLoading", 0),
-			new Trigger(ForeignType.CLIENT_MOD_LOADER.internal(Ecosystem.FORGE), BEGIN, "()V", "onClientModLoading", 0),
+			new Trigger(ForeignType.CLIENT_MOD_LOADER.internal(Ecosystem.NEOFORGE), BEGIN, "()V", "onClientModLoading", 0, Ecosystem.NEOFORGE),
+			new Trigger(ForeignType.CLIENT_MOD_LOADER.internal(Ecosystem.FORGE), BEGIN, "()V", "onClientModLoading", 0, Ecosystem.FORGE),
 	};
 
 	// PORT(1.21.1): the client's genuine-loader entry MOVED. 26.2 wove ClientModLoader.begin()V into
@@ -161,9 +167,9 @@ public final class LifecycleHookInjector implements ClassTransformer {
 			+ "Lnet/minecraft/server/packs/resources/ReloadableResourceManager;)V";
 	private static final Trigger[] CLIENT_INIT_TRIGGERS = {
 			new Trigger(ForeignType.CLIENT_MOD_LOADER.internal(Ecosystem.NEOFORGE), BEGIN, CLIENT_BEGIN_DESC,
-					"onClientModLoadingWithPacks", 0),
+					"onClientModLoadingWithPacks", 0, Ecosystem.NEOFORGE),
 			new Trigger(ForeignType.CLIENT_MOD_LOADER.internal(Ecosystem.FORGE), BEGIN, CLIENT_BEGIN_DESC,
-					"onClientModLoadingWithPacks", 0),
+					"onClientModLoadingWithPacks", 0, Ecosystem.FORGE),
 	};
 
 	/** No trigger arms: a reporting-only registration (see {@link #forClientEarlyFailures()}). */
@@ -252,6 +258,20 @@ public final class LifecycleHookInjector implements ClassTransformer {
 		this(SERVER_MAIN, "main", SERVER_TRIGGERS, true, false, KERNEL_HOOK_OWNER);
 	}
 
+	/**
+	 * The {@link MergedBaseCalleeSwaps#SUBSTITUTED} row for one redirect: what the guest was compiled against, and
+	 * what this pass put at the same instruction instead. Public so a test — or a headless probe — can assert the
+	 * row without a boot, and so the two readers and the writer share one construction.
+	 */
+	public static MergedBaseCalleeSwaps.Substitution substitutionRow(String hostClass, String hostMethod, String owner,
+			String name, String desc, Ecosystem ecosystem, String hookOwner, String hookName, String hookDesc) {
+		return new MergedBaseCalleeSwaps.Substitution(hostClass, hostMethod, "L" + owner + ";" + name + desc,
+				"L" + hookOwner + ";" + hookName + hookDesc, java.util.Set.of(ecosystem),
+				"the kernel owns the lifecycle: this pass replaced " + owner.replace('/', '.') + "." + name
+						+ " with its own hook at the same instruction, so the point BEFORE the hook is still the point "
+						+ "before the mod-loading window every guest anchored on that call meant");
+	}
+
 	@Override
 	public byte[] transform(String className, byte[] classBytes, TransformContext context) {
 		if (!transformClass.equals(className)) return classBytes;
@@ -289,6 +309,13 @@ public final class LifecycleHookInjector implements ClassTransformer {
 				}
 
 				redirected++;
+				// Publish the swap. A guest anchored on the call this pass just replaced is not reporting a merge
+				// loss — it is reporting ours — so the anchor-retarget moves it onto the hook instead of leaving it on
+				// a call that is no longer there (Sinytra Connector's boot.ServerMainMixin#earlyInit, whose
+				// `@At(INVOKE) ServerModLoader.load in Main.main` read as missing on every subject while the console
+				// line above was naming that very call as ours).
+				MergedBaseCalleeSwaps.kernelSubstituted(substitutionRow(transformClass, transformMethod, t.owner(),
+						t.name(), t.desc(), t.ecosystem(), hookOwner, call.name, call.desc));
 				ForbricLog.info("[Forbric/Lifecycle] redirected genuine loader trigger %s.%s to %s.%s from %s.%s "
 						+ "— kernel owns the lifecycle", t.owner(), t.name(), hookOwner, t.hookName(),
 						transformClass, transformMethod);

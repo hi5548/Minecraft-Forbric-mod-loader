@@ -321,5 +321,59 @@ mixin-injector:fabric-renderer-indigo.mixins.json:
 本条的对照行是 `[Forbric/Renderer] retargeted Indigo's per-block redirect onto the merged compile body's
 nine-argument renderBatched …`。
 
+## 10. 撤回 55164ff3：加宽本身对，shim 的参数类型错了——而这才量出了真正的形状
+
+世界深度的运行把上一条判决**证伪**了，逐字如下（`crash-reports/crash-2026-10-04_07.26.49-client.txt`）：
+
+```
+java.lang.VerifyError: Bad type on operand stack
+  Location: net/minecraft/client/renderer/chunk/SectionCompiler.redirect$zjm000$fabric-renderer-indigo$hookBuildRenderBlock(…)
+  Reason:   Type 'java/lang/Object' (current frame, stack[8]) is not assignable to
+            net/neoforged/neoforge/client/model/data/ModelData
+```
+
+标记（`retargeted Indigo's per-block redirect …`）**出现**了，说明重锚确实发射；随后客户端在世界加载时崩。
+`a08f43f8` 撤回该 shim：**一个在世界加载路径上崩的 shim 比一条记录在案的损失更糟**，不留半成品。
+
+### 10.1 真正的形状（帧级测量，不是描述符推理）
+
+用 ASM `SimpleVerifier` 在合并基底上把两个 `renderBatched` 调用点的**帧**读出来（classpath 补上游戏
+libraries；第一版缺 `it.unimi.dsi.fastutil`，直接抛 `ClassNotFoundException`，我当时把那条失败读成噪声，
+那本身就是错的）：
+
+```
+compile(SectionPos,RenderChunkRegion,VertexSorting,SectionBufferBuilderPack)   ← guest 的 method= 指的就是这个
+  operand[-2] = net/minecraftforge/client/model/data/ModelData                ← Forge 那份
+compile(…, SectionBufferBuilderPack, java/util/List)                          ← 另一个重载
+  operand[-2] = net/neoforged/neoforge/client/model/data/ModelData            ← NeoForge 那份
+```
+
+**同一个类里有两个九参 `renderBatched` 调用点，分属两个 `compile` 重载，拿的是两个不同的 `ModelData` 类。**
+我的第一版用"整个 `SectionCompiler` 里 `count(...) == 1`"去卡唯一性——它**在五参那个方法上通过了**，
+而 handler 注入的是**四参**那个。注解因此可验、shim 不可验。这不是"再补个 CHECKCAST"能修的：**选错了被调方**，
+而 CHECKCAST 到错的那个类正好是运行期 CCE 的配方。
+
+### 10.2 离线探针的缺口（这次要写下来的原因）
+
+我那个探针只查**形状**：注解 target、描述符宽度、转发调用描述符、幂等，以及发射出来的指令序列；
+它**没有对目标方法做帧分析**——而帧分析需要完整 classpath，第一版抛异常时我没有把它当回事。
+**形状探针永远抓不到操作数类型错**：这一次错得恰好是"形状全对、类型错"。
+所以下一次加宽必须把"该重载帧里那两个操作数的类型"纳入探针，并按**具体重载**取，不是在整个类里找唯一匹配。
+
+### 10.3 这一条的当前处置与代价
+
+- 状态：`SectionBuilderMixin#hookBuildRenderBlock` 仍是那一条 `CONFIRMED required`；适配器已回到
+  `26793e60` 原样（无新分支、不崩）。
+- **原因已量清**：被调方被**加宽**（7 参 → 9 参），7 参方法**仍在声明**只是不再被调用，所以锚点不存在——
+  这是世代问题的第三种形状：前两条（A/B）是类名与拼写，这条是签名被加宽。
+- **代价（玩家可见）**：Indigo 的 per-block 钩子不附着，**非 vanilla-adapter 的模型不会被路由到
+  `TerrainRenderContext.tessellateBlock`**，而是走 NeoForge 的 `renderBatched` 路径——Fabric mod 在区块里的
+  自定义方块几何可能渲染错误或完全不出现；该 mixin 的循环建立与返回处理器仍照常绑定。
+- 下一步（一步的事，不盲写第二版字节）：按"带账退出"给它补一行 `GuestInjectorPruner` 表项，锚点是
+  `INDIGO_SECTION_BUILDER_MIXIN = "net.fabricmc.fabric.mixin.client.indigo.renderer.SectionBuilderMixin"`，
+  prune 名 `hookBuildRenderBlock`，selector 前缀 `Lnet/minecraft/client/renderer/chunk/SectionCompiler;compile`，
+  代价按上面那段写。真正的重锚要先把 shim 的参数类型从**该重载的帧**取出来再生成。
+
+
 
 

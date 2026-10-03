@@ -78,6 +78,21 @@ import net.forbric.kernel.util.ForbricLog;
  * the same lines twice — and {@code hookDamage} (custom damage handlers) applies as written. Nothing is recorded for
  * them: the bridge does their job, and {@code FabricApiModuleLossAudit} names a mod's use of the registry when it
  * is off.
+ *
+ * <p><b>A lambda-selector retarget is NOT local — measured 2026-10-03, reverted.</b> A transformer that rewrote a
+ * guest mixin's selectors onto the lambda the merged base declares cleared {@code SerializableRegistriesMixin}'s
+ * finding, and the same subject then reported eleven more CONFIRMED {@code mixin-injector} losses plus a balm
+ * {@code InvalidInjectionException}. The rewrite itself touched ONE class of 3807 in the remapped tree (only that
+ * mixin, only its two selectors), so it cannot have edited the failing mixins. What moves is the PIPELINE:
+ * clearing the mixin's required finding let the launch pass the STRICT compatibility gate that had halted it
+ * before Mixin applied anything, and post-application audit verdicts ("no attachment in the actual defined class")
+ * that are unreachable at gate depth became visible. Whether those eleven are a REGRESSION or a failure that was
+ * always there and merely hidden behind the early stop is UNRESOLVED: the {@code -Dforbric.lambdaSelectorRetarget=off}
+ * isolation arm reproduced the parent's gate stop (`stopped=2`, no mixin application), so it compared two
+ * different boot depths and could not settle it. {@code confirmedRequired} is depth-sensitive — a retarget must be
+ * judged with {@code -Dforbric.compatibilityPolicy=continue} on BOTH arms, or the 1&rarr;12 delta is a boot-depth
+ * artefact, not an injection regression. Understanding why those eleven injectors report unattached once the boot
+ * goes deep enough is the real next question; the retarget is orthogonal to it.
  */
 public final class GuestInjectorPruner implements ClassTransformer {
 	public static final String PROPERTY = "forbric.guestInjectorPruner";

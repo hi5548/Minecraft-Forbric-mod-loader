@@ -90,4 +90,11 @@ runtime classes are Mojmap (verified: `class_7923 method_47487 ()V`, and after `
 targets become Mojmap and `createContents` becomes `public`). That fix needs a **fresh remap cache** (REMAP_VERSION
 bumped to `1.21.1-6-accesswidener-namespace`).
 
+The translation alone was not enough: `KernelFabricEcosystem.accessWidenerFiles()` read the widener out of
+`container.getJar()` — the pre-remap original — while the class loader used the remapped copy, so the runtime still
+merged an `intermediary` file. `44bad9da` closes the asymmetry: `jarToRead` resolves a container jar to the
+remapped copy (registered by `KernelBoot` right after `remapAll`), `ClassTweakerTransformer`'s summary line now
+names the declaring jars, and `KernelFabricEcosystemJarAlignmentTest` is the contract test — the reader and the
+class loader must resolve the same jar.
+
 

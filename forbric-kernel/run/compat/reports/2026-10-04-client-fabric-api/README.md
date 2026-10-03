@@ -374,6 +374,32 @@ compile(…, SectionBufferBuilderPack, java/util/List)                          
   prune 名 `hookBuildRenderBlock`，selector 前缀 `Lnet/minecraft/client/renderer/chunk/SectionCompiler;compile`，
   代价按上面那段写。真正的重锚要先把 shim 的参数类型从**该重载的帧**取出来再生成。
 
+### 10.4 独立复核与三条规则
+
+`W7Harness` 从**常量池**（不是信任我的探针）独立复核了同一件事，两个九参重载只差一个类型：
+
+```
+#270  BlockRenderDispatcher.renderBatched:(…RandomSource;Lnet/minecraftforge/client/model/data/ModelData;L…RenderType;)V
+#390  BlockRenderDispatcher.renderBatched:(…RandomSource;Lnet/neoforged/neoforge/client/model/data/ModelData;L…RenderType;)V
+```
+且四参 `compile`（guest 的 `method=` 指的那个）的 model data 来自
+`net/minecraftforge/client/model/data/ModelDataManager.getAt(...)`——就是 **MinecraftForge** 那一份。
+所以"CHECKCAST 到 NeoForge 那个类"会**通过校验、然后在第一次渲染方块时抛 `ClassCastException`**：
+把一次硬崩换成一次静默损坏。这条与 §10.2 同一个根：**按整个类卡唯一性**正是它选错重载的方式。
+
+四条规则留在这里，因为它们不是轶事而是下次可直接引用的判据：
+
+1. **"崩掉的 shim 比记录在案的损失更糟。"** 世界加载路径上的 `VerifyError` 让每个渲染的样本都付出代价；
+   一条记录在案的退出只付一条 finding。补不完就必须撤，这是唯一站得住的收尾。
+2. **"形状探针抓不到操作数类型错，而这一次恰好是'形状全对、类型错'。"** 注解 target、描述符宽度、
+   发射序列、幂等——一个根本不能通过校验的 body 能把这四项全部满足。这条推广到本适配器之外。
+3. **"类名之后是拼写，拼写之后是被加宽的签名"**——世代问题的第三种形状，而前两种各自花了一次启动才发现。
+   把形状说出来，下一次才是被"找"到而不是被"发现"。
+4. **classpath 不完整的探针，是没量到它声称量的东西的探针。** 我第一版探针因缺
+   `it.unimi.dsi.fastutil` 抛 `ClassNotFoundException`，我把那条失败读成了噪声——它与"`evidence: []`"、
+   "浅层的 `world`"同族：仪器自己的缺口被当成了无关项。
+
+
 
 
 

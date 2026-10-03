@@ -194,6 +194,12 @@ public final class KernelClientSmoke {
 	/**
 	 * Answers vanilla's backup/experimental confirmation, which a headless quick-play boot otherwise waits on forever.
 	 *
+	 * <p><b>Why the screen appears at all</b> (measured by BFabricBoot on 2c8d932e, carried here because the helper
+	 * that found it was folded into this one): the smoke world is a modded world — {@code WasModded=1} and
+	 * {@code ServerBrands=[neoforge]} in its {@code level.dat} — so vanilla opens it behind the confirmation rather
+	 * than declaring it plain. Confirming it mirrors a real player and keeps the fixture honest; the alternative,
+	 * editing the world so it looks unmodded, would have hidden a real behaviour instead of exercising it.
+	 *
 	 * <p>This is the identified cause of every client run that reached the world but never entered it. The
 	 * {@code Minecraft.screen} diagnostic (which split "the chain ran and quick-play declined" from "the chain never
 	 * ran") showed the render thread drawing {@code LoadingOverlay} over a {@code BackupConfirmScreen}: vanilla had

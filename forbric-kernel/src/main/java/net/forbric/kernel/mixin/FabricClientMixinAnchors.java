@@ -6,8 +6,9 @@ import org.objectweb.asm.*;
 import org.objectweb.asm.tree.*;
 import org.objectweb.asm.tree.analysis.*;
 import net.forbric.kernel.util.ForbricLog;
-/** Proven moved block-entity removal, a context-expanded call whose Fabric redirect is strictly a no-op, and Fabric's
- * per-screen draw events around NeoForge's screen-stack call. */
+/** Proven moved block-entity removal, a context-expanded call whose Fabric redirect is strictly a no-op, Fabric's
+ * per-screen draw events around NeoForge's screen-stack call, and the one instruction in fabric-rendering-v1's
+ * shader-id hook that assumed vanilla's {@code ShaderInstance} rather than the merged base's NeoForge one. */
 public final class FabricClientMixinAnchors {
  public static final String PROPERTY="forbric.fabricClientAnchors";
  private FabricClientMixinAnchors(){}
@@ -21,6 +22,7 @@ public final class FabricClientMixinAnchors {
     ||mixin.name.equals("net/fabricmc/fabric/mixin/event/lifecycle/server/LevelChunkMixin")
     ||mixin.name.equals("net/fabricmc/fabric/mixin/event/lifecycle/client/WorldChunkMixin")
     ||mixin.name.equals("net/fabricmc/fabric/mixin/event/lifecycle/server/WorldChunkMixin"))return removal(mixin,targets);
+  if(mixin.name.equals("net/fabricmc/fabric/mixin/client/rendering/shader/ShaderProgramMixin"))return shaderStage(mixin);
   if(mixin.name.equals("net/fabricmc/fabric/mixin/client/renderer/block/render/LevelRendererMixin"))return render(mixin,targets);
   if(mixin.name.equals("net/fabricmc/fabric/mixin/screen/GuiMixin"))return screenExtract(mixin,targets);
   return 0;
@@ -115,6 +117,43 @@ public final class FabricClientMixinAnchors {
  /** A declined retarget, named: which guard said no, on which mixin. Never silent. */
  private static int declined(ClassNode mixin,String why){
   ForbricLog.info("[Forbric/Mixin] %s:onRemoveBlockEntity retarget DECLINED — %s",mixin.name,why);
+  return 0;
+ }
+ /** fabric-rendering-v1's core-shader-id hook, compiled against VANILLA's {@code ShaderInstance}. Its
+  * {@code @ModifyVariable(at=STORE, ordinal=1)} rewrites the stage id {@code getOrCreate} builds — vanilla's
+  * {@code "shaders/core/" + vertex + ext} — into a FULL location ({@code FabricShaderProgram.rewriteAsId(...)
+  * .toString()}), because vanilla then calls {@code ResourceLocation.withDefaultNamespace} and the hook's sibling
+  * {@code @WrapOperation} parses a namespaced result. The merged base's {@code ShaderInstance} is NeoForge's —
+  * decompiled source identical to {@code patched-mc-neoforge-1.21.1.jar}'s (the raw byte diff is constant-pool
+  * index numbering and the {@code ldc}/{@code ldc_w} width it forces, nothing semantic): it parses the vertex as a
+  * location and attaches that namespace itself, so neither {@code withDefaultNamespace} anchor exists and the two
+  * wrap operations are dropped. The one surviving injector then hands {@code fromNamespaceAndPath} a string that
+  * already carries the namespace — {@code neoforge:neoforge:shaders/core/rendertype_entity_unlit_translucent.vsh}
+  * — a {@code ResourceLocationException} inside {@code RegisterShadersEvent} that removes every resource pack and
+  * parks the client on the title screen. One instruction is the whole difference: hand the reader the PATH it will
+  * re-namespace, not the whole location. The injector and its handler are otherwise left exactly as compiled, so
+  * the mixin keeps its PARTIAL verdict and the reported amount does not move. {@code -Dforbric.fabricClientAnchors=off}
+  * leaves it as compiled. */
+ private static int shaderStage(ClassNode mixin){
+  String desc="(Ljava/lang/String;Lnet/minecraft/server/packs/resources/ResourceProvider;Lcom/mojang/blaze3d/shaders/Program$Type;Ljava/lang/String;)Ljava/lang/String;";
+  MethodNode handler=find(mixin,"modifyStageId",desc);
+  if(handler==null)return declined(mixin,"modifyStageId","no handler modifyStageId"+desc);
+  if(group(handler))return declined(mixin,"modifyStageId","handler is in an @Group");
+  AnnotationNode injector=MixinFit.injectorOf(handler);
+  if(injector==null||!"Lorg/spongepowered/asm/mixin/injection/ModifyVariable;".equals(injector.desc))
+    return declined(mixin,"modifyStageId","handler carries no @ModifyVariable");
+  if(calls(handler,"net/fabricmc/fabric/impl/client/rendering/FabricShaderProgram","rewriteAsId")!=1)
+    return declined(mixin,"modifyStageId","handler does not call FabricShaderProgram.rewriteAsId exactly once");
+  MethodInsnNode whole=null;int matches=0;
+  for(var insn:handler.instructions)if(insn instanceof MethodInsnNode call&&call.getOpcode()==Opcodes.INVOKEVIRTUAL
+    &&call.owner.equals("net/minecraft/resources/ResourceLocation")&&call.name.equals("toString")&&call.desc.equals("()Ljava/lang/String;")){matches++;whole=call;}
+  if(matches!=1)return declined(mixin,"modifyStageId","ResourceLocation.toString count is "+matches+" not 1");
+  whole.name="getPath";
+  ForbricLog.info("[Forbric/Mixin] normalised %s:modifyStageId — the stage id it hands ShaderInstance.getOrCreate is the path, not a full location; the merged NeoForge reader attaches the namespace itself",mixin.name);
+  return 1;
+ }
+ private static int declined(ClassNode mixin,String handler,String why){
+  ForbricLog.info("[Forbric/Mixin] %s:%s retarget DECLINED — %s",mixin.name,handler,why);
   return 0;
  }
  private static int render(ClassNode mixin,Function<String,ClassNode> targets){

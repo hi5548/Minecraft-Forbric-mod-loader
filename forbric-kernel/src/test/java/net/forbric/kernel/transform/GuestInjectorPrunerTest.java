@@ -558,6 +558,27 @@ class GuestInjectorPrunerTest {
 				"an optional entry must not be a REQUIRED repair the ledger cries wolf about");
 	}
 
+	/**
+	 * The Open Parties and Claims entry. The merged {@code ExperienceOrb.scanForEntities} never calls
+	 * {@code Level.getNearestPlayer}, so the {@code @At(INVOKE_ASSIGN)} anchor cannot bind and the sole handler is
+	 * stood down, recorded as a loss that asks nothing. Red before the entry: the class passes through untouched.
+	 */
+	@Test
+	void theOpacOrbTargetingInjectorIsPrunedIntoAConfirmedFindingThatAsksNothing() throws Exception {
+		net.forbric.api.CompatibilityFindings.reset();
+		byte[] original = oneDeadInjector(GuestInjectorPruner.OPAC_XP_ORB_MIXIN,
+				"net.minecraft.world.entity.ExperienceOrb", "onScanForEntities",
+				"(Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V",
+				"Lorg/spongepowered/asm/mixin/injection/Inject;",
+				"scanForEntities", "INVOKE_ASSIGN",
+				"Lnet/minecraft/world/level/Level;getNearestPlayer(Lnet/minecraft/world/entity/Entity;D)"
+						+ "Lnet/minecraft/world/entity/player/Player;",
+				"onScanForEntitiesKeepMe");
+		checkPrunedDeadInjector(original, GuestInjectorPruner.OPAC_XP_ORB_MIXIN, "onScanForEntities",
+				"(Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V",
+				"onScanForEntitiesKeepMe", "XpOrbTargetingEvent");
+	}
+
 	private static void checkPrunedDeadInjector(byte[] original, String mixin, String dead, String deadDesc,
 			String survivor, String detailNeedle) {
 		byte[] pruned = new GuestInjectorPruner().transform(mixin, original, null);

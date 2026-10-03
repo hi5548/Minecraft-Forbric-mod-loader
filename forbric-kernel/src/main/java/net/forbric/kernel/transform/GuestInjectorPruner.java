@@ -76,6 +76,13 @@ import net.forbric.kernel.util.ForbricLog;
  * a declined repair, which is what {@link Prune#optional()} and the {@code HEDGE} severity in
  * {@link #declaredAnchors} are for.
  *
+ * <p>The Open Parties and Claims entry is the plain case: the merged {@code ExperienceOrb.scanForEntities} replaces
+ * vanilla's {@code Level.getNearestPlayer} selection wholesale with NeoForge's {@code XpOrbTargetingEvent} plus
+ * {@code Level.getEntities(EntityTypeTest,AABB,Predicate)}, so the {@code @At(INVOKE_ASSIGN)} anchor is not a moved
+ * call but a different program. {@link net.forbric.kernel.mixin.MergedBaseCalleeSwaps#SUBSTITUTED} has no row for it
+ * (that table is one call for another at the same instruction), and a {@code Player} result is not a
+ * {@code List<ExperienceOrb>}, so the handler is stood down and its cost recorded.
+ *
  * <p>Guest mixin classes reach the transform chain through {@code ForbricClassLoader.getPreMixinClassBytes},
  * which is also what {@link net.forbric.kernel.mixin.MixinFit} and Mixin itself read, so the pruned bytes are
  * the only bytes anyone judges or applies. Both methods must be present, each carrying an injector annotation
@@ -205,6 +212,7 @@ public final class GuestInjectorPruner implements ClassTransformer {
 	static final String ARCHITECTURY_PHANTOM_MIXIN = "dev.architectury.mixin.fabric.MixinPhantomSpawner";
 	static final String SCREEN_HANDLER_PLAYER_MIXIN =
 			"net.fabricmc.fabric.mixin.screenhandler.ServerPlayerEntityMixin";
+	static final String OPAC_XP_ORB_MIXIN = "xaero.pac.common.mixin.MixinOptionalExperienceOrb";
 
 	/**
 	 * One table plus the entries that would push {@code Map.of} past its ten-pair limit. Java's {@code Map.of}
@@ -320,7 +328,18 @@ public final class GuestInjectorPruner implements ClassTransformer {
 			// revision the entry is a correct no-op; see {@link Prune#optional()}.
 			Map.entry(SCREEN_HANDLER_PLAYER_MIXIN, List.of(new Prune("fabric_replaceMenuProvider",
 					"(Lnet/minecraft/world/MenuProvider;)Lnet/minecraft/world/MenuProvider;",
-					"openMenu", false, true))));
+					"openMenu", false, true))),
+			// Open Parties and Claims' MixinOptionalExperienceOrb#onScanForEntities is an @Inject at
+			// @At(INVOKE_ASSIGN) of Level.getNearestPlayer(Entity,D)Player inside ExperienceOrb.scanForEntities.
+			// The merged body never makes that call: it posts NeoForge's XpOrbTargetingEvent and picks the target
+			// with Level.getEntities(EntityTypeTest,AABB,Predicate) (javap: XpOrbTargetingEvent.<init>,
+			// getFollowingPlayer, EntityTypeTest.forClass, Level.getEntities; no getNearestPlayer anywhere).
+			// MergedBaseCalleeSwaps#SUBSTITUTED has no row for it — the merge did not swap one call for another at
+			// the same point, it replaced the whole selection — and a getNearestPlayer()Player result is not a
+			// List<ExperienceOrb>, so the handler cannot be retargeted onto the surviving code. No other handler.
+			Map.entry(OPAC_XP_ORB_MIXIN, List.of(new Prune("onScanForEntities",
+					"(Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V",
+					"scanForEntities"))));
 
 	static final Map<String, List<Prune>> TABLE = with(Map.of(MODEL_MANAGER_MIXIN, List.of(
 			new Prune("cancelVanillaDeserialize",
@@ -394,7 +413,8 @@ public final class GuestInjectorPruner implements ClassTransformer {
 			Map.entry(SHADOWGUARD_FIRE_MIXIN, "shadowguard.mixins.json"),
 			Map.entry(ARCHITECTURY_GAMEMODE_MIXIN, "architectury.mixins.json"),
 			Map.entry(ARCHITECTURY_PHANTOM_MIXIN, "architectury.mixins.json"),
-			Map.entry(SCREEN_HANDLER_PLAYER_MIXIN, "fabric-screen-handler-api-v1.mixins.json"));
+			Map.entry(SCREEN_HANDLER_PLAYER_MIXIN, "fabric-screen-handler-api-v1.mixins.json"),
+			Map.entry(OPAC_XP_ORB_MIXIN, "openpartiesandclaims.forge.mixins.json"));
 
 	/** The mixin config each entry is declared in, which names the owning mod on the finding. */
 	static final Map<String, String> CONFIGS = with(Map.of(MODEL_MANAGER_MIXIN, "fabric-model-loading-api-v1.mixins.json",
@@ -415,7 +435,8 @@ public final class GuestInjectorPruner implements ClassTransformer {
 			Map.entry(SHADOWGUARD_FIRE_MIXIN, () -> true),
 			Map.entry(ARCHITECTURY_GAMEMODE_MIXIN, () -> true),
 			Map.entry(ARCHITECTURY_PHANTOM_MIXIN, () -> true),
-			Map.entry(SCREEN_HANDLER_PLAYER_MIXIN, () -> true));
+			Map.entry(SCREEN_HANDLER_PLAYER_MIXIN, () -> true),
+			Map.entry(OPAC_XP_ORB_MIXIN, () -> true));
 
 	static final Map<String, BooleanSupplier> ACTIVE = with(Map.of(MODEL_MANAGER_MIXIN, () -> true,
 			ITEM_STACK_MIXIN, GuestInjectorPruner::fabricTooltipBridgeOn,
@@ -457,7 +478,11 @@ public final class GuestInjectorPruner implements ClassTransformer {
 			Map.entry(SCREEN_HANDLER_PLAYER_MIXIN, "the @ModifyArg stays in the mixin, cannot attach (the merged "
 					+ "ServerPlayer.openMenu(MenuProvider) makes no openMenu self-call to modify) and is reported as a "
 					+ "required CONFIRMED loss, so a STRICT launch halts on it; the menu-provider replacement is gone "
-					+ "either way, since the call site the handler was written against does not exist"));
+					+ "either way, since the call site the handler was written against does not exist"),
+			Map.entry(OPAC_XP_ORB_MIXIN, "the handler stays in the mixin, cannot attach (the merged "
+					+ "ExperienceOrb.scanForEntities makes no Level.getNearestPlayer call) and is reported as a "
+					+ "required CONFIRMED loss, so a STRICT launch halts on it; the orb-targeting hook is gone either "
+					+ "way, since the call site the handler was written against does not exist"));
 
 	static final Map<String, String> COSTS = with(Map.of(MODEL_MANAGER_MIXIN,
 			"the whole mixin stays pinned, so every Fabric ModelLoadingPlugin -- block-state resolvers, extra "
@@ -513,7 +538,12 @@ public final class GuestInjectorPruner implements ClassTransformer {
 					+ "overload — its body calls closeContainer/nextContainerCounter/MenuProvider.createMenu/"
 					+ "ClientboundOpenScreenPacket/initMenu/ForgeEventFactory.onPlayerOpenContainer and never "
 					+ "openMenu(MenuProvider,Consumer) — so fabric-screen-handler's @ModifyArg(index=0) on that self-call "
-					+ "has nothing to bind to"));
+					+ "has nothing to bind to"),
+			Map.entry(OPAC_XP_ORB_MIXIN, "the merged ExperienceOrb.scanForEntities posts NeoForge's "
+					+ "XpOrbTargetingEvent and picks its target with Level.getEntities(EntityTypeTest,AABB,Predicate) "
+					+ "— javap shows XpOrbTargetingEvent.<init>/getFollowingPlayer, EntityTypeTest.forClass and "
+					+ "Level.getEntities, and no getNearestPlayer anywhere — so the @At(INVOKE_ASSIGN) "
+					+ "Level.getNearestPlayer anchor has no call to bind to"));
 
 	static final Map<String, String> REASONS = with(Map.of(MODEL_MANAGER_MIXIN,
 			"NeoForge replaced CuboidModel.fromStream with UnbakedModelParser.parse at that site, so fabric's @Redirect "
@@ -558,7 +588,9 @@ public final class GuestInjectorPruner implements ClassTransformer {
 					+ "handlers never attach — exactly the state before this entry"),
 			Map.entry(SCREEN_HANDLER_PLAYER_MIXIN, "the @ModifyArg soft-skips with Mixin's own warning, exactly as it "
 					+ "did before this entry — on the revision that carries the handler at all; on fabric-api 0.116.17 "
-					+ "the class never had it, so this entry is a no-op either way"));
+					+ "the class never had it, so this entry is a no-op either way"),
+			Map.entry(OPAC_XP_ORB_MIXIN, "the injection is skipped with Mixin's own warning, exactly as it did before "
+					+ "this entry; this mixin has no other handler"));
 
 	static final Map<String, String> DRIFT = with(Map.of(MODEL_MANAGER_MIXIN, "it will read PARTIAL and apply half — the state that made every block "
 					+ "model missingno",
@@ -600,7 +632,12 @@ public final class GuestInjectorPruner implements ClassTransformer {
 					+ "happens — the @ModifyArg replaced argument 0 of the openMenu(MenuProvider,Consumer) self-call with "
 					+ "the extended factory, and the merged body inlines that overload and makes no such call, so a "
 					+ "Fabric mod's extended-screen opening data is never installed; the mixin's close-handled-screen "
-					+ "redirect, its store-opened handler and its vanilla-packet replacement still bind"));
+					+ "redirect, its store-opened handler and its vanilla-packet replacement still bind"),
+			Map.entry(OPAC_XP_ORB_MIXIN, "the kernel removed this injector: Open Parties and Claims' experience-orb "
+					+ "pickup hook no longer runs — the handler fed the player Level.getNearestPlayer returned into "
+					+ "ServerCore.onExperiencePickup to track followingPlayer, and the merged scanForEntities targets "
+					+ "orbs through NeoForge's XpOrbTargetingEvent and Level.getEntities(EntityTypeTest,AABB,Predicate) "
+					+ "instead; this mixin has no other handler"));
 
 	static final Map<String, String> LOSSES = with(Map.of(MODEL_MANAGER_MIXIN,
 			"the kernel removed this injector: NeoForge's UnbakedModelParser now reads block models at its call site, so "

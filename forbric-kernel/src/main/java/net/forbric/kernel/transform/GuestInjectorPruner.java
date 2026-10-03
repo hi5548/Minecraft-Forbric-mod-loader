@@ -379,7 +379,7 @@ public final class GuestInjectorPruner implements ClassTransformer {
 			Map.entry(ARCHITECTURY_GAMEMODE_MIXIN, () -> true),
 			Map.entry(ARCHITECTURY_PHANTOM_MIXIN, () -> true));
 
-	private static final Map<String, BooleanSupplier> ACTIVE = with(Map.of(MODEL_MANAGER_MIXIN, () -> true,
+	static final Map<String, BooleanSupplier> ACTIVE = with(Map.of(MODEL_MANAGER_MIXIN, () -> true,
 			ITEM_STACK_MIXIN, GuestInjectorPruner::fabricTooltipBridgeOn,
 			WORLD_CHUNK_MIXIN, () -> true,
 			BREWING_STAND_MIXIN, () -> true,
@@ -397,13 +397,27 @@ public final class GuestInjectorPruner implements ClassTransformer {
 					+ "DefaultedRegistry.stream call exists anywhere in the merged base) and is reported as a required "
 					+ "CONFIRMED loss, so a STRICT launch halts on it; the feature is gone either way, since the trade it "
 					+ "would widen is no longer built from a registry iteration"),
+			Map.entry(SHADOWGUARD_FIRE_MIXIN, "the handler stays and aborts the WHOLE mixin "
+					+ "(InvalidInjectionException: its parameter list is one Direction short of the merged "
+					+ "checkBurnOut), taking $protectFireTick and $protectFirePlacement with it although both of their "
+					+ "anchors are present — a STRICT launch then halts on three findings instead of one; the feature "
+					+ "is gone either way, since the merged checkBurnOut takes a Direction this handler cannot accept"),
+			Map.entry(ARCHITECTURY_GAMEMODE_MIXIN, "the handler stays, its @Inject.locals capture still cannot be "
+					+ "satisfied on the merged body, and the census counts the skipped injection as a required CONFIRMED "
+					+ "loss, so a STRICT launch halts on it; the injection is skipped either way — the kernel softened "
+					+ "the capture to FAILSOFT so the game survives — so architectury's block-break event does not fire "
+					+ "either way"),
+			Map.entry(ARCHITECTURY_PHANTOM_MIXIN, "the handler stays, its @Inject.locals capture still cannot be "
+					+ "satisfied on the merged body, and the census counts the skipped injection as a required CONFIRMED "
+					+ "loss, so a STRICT launch halts on it; the injection is skipped either way, so architectury's "
+					+ "phantom-spawn event does not fire either way"),
 			Map.entry(BALM_CROP_MIXIN, "the two injectors stay in the mixin and abort it (InvalidInjectionException), "
 					+ "taking the two randomTick handlers with them — both of THEIR anchors are present in the merged "
 					+ "randomTick, so the abort, not the anchor, is what makes them required losses, and the mixin-level "
 					+ "failure is reported on its own; the feature is gone either way, since the merged getGrowthSpeed "
 					+ "consults NeoForge's own canSustainPlant/isFertile and never the mod's CustomFarmBlock"));
 
-	private static final Map<String, String> COSTS = with(Map.of(MODEL_MANAGER_MIXIN,
+	static final Map<String, String> COSTS = with(Map.of(MODEL_MANAGER_MIXIN,
 			"the whole mixin stays pinned, so every Fabric ModelLoadingPlugin -- block-state resolvers, extra "
 					+ "models, model modifiers -- is registered and never called",
 			ITEM_STACK_MIXIN, "fabric-item-api's tooltip injectors stay where the retarget put them, so the kernel's "
@@ -437,13 +451,24 @@ public final class GuestInjectorPruner implements ClassTransformer {
 					+ "entirely — VillagerTrades builds that map without iterating BuiltInRegistries.VILLAGER_TYPE at "
 					+ "all — so the @At(INVOKE) DefaultedRegistry.stream anchor has no call to bind to, and a handler "
 					+ "returning a widened Stream cannot fit any surviving call"),
+			Map.entry(SHADOWGUARD_FIRE_MIXIN, "the merge WIDENED FireBlock.checkBurnOut: Mixin's own words are "
+					+ "\"Expected (…,I,Lnet/minecraft/core/Direction;,Lorg/…CallBackInfo;)V but found (…,I,Lorg/…CallBackInfo;)V\" "
+					+ "— a handler's parameter list is the module's code shape, not a selector the name layer could "
+					+ "translate, so nothing here is retargetable"),
+			Map.entry(ARCHITECTURY_GAMEMODE_MIXIN, "the anchor binds — what fails is the LOCAL CAPTURE: "
+					+ "\"Injection warning: LVT in …ServerPlayerGameMode::destroyBlock(…)Z has incompatible changes at opcode "
+					+ "39\", because NeoForge's break path inserts locals there; a capture is not a selector and the "
+					+ "handler's signature is the module's own code"),
+			Map.entry(ARCHITECTURY_PHANTOM_MIXIN, "the anchor binds — what fails is the LOCAL CAPTURE: "
+					+ "\"Injection warning: LVT in …PhantomSpawner::tick(…)I has incompatible changes at opcode 267\"; "
+					+ "a capture is not a selector and the handler's signature is the module's own code"),
 			Map.entry(BALM_CROP_MIXIN, "the merged (NeoForge) CropBlock.getGrowthSpeed takes a BlockState, not vanilla's "
 					+ "Block, and its body no longer calls BlockState.is(Block) at all — NeoForge rewrote the farmland "
 					+ "test as canSustainPlant/isFertile/getBlock() — so both anchors (ordinals 0 and 1) are gone; one "
 					+ "unbound required injector aborts the WHOLE mixin, which is why the two randomTick handlers report "
 					+ "no attachment although their ServerLevel.setBlock anchor is present in the merged randomTick"));
 
-	private static final Map<String, String> REASONS = with(Map.of(MODEL_MANAGER_MIXIN,
+	static final Map<String, String> REASONS = with(Map.of(MODEL_MANAGER_MIXIN,
 			"NeoForge replaced CuboidModel.fromStream with UnbakedModelParser.parse at that site, so fabric's @Redirect "
 					+ "could not bind while its @ModifyArg did and re-read a consumed Reader (every block model missingno)",
 			ITEM_STACK_MIXIN, "NeoForge's ItemStack draws tooltips from its appender lists, where the kernel draws "
@@ -476,10 +501,16 @@ public final class GuestInjectorPruner implements ClassTransformer {
 	private static final Map<String, String> EXTRA_DRIFT = Map.ofEntries(
 			Map.entry(TRADE_OFFERS_MIXIN, "the injector soft-skips with Mixin's own warning, exactly as it did before "
 					+ "this entry, and the mixin's three other anchors still bind"),
+			Map.entry(SHADOWGUARD_FIRE_MIXIN, "shadowguard's whole fire mixin aborts (InvalidInjectionException) and "
+					+ "its two other handlers never attach — exactly the state before this entry"),
+			Map.entry(ARCHITECTURY_GAMEMODE_MIXIN, "the injection is skipped with Mixin's own warning, exactly as it did "
+					+ "before this entry; this mixin has no other handler"),
+			Map.entry(ARCHITECTURY_PHANTOM_MIXIN, "the injection is skipped with Mixin's own warning, exactly as it did "
+					+ "before this entry; this mixin has no other handler"),
 			Map.entry(BALM_CROP_MIXIN, "balm's whole crop mixin aborts (InvalidInjectionException) and its two randomTick "
 					+ "handlers never attach — exactly the state before this entry"));
 
-	private static final Map<String, String> DRIFT = with(Map.of(MODEL_MANAGER_MIXIN, "it will read PARTIAL and apply half — the state that made every block "
+	static final Map<String, String> DRIFT = with(Map.of(MODEL_MANAGER_MIXIN, "it will read PARTIAL and apply half — the state that made every block "
 					+ "model missingno",
 			ITEM_STACK_MIXIN, "it is retargeted as before and the kernel's tooltip bridge stands down; Fabric component "
 					+ "tooltip providers show only above the item id in advanced tooltips",
@@ -501,12 +532,21 @@ public final class GuestInjectorPruner implements ClassTransformer {
 					+ "substitutes a modded VillagerType for the vanilla one (the merged EmeraldsForVillagerTypeItem is "
 					+ "built from a caller-supplied map, with no registry iteration left to widen); the mixin's @At(NEW) "
 					+ "construction anchor and its method anchors still bind"),
+			Map.entry(SHADOWGUARD_FIRE_MIXIN, "the kernel removed this injector: ShadowGuard's fire-TARGET protection "
+					+ "(the checkBurnOut veto) is not installed — the merged checkBurnOut takes a Direction the handler "
+					+ "cannot accept; the mixin's tick @Inject(HEAD) and its ServerLevel.setBlock @Redirect still apply"),
+			Map.entry(ARCHITECTURY_GAMEMODE_MIXIN, "the kernel removed this injector: architectury's block-break event "
+					+ "no longer fires on subjects whose closure carries architectury — its @Inject.locals capture cannot "
+					+ "be satisfied on the merged destroyBlock; this mixin has no other handler"),
+			Map.entry(ARCHITECTURY_PHANTOM_MIXIN, "the kernel removed this injector: architectury's phantom-spawn event "
+					+ "no longer fires — its @Inject.locals capture cannot be satisfied on the merged PhantomSpawner.tick; "
+					+ "this mixin has no other handler"),
 			Map.entry(BALM_CROP_MIXIN, "the kernel removed these injectors: a balm CustomFarmBlock's "
 					+ "canSustainPlant/isFertile no longer changes a crop's growth speed (the merged "
 					+ "CropBlock.getGrowthSpeed consults NeoForge's own canSustainPlant/isFertile); the mixin's two "
 					+ "randomTick handlers (the pre/post grow events) still bind"));
 
-	private static final Map<String, String> LOSSES = with(Map.of(MODEL_MANAGER_MIXIN,
+	static final Map<String, String> LOSSES = with(Map.of(MODEL_MANAGER_MIXIN,
 			"the kernel removed this injector: NeoForge's UnbakedModelParser now reads block models at its call site, so "
 					+ "Fabric's fabric:type custom model formats (UnbakedModelDeserializer) are not consulted — the "
 					+ "kernel's own dispatch of them is off (-D" + ModelFormatFunnelInjector.PROPERTY + "=off)",

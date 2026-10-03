@@ -169,6 +169,31 @@ class GuestInjectorPrunerTest {
 	 * kernel ships this trim.
 	 */
 	/**
+	 * Every entry must be able to answer every question the pass asks about it, because the pass asks them on the
+	 * BOOT path: {@code anchors()} reports each entry as a REQUIRED anchor with its cost, and {@code AnchorSet.of}
+	 * refuses an anchor it cannot describe. A table entry added without its metadata therefore does not degrade — it
+	 * takes the whole game down before a single subject is considered (measured: three trims landed with their cost
+	 * rows missing and every boot died in {@code TransformChain.register} with
+	 * {@code an anchor without a cost cannot be reported usefully}). This is the test that turns that into a failure
+	 * here instead of a failure there.
+	 */
+	@Test
+	void everyPruneEntryAnswersEveryQuestionThePassAsks() {
+		for (String mixin : GuestInjectorPruner.TABLE.keySet()) {
+			// The three the boot path reads whatever the entry's switch says: `anchors()` asks ACTIVE and COSTS for
+			// every entry, and the finding names CONFIGS.
+			assertNotNull(GuestInjectorPruner.ACTIVE.get(mixin), mixin + " has no activation predicate");
+			for (Map.Entry<String, Map<String, String>> table : List.of(
+					Map.entry("CONFIGS", GuestInjectorPruner.CONFIGS),
+					Map.entry("COSTS", GuestInjectorPruner.COSTS))) {
+				String text = table.getValue().get(mixin);
+				assertTrue(text != null && !text.isBlank(),
+						mixin + " has no " + table.getKey() + " text; an entry without one is a boot failure, not a gap");
+			}
+		}
+	}
+
+	/**
 	 * The whole-mixin pins ARE maintained by hand next to a table they must agree with, so they are checked against
 	 * it: a pin that outlives its pruner entry silently suppresses a mixin that may fit again, and a pin naming a
 	 * different config than the one the findings use is the same stale artefact wearing the right mixin name. Not

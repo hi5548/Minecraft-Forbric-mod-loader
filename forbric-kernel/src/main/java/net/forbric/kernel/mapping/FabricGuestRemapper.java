@@ -82,7 +82,7 @@ public final class FabricGuestRemapper {
 	 * selector-resolution losses while the new stage was never given the jar. Bumping this constant is the one-line
 	 * answer, and it costs one re-remap of the tree per cache directory.
 	 */
-	private static final String REMAP_VERSION = "1.21.1-5-shadow-methods";
+	private static final String REMAP_VERSION = "1.21.1-6-accesswidener-namespace";
 
 	private FabricGuestRemapper() {
 	}
@@ -126,6 +126,9 @@ public final class FabricGuestRemapper {
 				// namespace too: its selector strings, and the values of its refmap, are intermediary and must
 				// become named (see MixinNames — the extension translates neither).
 				MixinNames.translate(out, spine);
+				// And the access widener is a namespace too: its directives name class_*/method_* the runtime
+				// class does not have, so a pass that never rewrites it widens nothing (see AccessWidenerRemapper).
+				net.forbric.kernel.access.AccessWidenerRemapper.remap(out, spine);
 				ForbricLog.info("[Forbric/Mapping] remapped %s → %s (%s → %s, mixin annotations included)",
 						jar.getFileName(), out.getFileName(), ForbricMappings.INTERMEDIARY, ForbricMappings.NAMED);
 			}

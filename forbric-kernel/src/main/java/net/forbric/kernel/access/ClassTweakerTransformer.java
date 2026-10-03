@@ -87,19 +87,25 @@ public final class ClassTweakerTransformer implements ClassTransformer {
 		ClassTweaker tweaker = ClassTweaker.newInstance();
 		ClassTweakerReader reader = ClassTweakerReader.create(tweaker);
 		java.util.Map<String, String> sources = new java.util.HashMap<>();
-		String namespace = null;
 		int applied = 0;
+
+		// The merge namespace is the one the MOST files declare, ties going to the runtime one — not the FIRST
+		// file's as before. First-file-wins made one unrewritten file total: a case-missed suffix, or a stale cache
+		// entry, set 'intermediary' and every correct file after it was skipped. Measured on cloth-config's
+		// camelCase `cloth-config.accessWidener`, first in mod order, which disabled the other 18 files and left
+		// cristellib and BetterRailwaySystem on the original IllegalAccessError. Majority keeps a single miss local.
+		String namespace = majorityNamespace(files);
+		if (namespace == null) return null;
 
 		for (File sourced : files) {
 			byte[] file = sourced.bytes();
 			try {
 				String fileNamespace = ClassTweakerReader.readHeader(file).getNamespace();
 
-				if (namespace == null) {
-					namespace = fileNamespace;
-				} else if (!namespace.equals(fileNamespace)) {
+				if (!namespace.equals(fileNamespace)) {
 					// Merging tweakers written against different namespaces would silently widen the wrong members.
-					ForbricLog.warn("[Forbric/Access] skipping a class tweaker in namespace '%s'; the others are '%s'",
+					ForbricLog.warn("[Forbric/Access] skipping the class tweaker of %s in namespace '%s'; the merge "
+							+ "namespace is '%s'", sourced.source() == null ? "an unattributed file" : sourced.source(),
 							fileNamespace, namespace);
 					continue;
 				}
@@ -122,6 +128,33 @@ public final class ClassTweakerTransformer implements ClassTransformer {
 				+ "declared by %s", applied, namespace, tweaker.getTargets().size(),
 				declaringJars.isEmpty() ? "an unnamed source" : String.join(", ", declaringJars));
 		return new ClassTweakerTransformer(tweaker, generatedSink, sources);
+	}
+
+	/**
+	 * The namespace the most files declare, ties going to the runtime one; {@code null} when none declares one. The
+	 * merge uses this instead of the first file's, so one unrewritten file is skipped on its own rather than setting
+	 * the namespace and skipping every other file.
+	 */
+	private static String majorityNamespace(List<File> files) {
+		java.util.Map<String, Integer> counts = new java.util.LinkedHashMap<>();
+		for (File file : files) {
+			try {
+				counts.merge(ClassTweakerReader.readHeader(file.bytes()).getNamespace(), 1, Integer::sum);
+			} catch (Throwable unreadable) {
+				// An unreadable file cannot vote; the merge loop reports it.
+			}
+		}
+		String chosen = null;
+		int best = -1;
+		for (java.util.Map.Entry<String, Integer> entry : counts.entrySet()) {
+			boolean runtime = net.forbric.kernel.access.AccessWidenerRemapper.RUNTIME_NAMESPACE.equals(entry.getKey());
+			boolean chosenRuntime = net.forbric.kernel.access.AccessWidenerRemapper.RUNTIME_NAMESPACE.equals(chosen);
+			if (entry.getValue() > best || (entry.getValue() == best && runtime && !chosenRuntime)) {
+				best = entry.getValue();
+				chosen = entry.getKey();
+			}
+		}
+		return chosen;
 	}
 
 	/** Reads {@code file} on its own to learn which members it names, so an unmatched one can be attributed. */

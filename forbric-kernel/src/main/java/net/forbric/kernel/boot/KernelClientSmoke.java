@@ -137,7 +137,13 @@ public final class KernelClientSmoke {
 	}
 
 	private static void tick(Object minecraft) {
-		if (!connectionProbesTried) armConnectionProbes(minecraft);
+		// -Dforbric.clientSmokeProbes=off leaves the census unarmed. It exists to isolate the probe from
+		// everything else in one launch: after the probe learned to arm for real, runs stopped reaching
+		// Minecraft.onGameLoadFinished (quick-play never attempted) where the run before it reached
+		// WorldOpenFlows.openWorld. One variable, so "did the probe do this" is answerable without a guess.
+		if (!connectionProbesTried && !"off".equalsIgnoreCase(System.getProperty(PROBES, "on"))) {
+			armConnectionProbes(minecraft);
+		}
 		Object level = fieldValue(minecraft, "level");
 		Object player = fieldValue(minecraft, "player");
 
@@ -223,6 +229,8 @@ public final class KernelClientSmoke {
 			{"TextureStitched", "net.minecraftforge.client.event.TextureStitchEvent$Post"},
 			{"ModelsBaked", "net.minecraftforge.client.event.ModelEvent$BakingCompleted"}};
 	private static final java.util.Map<String, Integer> forgeHeard = new java.util.concurrent.ConcurrentHashMap<>();
+	/** {@code -Dforbric.clientSmokeProbes=off} leaves the Forge connection census unarmed. */
+	private static final String PROBES = "forbric.clientSmokeProbes";
 	private static boolean connectionProbesArmed;
 	/**
 	 * Whether arming has been attempted at all. Arming is one-shot: it either succeeds or is recorded as

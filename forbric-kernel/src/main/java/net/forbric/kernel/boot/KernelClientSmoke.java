@@ -178,38 +178,6 @@ public final class KernelClientSmoke {
 			ForbricLog.info("[Forbric/ClientSmoke] screen change -> %s",
 					screen == null ? "null" : screen.getClass().getName());
 		}
-		answerWorldConfirmation(screen);
-	}
-
-	/**
-	 * Answers the world-open confirmation the client puts in front of quick-play, the way a player does.
-	 *
-	 * <p>Measured (2c8d932e, sound-physics): the smoke world is flagged as a modded world ({@code WasModded=1},
-	 * {@code ServerBrands=[neoforge]}), so vanilla opens it behind {@code BackupConfirmScreen} — the render thread
-	 * shows {@code LoadingOverlay} drawing it — and quick-play waits for a click an unattended client never makes.
-	 * The screen diagnostic proved the chain reached that screen, so the world gate is blocked by this prompt and
-	 * nothing else. Confirming it mirrors a real player and keeps the fixture honest, rather than editing the world
-	 * so it looks unmodded. BOOT side, so reflective; only ever touches the backup/experimental confirmation, never
-	 * the title screen or a loading overlay. {@code BackupConfirmScreen.Listener.proceed(boolean backedUp, boolean
-	 * eraseCache)} is what its own confirm button calls.
-	 */
-	private static void answerWorldConfirmation(Object screen) {
-		if (screen == null || !screen.getClass().getName().endsWith("BackupConfirmScreen")) return;
-		Object listener = fieldValue(screen, "onProceed");
-		if (listener == null) return;
-		for (Method method : listener.getClass().getMethods()) {
-			Class<?>[] parameters = method.getParameterTypes();
-			if (!method.getName().equals("proceed") || parameters.length != 2) continue;
-			try {
-				method.invoke(listener, true, false);
-				ForbricLog.info("[Forbric/ClientSmoke] confirmed the world-open prompt (%s) as a player would",
-						screen.getClass().getSimpleName());
-			} catch (ReflectiveOperationException | RuntimeException failed) {
-				ForbricLog.warn("[Forbric/ClientSmoke] could not confirm %s",
-						screen.getClass().getSimpleName(), failed);
-			}
-			return;
-		}
 	}
 
 
@@ -250,7 +218,14 @@ public final class KernelClientSmoke {
 			java.lang.reflect.Field onProceed = screen.getClass().getDeclaredField("onProceed");
 			onProceed.setAccessible(true);
 			Object listener = onProceed.get(screen);
-			listener.getClass().getMethod("proceed", boolean.class, boolean.class).invoke(listener, true, false);
+			java.lang.reflect.Method proceed =
+					listener.getClass().getMethod("proceed", boolean.class, boolean.class);
+			// The listener is a lambda whose CLASS is not public (WorldOpenFlows$$Lambda), so invoke() runs an
+			// access check against that class and throws IllegalAccessException even though the member reads
+			// "public" — measured on 2c8d932e/e0ef5ae9. The grant must be on the METHOD; setAccessible on the
+			// onProceed FIELD above does not cover the call.
+			proceed.setAccessible(true);
+			proceed.invoke(listener, true, false);
 			ForbricLog.info("[Forbric/ClientSmoke] answered vanilla's backup confirmation (proceed=true, "
 					+ "eraseCache=false) — a headless quick-play boot cannot press the button, and the world load was "
 					+ "waiting on it");

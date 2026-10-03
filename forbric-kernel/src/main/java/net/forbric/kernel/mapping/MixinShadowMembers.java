@@ -173,7 +173,15 @@ public final class MixinShadowMembers {
 			String mapped = spine.mapField(ForbricMappings.INTERMEDIARY, ForbricMappings.NAMED, owner, name, null);
 			if (!mapped.equals(name)) return mapped;
 		}
-		return null;
+		// No target owns it: the member belongs to an ancestor of the target, or to a class the tree carries only
+		// under its declaring name. Intermediary names a member once globally, so the name alone still resolves —
+		// measured on the fabric-api modules (W7Harness): "@Shadow method PotionBrewing$Builder.method_59706" and
+		// "@Shadow method FireBlock.method_10190" came back with their member names still intermediary while their
+		// descriptors were already named, which is the same shape as the LocalPlayer.playSound case the refmap pass
+		// was fixed for. Returning null when the name does not move keeps this method's contract: null means "this
+		// spine cannot map it", and the declaration is left exactly as the mod wrote it.
+		String byName = spine.mapMemberName(name);
+		return byName.equals(name) ? null : byName;
 	}
 
 	/** The runtime name of a shadowed or overwritten method, resolved the same way for the same reasons. */
@@ -183,7 +191,15 @@ public final class MixinShadowMembers {
 			String mapped = spine.mapMethod(ForbricMappings.INTERMEDIARY, ForbricMappings.NAMED, owner, name, null);
 			if (!mapped.equals(name)) return mapped;
 		}
-		return null;
+		// No target owns it: the member belongs to an ancestor of the target, or to a class the tree carries only
+		// under its declaring name. Intermediary names a member once globally, so the name alone still resolves —
+		// measured on the fabric-api modules (W7Harness): "@Shadow method PotionBrewing$Builder.method_59706" and
+		// "@Shadow method FireBlock.method_10190" came back with their member names still intermediary while their
+		// descriptors were already named, which is the same shape as the LocalPlayer.playSound case the refmap pass
+		// was fixed for. Returning null when the name does not move keeps this method's contract: null means "this
+		// spine cannot map it", and the declaration is left exactly as the mod wrote it.
+		String byName = spine.mapMemberName(name);
+		return byName.equals(name) ? null : byName;
 	}
 
 	/** The mixin's targets, internal names in the SOURCE namespace: the {@code targets} strings and {@code value} classes. */

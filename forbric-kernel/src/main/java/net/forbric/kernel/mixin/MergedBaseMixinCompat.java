@@ -173,6 +173,23 @@ public final class MergedBaseMixinCompat {
 			// PORT(1.21.1): the api's loot mixin class is ReloadableRegistriesMixin here; see the entry above.
 			"fabric-loot-api-v3.mixins.json:ReloadableRegistriesMixin",
 			"fabric-creative-tab-api-v1.client.mixins.json:CreativeModeInventoryScreenMixin",
+			// fabric-item-api-v1's custom enchanting checks have NO injection point on the merged base, and the
+			// number that looks like one is a different function wearing the same name. Its @Inject names
+			// `method_60143`, which both its refmap and the spine resolve to the filter predicate
+			// `lambda$getAvailableEnchantmentResults$41(ItemStack, boolean, Holder)boolean` — the lambda that, in
+			// vanilla 1.21.1, decides whether an enchantment may be offered. Measured on the merged base
+			// (patched-mc-merged-1.21.1.jar): `EnchantmentHelper` declares NO method with that descriptor at all,
+			// and `getAvailableEnchantmentResults` is `(int, ItemStack, Stream<Holder<Enchantment>>)` — NeoForge
+			// hoisted the stream and its predicate out to the CALLER, so the filter the mixin wants does not exist
+			// to bind to. The `$41` in the merged jar is a DIFFERENT function entirely,
+			// `void lambda$getAvailableEnchantmentResults$41(int, List, Holder)` (a forEach accumulator), which is
+			// exactly why this is pinned rather than retargeted: `$41` matches on base name AND number, so any
+			// retarget-by-number would silently attach `useCustomEnchantingChecks` to an unrelated lambda — a
+			// worse outcome than the loss it hides. Pinning costs fabric-item-api-v1's
+			// `Enchantment.isPrimaryItem`/`isAcceptableItem` hook on the server; it clears the whole
+			// launch-stopping CONFIRMED finding, which on pin 208e74d0 was the LAST one standing on 8 of the 10
+			// subjects in the W7 fabric compat-required-loss bucket.
+			"fabric-item-api-v1.mixins.json:EnchantmentHelperMixin",
 			// MOD-vs-MOD, not merged-base: Shoulder Surfing's @Redirect deletes the call site CustomSkinLoader's
 			// raw-ASM cape patch needs. See the javadoc entry below — this one arbitrates between two mods.
 			"shouldersurfing.common.mixins.json:CapeLayerMixin",

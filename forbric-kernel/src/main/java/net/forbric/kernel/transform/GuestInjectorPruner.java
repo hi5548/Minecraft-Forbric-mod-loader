@@ -212,6 +212,13 @@ public final class GuestInjectorPruner implements ClassTransformer {
 			"net.fabricmc.fabric.mixin.event.interaction.ServerPlayerInteractionManagerMixin";
 	static final String MINECRAFT_CLIENT_MIXIN =
 			"net.fabricmc.fabric.mixin.event.interaction.client.MinecraftClientMixin";
+	static final String INDIGO_SECTION_BUILDER_MIXIN =
+			"net.fabricmc.fabric.mixin.client.indigo.renderer.SectionBuilderMixin";
+	static final String INDIGO_RENDER_BLOCK_HANDLER =
+			"(Lnet/minecraft/client/renderer/block/BlockRenderDispatcher;"
+					+ "Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/core/BlockPos;"
+					+ "Lnet/minecraft/world/level/BlockAndTintGetter;Lcom/mojang/blaze3d/vertex/PoseStack;"
+					+ "Lcom/mojang/blaze3d/vertex/VertexConsumer;ZLnet/minecraft/util/RandomSource;)V";
 	static final String TRADE_OFFERS_MIXIN =
 			"net.fabricmc.fabric.mixin.object.builder.TradeOffersTypeAwareBuyForOneEmeraldFactoryMixin";
 	static final String BALM_CROP_MIXIN = "net.blay09.mods.balm.mixin.FabricCropBlockMixin";
@@ -376,7 +383,8 @@ public final class GuestInjectorPruner implements ClassTransformer {
 							+ "[Lnet/minecraft/world/InteractionHand;IILnet/minecraft/world/InteractionHand;"
 							+ "Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/phys/EntityHitResult;"
 							+ "Lnet/minecraft/world/entity/Entity;)V",
-					"Lnet/minecraft/client/Minecraft;startUseItem"))));
+					"Lnet/minecraft/client/Minecraft;startUseItem"))),
+			Map.entry(INDIGO_SECTION_BUILDER_MIXIN, List.of(new Prune("hookBuildRenderBlock", INDIGO_RENDER_BLOCK_HANDLER, "Lnet/minecraft/client/renderer/chunk/SectionCompiler;compile"))));
 
 	static final Map<String, List<Prune>> TABLE = with(Map.of(MODEL_MANAGER_MIXIN, List.of(
 			new Prune("cancelVanillaDeserialize",
@@ -453,7 +461,8 @@ public final class GuestInjectorPruner implements ClassTransformer {
 			Map.entry(SCREEN_HANDLER_PLAYER_MIXIN, "fabric-screen-handler-api-v1.mixins.json"),
 			Map.entry(OPAC_XP_ORB_MIXIN, "openpartiesandclaims.forge.mixins.json"),
 			Map.entry(BONFIRES_ITEM_STACK_MIXIN, "bonfires.mixins.json"),
-			Map.entry(MINECRAFT_CLIENT_MIXIN, "fabric-events-interaction-v0.client.mixins.json"));
+			Map.entry(MINECRAFT_CLIENT_MIXIN, "fabric-events-interaction-v0.client.mixins.json"),
+			Map.entry(INDIGO_SECTION_BUILDER_MIXIN, "fabric-renderer-indigo.mixins.json"));
 
 	/** The mixin config each entry is declared in, which names the owning mod on the finding. */
 	static final Map<String, String> CONFIGS = with(Map.of(MODEL_MANAGER_MIXIN, "fabric-model-loading-api-v1.mixins.json",
@@ -477,7 +486,8 @@ public final class GuestInjectorPruner implements ClassTransformer {
 			Map.entry(SCREEN_HANDLER_PLAYER_MIXIN, () -> true),
 			Map.entry(OPAC_XP_ORB_MIXIN, () -> true),
 			Map.entry(BONFIRES_ITEM_STACK_MIXIN, () -> true),
-			Map.entry(MINECRAFT_CLIENT_MIXIN, () -> true));
+			Map.entry(MINECRAFT_CLIENT_MIXIN, () -> true),
+			Map.entry(INDIGO_SECTION_BUILDER_MIXIN, () -> true));
 
 	static final Map<String, BooleanSupplier> ACTIVE = with(Map.of(MODEL_MANAGER_MIXIN, () -> true,
 			ITEM_STACK_MIXIN, GuestInjectorPruner::fabricTooltipBridgeOn,
@@ -533,7 +543,12 @@ public final class GuestInjectorPruner implements ClassTransformer {
 					+ "satisfied on the merged startUseItem (NeoForge inserted its InteractionKeyMappingTriggered local "
 					+ "ahead of the loop), and the census counts the skipped injection as a required CONFIRMED loss, so a "
 					+ "STRICT launch halts on it; UseEntityCallback does not fire on the client either way, and the "
-					+ "mixin's other six injectors keep binding"));
+					+ "mixin's other six injectors keep binding"),
+			Map.entry(INDIGO_SECTION_BUILDER_MIXIN, "the redirect stays in the mixin, cannot attach (the merged "
+					+ "SectionCompiler.compile calls a nine-argument renderBatched, not the seven-argument one this "
+					+ "@At names) and is reported as a required CONFIRMED loss, so a STRICT launch halts on it; the "
+					+ "Indigo path is gone either way, since a redirect cannot follow a call the merged body no "
+					+ "longer makes"));
 
 	static final Map<String, String> COSTS = with(Map.of(MODEL_MANAGER_MIXIN,
 			"the whole mixin stays pinned, so every Fabric ModelLoadingPlugin -- block-state resolvers, extra "
@@ -606,7 +621,20 @@ public final class GuestInjectorPruner implements ClassTransformer {
 					+ "\"Injection warning: LVT in net/minecraft/client/Minecraft::startUseItem()V has incompatible "
 					+ "changes at opcode 143\", because NeoForge's patch inserts its InteractionKeyMappingTriggered "
 					+ "local ahead of the InteractionHand loop; the handler's seven captured locals are the module's own "
-					+ "code and are resolved against that LVT, and a capture is not a selector"));
+					+ "code and are resolved against that LVT, and a capture is not a selector"),
+			Map.entry(INDIGO_SECTION_BUILDER_MIXIN, "the callee was WIDENED, not renamed: the merged "
+					+ "SectionCompiler.compile makes one renderBatched call, of a nine-argument overload, and the "
+					+ "seven-argument method -- though still declared -- is not called there. Retargeting onto that "
+					+ "site was implemented, verified the annotation, and REVERTED: the merged base carries TWO "
+					+ "nine-argument overloads differing only in which ModelData they take (constant pool #270 "
+					+ "net/minecraftforge/..., #390 net/neoforged/neoforge/...), and the four-argument compile -- the "
+					+ "overload this handler names -- resolves its model data through "
+					+ "net/minecraftforge/client/model/data/ModelDataManager.getAt, i.e. the MinecraftForge one. "
+					+ "Mixin's generated shim died at world load with a VerifyError naming java/lang/Object against "
+					+ "net/neoforged/neoforge/client/model/data/ModelData, and a CHECKCAST to that class would have "
+					+ "verified and then thrown ClassCastException at the first block render -- a hard crash traded "
+					+ "for a silent corruption. The shim's parameter types must be read from the FRAME of that exact "
+					+ "overload, never from a descriptor that merely exists somewhere in the class"));
 
 	static final Map<String, String> REASONS = with(Map.of(MODEL_MANAGER_MIXIN,
 			"NeoForge replaced CuboidModel.fromStream with UnbakedModelParser.parse at that site, so fabric's @Redirect "
@@ -657,7 +685,9 @@ public final class GuestInjectorPruner implements ClassTransformer {
 			Map.entry(BONFIRES_ITEM_STACK_MIXIN, "the redirect soft-skips with Mixin's own warning, exactly as it did "
 					+ "before this entry; this mixin has no other handler"),
 			Map.entry(MINECRAFT_CLIENT_MIXIN, "the injection is skipped with Mixin's own warning, exactly as it did "
-					+ "before this entry, and the mixin's other six injectors keep binding"));
+					+ "before this entry, and the mixin's other six injectors keep binding"),
+			Map.entry(INDIGO_SECTION_BUILDER_MIXIN, "the redirect soft-skips with Mixin's own warning, exactly as it "
+					+ "did before this entry; this mixin's other handlers still bind"));
 
 	static final Map<String, String> DRIFT = with(Map.of(MODEL_MANAGER_MIXIN, "it will read PARTIAL and apply half — the state that made every block "
 					+ "model missingno",
@@ -713,7 +743,12 @@ public final class GuestInjectorPruner implements ClassTransformer {
 			Map.entry(MINECRAFT_CLIENT_MIXIN, "the kernel removed this injector: fabric-events-interaction's "
 					+ "UseEntityCallback no longer fires on the client (its @Inject.locals capture cannot be satisfied "
 					+ "on the merged startUseItem) — the event a mod uses to cancel or observe the use action against an "
-					+ "entity; the mixin's other six injectors still apply"));
+					+ "entity; the mixin's other six injectors still apply"),
+			Map.entry(INDIGO_SECTION_BUILDER_MIXIN, "the kernel removed this injector: Indigo's per-block hook does "
+					+ "not attach, so a block whose model is not vanilla-adapted is not routed to "
+					+ "TerrainRenderContext.tessellateBlock and goes to the merged renderBatched path instead -- a "
+					+ "Fabric mod's in-chunk custom block geometry may render wrongly or not at all; the mixin's "
+					+ "loop-setup and return handlers still bind"));
 
 	static final Map<String, String> LOSSES = with(Map.of(MODEL_MANAGER_MIXIN,
 			"the kernel removed this injector: NeoForge's UnbakedModelParser now reads block models at its call site, so "

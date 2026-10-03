@@ -660,3 +660,42 @@ and §15 — one family's reader with the other family's provider — but a diff
 this bounded read's scope; it is recorded, not diagnosed or repaired.
 
 The client acceptance criterion stays met: the join line is in this same run.
+
+## 18. The arm against the model-data repair — the client lives in the world; what is left is the smoke driver
+
+Commit `8010be1f`, frozen kernel `e212a7a8533bb6191f834a76923d3c40c365d86bce7f900294acf50202a5760f` (W7Harness's
+clean-worktree build reproduced the sha exactly), report `reports/2026-10-03-client-modeldata/`. **Run on a quiet
+box** at W7Harness's check (1.5% CPU, no sweeps, no game JVMs), so `contended=false` and the 312 s wall is usable
+as evidence — the first non-timing-suspect row of this sequence.
+
+Row:
+```
+run=TIMEOUT  exit=143  world=TRUE  frames=0  strict=false  cause=no-frame  seconds=312  contended=false
+compatibility_policy=continue   mixin_fit=default   kernel_sha256=e212a7a8…
+```
+
+- `joined world via quick-play` — appears (verbatim below).
+- `ReportedException` — **0** (was 2); `ModelDataManager` — **0** in the console. The §17 blocker is gone.
+- The client does not merely join; it **lives in the world**, verbatim:
+
+```
+[Forbric/ClientSmoke] joined world via quick-play: W7Client
+[Forbric/ClientSmoke] screen change -> null
+[Forbric/ClientSmoke] client-ready after 200 world tick(s)
+[Forbric/ClientSmoke] client command tree after joining: forge=true neo=true
+[Forbric/ClientSmoke] window title: Minecraft* 1.21.1 - Singleplayer
+[Forbric/ClientSmoke] advanced tooltip of a damaged iron sword with lore: 9 line(s), lore true, attributes true, durability true
+[Forbric/ClientSmoke] requesting clean disconnect after 220 world tick(s)
+[Forbric/ClientSmoke] no no-arg Minecraft.disconnectWithSavingScreen to invoke — the run will not end on its own
+```
+
+**What remains is the smoke driver, not kernel behaviour.** `frames=0` and `run=TIMEOUT cause=no-frame` because
+(a) the clean-disconnect step cannot find a no-arg `Minecraft.disconnectWithSavingScreen`, so the client never
+stops and the harness's boot timeout ends the run, and (b) the screenshot step writes nothing. Both belong to
+`KernelClientSmoke`, the kernel's own test driver, and are a different kind of defect from the three merge-shape
+ones this report has been closing (§13 registry-sync wrap, §15 unwritten static, §18 model-data accessor) — recorded
+here, not repaired here. (W7Harness also disclosed a bug in its own console-tail pump, `I/O operation on closed
+file` after the child exits, which did not affect this row.)
+
+The client acceptance criterion is met, with the strongest evidence yet: the join line, plus 200 world ticks, both
+loaders' command trees present, and a tooltip read through the merged item stack.

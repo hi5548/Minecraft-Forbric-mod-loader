@@ -212,7 +212,10 @@ class GuestInjectorPrunerTest {
 			if (!GuestInjectorPruner.ACTIVE.get(mixin).getAsBoolean()) continue;
 			AnchorSet.Anchor anchor = declared.stream().filter(a -> a.binaryName().equals(mixin)).findFirst()
 					.orElseThrow(() -> new AssertionError("active trim entry declares no anchor: " + mixin));
-			assertEquals(AnchorSet.Severity.REQUIRED, anchor.severity());
+			// A required entry whose class is loaded and not edited is a defect; an OPTIONAL entry (its handler
+			// exists only on some module revisions) is a HEDGE, because its absence is the correct answer there.
+			boolean optional = GuestInjectorPruner.TABLE.get(mixin).stream().allMatch(GuestInjectorPruner.Prune::optional);
+			assertEquals(optional ? AnchorSet.Severity.HEDGE : AnchorSet.Severity.REQUIRED, anchor.severity(), mixin);
 			assertFalse(anchor.cost().isBlank(), mixin + " declares a cost-less anchor");
 		}
 
@@ -502,6 +505,57 @@ class GuestInjectorPrunerTest {
 				"injectCodec"), GuestInjectorPruner.INGREDIENT_MIXIN, "useCustomIngredientPacketCodec",
 				"(Lnet/minecraft/network/codec/StreamCodec;)Lnet/minecraft/network/codec/StreamCodec;",
 				"injectCodec", "custom Ingredient packet codec");
+	}
+
+	/**
+	 * The fabric-screen-handler entry, on the module revision that carries the handler (screen-handler 1.3.91, as
+	 * the Sinytra/forgified fabric-api bundles): the {@code @ModifyArg} on the {@code openMenu(MenuProvider,Consumer)}
+	 * self-call is pruned into a confirmed finding that asks nothing, and the mixin's other handlers stay. Red before
+	 * the entry exists: the class passes through untouched. Synthetic bytes.
+	 */
+	@Test
+	void theScreenHandlerMenuProviderModifyArgIsPrunedWhereItExists() throws Exception {
+		net.forbric.api.CompatibilityFindings.reset();
+		byte[] original = oneDeadInjector(GuestInjectorPruner.SCREEN_HANDLER_PLAYER_MIXIN,
+				"net.minecraft.server.level.ServerPlayer", "fabric_replaceMenuProvider",
+				"(Lnet/minecraft/world/MenuProvider;)Lnet/minecraft/world/MenuProvider;",
+				"Lorg/spongepowered/asm/mixin/injection/ModifyArg;",
+				"openMenu(Lnet/minecraft/world/MenuProvider;)Ljava/util/OptionalInt;", "INVOKE",
+				"Lnet/minecraft/server/level/ServerPlayer;openMenu(Lnet/minecraft/world/MenuProvider;"
+						+ "Ljava/util/function/Consumer;)Ljava/util/OptionalInt;",
+				"fabric_storeOpenedScreenHandler");
+		checkPrunedDeadInjector(original, GuestInjectorPruner.SCREEN_HANDLER_PLAYER_MIXIN,
+				"fabric_replaceMenuProvider",
+				"(Lnet/minecraft/world/MenuProvider;)Lnet/minecraft/world/MenuProvider;",
+				"fabric_storeOpenedScreenHandler", "ExtendedScreenHandlerFactory");
+	}
+
+	/**
+	 * …and on the revision that does NOT carry it (fabric-api 0.116.17's nested screen-handler declares only the
+	 * close/store/vanilla-packet handlers). The same class name loads, the entry does nothing, records nothing, and
+	 * — the half that matters — declares a HEDGE anchor, so {@code AnchorLedger} does not report a repair it
+	 * declined. Synthetic bytes. Red before the entry: {@code TABLE} has no key, so nothing is declared either way;
+	 * the assertion that turns red is the {@code HEDGE} severity.
+	 */
+	@Test
+	void theScreenHandlerEntryIsANoOpOnARevisionWithoutTheHandler() throws Exception {
+		net.forbric.api.CompatibilityFindings.reset();
+		byte[] without = oneDeadInjector(GuestInjectorPruner.SCREEN_HANDLER_PLAYER_MIXIN,
+				"net.minecraft.server.level.ServerPlayer", "fabric_closeHandledScreenIfAllowed",
+				"(Lnet/minecraft/server/level/ServerPlayer;Lnet/minecraft/world/MenuProvider;)V",
+				"Lorg/spongepowered/asm/mixin/injection/Redirect;",
+				"openMenu(Lnet/minecraft/world/MenuProvider;)Ljava/util/OptionalInt;", "INVOKE",
+				"Lnet/minecraft/server/level/ServerPlayer;closeContainer()V",
+				"fabric_storeOpenedScreenHandler");
+		assertSame(without, new GuestInjectorPruner().transform(GuestInjectorPruner.SCREEN_HANDLER_PLAYER_MIXIN,
+				without, null), "a revision without the handler is left exactly as it is");
+		assertTrue(net.forbric.api.CompatibilityFindings.all().isEmpty(), "and nothing is reported for it");
+
+		AnchorSet.Anchor anchor = new GuestInjectorPruner().anchors().anchors().stream()
+				.filter(a -> a.binaryName().equals(GuestInjectorPruner.SCREEN_HANDLER_PLAYER_MIXIN)).findFirst()
+				.orElseThrow(() -> new AssertionError("the entry declares no anchor"));
+		assertEquals(AnchorSet.Severity.HEDGE, anchor.severity(),
+				"an optional entry must not be a REQUIRED repair the ledger cries wolf about");
 	}
 
 	private static void checkPrunedDeadInjector(byte[] original, String mixin, String dead, String deadDesc,

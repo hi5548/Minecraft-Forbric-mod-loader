@@ -68,6 +68,14 @@ import net.forbric.kernel.util.ForbricLog;
  * (fusion's capture of the model id before the parse), because such a handler sees only the point; it never moves
  * this pair, whose handlers are the call and its argument, and {@code parse} is not {@code fromStream}.
  *
+ * <p>The fabric-screen-handler entry is the first with an OPTIONAL handler. The merged
+ * {@code ServerPlayer.openMenu(MenuProvider)} inlines the two-arg overload and makes no {@code openMenu} self-call,
+ * so screen-handler 1.3.91's {@code @ModifyArg(index=0)} on that call can never attach — but the class is loaded by
+ * every fabric-api here, and fabric-api 0.116.17's nested screen-handler module carries no
+ * {@code fabric_replaceMenuProvider} at all. On that revision the entry must do nothing and must NOT be reported as
+ * a declined repair, which is what {@link Prune#optional()} and the {@code HEDGE} severity in
+ * {@link #declaredAnchors} are for.
+ *
  * <p>Guest mixin classes reach the transform chain through {@code ForbricClassLoader.getPreMixinClassBytes},
  * which is also what {@link net.forbric.kernel.mixin.MixinFit} and Mixin itself read, so the pruned bytes are
  * the only bytes anyone judges or applies. Both methods must be present, each carrying an injector annotation
@@ -195,6 +203,8 @@ public final class GuestInjectorPruner implements ClassTransformer {
 	static final String ARCHITECTURY_GAMEMODE_MIXIN =
 			"dev.architectury.mixin.fabric.MixinServerPlayerGameMode";
 	static final String ARCHITECTURY_PHANTOM_MIXIN = "dev.architectury.mixin.fabric.MixinPhantomSpawner";
+	static final String SCREEN_HANDLER_PLAYER_MIXIN =
+			"net.fabricmc.fabric.mixin.screenhandler.ServerPlayerEntityMixin";
 
 	/**
 	 * One table plus the entries that would push {@code Map.of} past its ten-pair limit. Java's {@code Map.of}
@@ -212,10 +222,20 @@ public final class GuestInjectorPruner implements ClassTransformer {
 	/**
 	 * One injector method to remove, and the target-method selector its annotation must carry: a prefix, or with
 	 * {@code exact} the whole selector — {@code addDetailsToTooltip} is also the prefix of the two renamed bodies.
+	 *
+	 * <p>{@code optional} marks a handler that MODULE REVISIONS need not carry at all: fabric-screen-handler 1.3.91
+	 * has {@code fabric_replaceMenuProvider}, the nested screen-handler module of fabric-api 0.116.17 does not, and
+	 * the same class name is loaded either way. An absent optional prune is a correct no-op, not drift, so its entry
+	 * declares a {@code HEDGE} anchor rather than {@code REQUIRED} (see {@link #declaredAnchors}); a required prune
+	 * absent on the first pass stays the defect it always was.
 	 */
-	record Prune(String name, String desc, String selectorPrefix, boolean exact) {
+	record Prune(String name, String desc, String selectorPrefix, boolean exact, boolean optional) {
 		Prune(String name, String desc, String selectorPrefix) {
-			this(name, desc, selectorPrefix, false);
+			this(name, desc, selectorPrefix, false, false);
+		}
+
+		Prune(String name, String desc, String selectorPrefix, boolean exact) {
+			this(name, desc, selectorPrefix, exact, false);
 		}
 
 		String key() {
@@ -284,7 +304,23 @@ public final class GuestInjectorPruner implements ClassTransformer {
 							"(Lnet/minecraft/world/level/block/state/BlockState;"
 									+ "Lcom/llamalad7/mixinextras/sugar/ref/LocalRef;)"
 									+ "Lnet/minecraft/world/level/block/state/BlockState;",
-							"getGrowthSpeed"))));
+							"getGrowthSpeed"))),
+			// fabric-screen-handler-api-v1's ServerPlayerEntityMixin#fabric_replaceMenuProvider is an
+			// @ModifyArg(index=0) on openMenu(MenuProvider) whose @At(INVOKE) names the
+			// openMenu(MenuProvider,Consumer) SELF-CALL. The merged ServerPlayer.openMenu(MenuProvider) does not make
+			// it: javap shows closeContainer, nextContainerCounter, MenuProvider.createMenu, ClientboundOpenScreenPacket,
+			// initMenu and ForgeEventFactory.onPlayerOpenContainer, and no call to openMenu anywhere in ServerPlayer.
+			// The merged one-arg body is the two-arg body inlined, so the self-call the handler modified is gone and
+			// the injector can never attach on any subject.
+			//
+			// OPTIONAL, because the CLASS is loaded by every fabric-api here while the HANDLER is not: fabric-api
+			// 0.116.17's nested screen-handler module declares only fabric_closeHandledScreenIfAllowed /
+			// fabric_storeOpenedScreenHandler / fabric_replaceVanillaScreenPacket, and it is the Sinytra/forgified
+			// fabric-api (bundling screen-handler 1.3.91) that carries fabric_replaceMenuProvider. On the older
+			// revision the entry is a correct no-op; see {@link Prune#optional()}.
+			Map.entry(SCREEN_HANDLER_PLAYER_MIXIN, List.of(new Prune("fabric_replaceMenuProvider",
+					"(Lnet/minecraft/world/MenuProvider;)Lnet/minecraft/world/MenuProvider;",
+					"openMenu", false, true))));
 
 	static final Map<String, List<Prune>> TABLE = with(Map.of(MODEL_MANAGER_MIXIN, List.of(
 			new Prune("cancelVanillaDeserialize",
@@ -357,7 +393,8 @@ public final class GuestInjectorPruner implements ClassTransformer {
 			Map.entry(BALM_CROP_MIXIN, "balm.fabric.mixins.json"),
 			Map.entry(SHADOWGUARD_FIRE_MIXIN, "shadowguard.mixins.json"),
 			Map.entry(ARCHITECTURY_GAMEMODE_MIXIN, "architectury.mixins.json"),
-			Map.entry(ARCHITECTURY_PHANTOM_MIXIN, "architectury.mixins.json"));
+			Map.entry(ARCHITECTURY_PHANTOM_MIXIN, "architectury.mixins.json"),
+			Map.entry(SCREEN_HANDLER_PLAYER_MIXIN, "fabric-screen-handler-api-v1.mixins.json"));
 
 	/** The mixin config each entry is declared in, which names the owning mod on the finding. */
 	static final Map<String, String> CONFIGS = with(Map.of(MODEL_MANAGER_MIXIN, "fabric-model-loading-api-v1.mixins.json",
@@ -377,7 +414,8 @@ public final class GuestInjectorPruner implements ClassTransformer {
 			Map.entry(BALM_CROP_MIXIN, () -> true),
 			Map.entry(SHADOWGUARD_FIRE_MIXIN, () -> true),
 			Map.entry(ARCHITECTURY_GAMEMODE_MIXIN, () -> true),
-			Map.entry(ARCHITECTURY_PHANTOM_MIXIN, () -> true));
+			Map.entry(ARCHITECTURY_PHANTOM_MIXIN, () -> true),
+			Map.entry(SCREEN_HANDLER_PLAYER_MIXIN, () -> true));
 
 	static final Map<String, BooleanSupplier> ACTIVE = with(Map.of(MODEL_MANAGER_MIXIN, () -> true,
 			ITEM_STACK_MIXIN, GuestInjectorPruner::fabricTooltipBridgeOn,
@@ -415,7 +453,11 @@ public final class GuestInjectorPruner implements ClassTransformer {
 					+ "taking the two randomTick handlers with them — both of THEIR anchors are present in the merged "
 					+ "randomTick, so the abort, not the anchor, is what makes them required losses, and the mixin-level "
 					+ "failure is reported on its own; the feature is gone either way, since the merged getGrowthSpeed "
-					+ "consults NeoForge's own canSustainPlant/isFertile and never the mod's CustomFarmBlock"));
+					+ "consults NeoForge's own canSustainPlant/isFertile and never the mod's CustomFarmBlock"),
+			Map.entry(SCREEN_HANDLER_PLAYER_MIXIN, "the @ModifyArg stays in the mixin, cannot attach (the merged "
+					+ "ServerPlayer.openMenu(MenuProvider) makes no openMenu self-call to modify) and is reported as a "
+					+ "required CONFIRMED loss, so a STRICT launch halts on it; the menu-provider replacement is gone "
+					+ "either way, since the call site the handler was written against does not exist"));
 
 	static final Map<String, String> COSTS = with(Map.of(MODEL_MANAGER_MIXIN,
 			"the whole mixin stays pinned, so every Fabric ModelLoadingPlugin -- block-state resolvers, extra "
@@ -466,7 +508,12 @@ public final class GuestInjectorPruner implements ClassTransformer {
 					+ "Block, and its body no longer calls BlockState.is(Block) at all — NeoForge rewrote the farmland "
 					+ "test as canSustainPlant/isFertile/getBlock() — so both anchors (ordinals 0 and 1) are gone; one "
 					+ "unbound required injector aborts the WHOLE mixin, which is why the two randomTick handlers report "
-					+ "no attachment although their ServerLevel.setBlock anchor is present in the merged randomTick"));
+					+ "no attachment although their ServerLevel.setBlock anchor is present in the merged randomTick"),
+			Map.entry(SCREEN_HANDLER_PLAYER_MIXIN, "the merged ServerPlayer.openMenu(MenuProvider) INLINES the two-arg "
+					+ "overload — its body calls closeContainer/nextContainerCounter/MenuProvider.createMenu/"
+					+ "ClientboundOpenScreenPacket/initMenu/ForgeEventFactory.onPlayerOpenContainer and never "
+					+ "openMenu(MenuProvider,Consumer) — so fabric-screen-handler's @ModifyArg(index=0) on that self-call "
+					+ "has nothing to bind to"));
 
 	static final Map<String, String> REASONS = with(Map.of(MODEL_MANAGER_MIXIN,
 			"NeoForge replaced CuboidModel.fromStream with UnbakedModelParser.parse at that site, so fabric's @Redirect "
@@ -508,7 +555,10 @@ public final class GuestInjectorPruner implements ClassTransformer {
 			Map.entry(ARCHITECTURY_PHANTOM_MIXIN, "the injection is skipped with Mixin's own warning, exactly as it did "
 					+ "before this entry; this mixin has no other handler"),
 			Map.entry(BALM_CROP_MIXIN, "balm's whole crop mixin aborts (InvalidInjectionException) and its two randomTick "
-					+ "handlers never attach — exactly the state before this entry"));
+					+ "handlers never attach — exactly the state before this entry"),
+			Map.entry(SCREEN_HANDLER_PLAYER_MIXIN, "the @ModifyArg soft-skips with Mixin's own warning, exactly as it "
+					+ "did before this entry — on the revision that carries the handler at all; on fabric-api 0.116.17 "
+					+ "the class never had it, so this entry is a no-op either way"));
 
 	static final Map<String, String> DRIFT = with(Map.of(MODEL_MANAGER_MIXIN, "it will read PARTIAL and apply half — the state that made every block "
 					+ "model missingno",
@@ -544,7 +594,13 @@ public final class GuestInjectorPruner implements ClassTransformer {
 			Map.entry(BALM_CROP_MIXIN, "the kernel removed these injectors: a balm CustomFarmBlock's "
 					+ "canSustainPlant/isFertile no longer changes a crop's growth speed (the merged "
 					+ "CropBlock.getGrowthSpeed consults NeoForge's own canSustainPlant/isFertile); the mixin's two "
-					+ "randomTick handlers (the pre/post grow events) still bind"));
+					+ "randomTick handlers (the pre/post grow events) still bind"),
+			Map.entry(SCREEN_HANDLER_PLAYER_MIXIN, "the kernel removed this injector: Fabric's "
+					+ "ExtendedScreenHandlerFactory substitution inside ServerPlayer.openMenu(MenuProvider) no longer "
+					+ "happens — the @ModifyArg replaced argument 0 of the openMenu(MenuProvider,Consumer) self-call with "
+					+ "the extended factory, and the merged body inlines that overload and makes no such call, so a "
+					+ "Fabric mod's extended-screen opening data is never installed; the mixin's close-handled-screen "
+					+ "redirect, its store-opened handler and its vanilla-packet replacement still bind"));
 
 	static final Map<String, String> LOSSES = with(Map.of(MODEL_MANAGER_MIXIN,
 			"the kernel removed this injector: NeoForge's UnbakedModelParser now reads block models at its call site, so "
@@ -649,7 +705,12 @@ public final class GuestInjectorPruner implements ClassTransformer {
 		List<AnchorSet.Anchor> anchors = new ArrayList<>();
 		for (String mixin : mixins) {
 			if (!active.get(mixin).getAsBoolean()) continue;
-			anchors.add(new AnchorSet.Anchor(mixin, AnchorSet.Severity.REQUIRED, costOf(mixin, costs)));
+			// An entry whose handler a module revision need not carry is a HEDGE: its absence is the correct
+			// answer on that revision, not a repair that was declined. See {@link Prune#optional()}.
+			List<Prune> prunes = TABLE.get(mixin);
+			boolean optional = prunes != null && !prunes.isEmpty() && prunes.stream().allMatch(Prune::optional);
+			anchors.add(new AnchorSet.Anchor(mixin,
+					optional ? AnchorSet.Severity.HEDGE : AnchorSet.Severity.REQUIRED, costOf(mixin, costs)));
 		}
 		return anchors;
 	}
@@ -705,6 +766,10 @@ public final class GuestInjectorPruner implements ClassTransformer {
 					if (ITEM_STACK_MIXIN.equals(className)) fabricTooltipsPruned = true;
 					return classBytes;
 				}
+				// …unless THIS prune is optional: a module revision that predates the handler carries the class
+				// without it, which is not drift (fabric-api 0.116.17's nested screen-handler has no
+				// fabric_replaceMenuProvider). Skip it and keep applying the entry's other prunes.
+				if (prune.optional()) continue;
 				ForbricLog.warn("[Forbric/GuestInjectorPruner] %s has no %s%s — fabric-api reshaped the mixin, leaving "
 						+ "it untouched (%s)", className, prune.name(), prune.desc(), DRIFT.get(className));
 				return classBytes;

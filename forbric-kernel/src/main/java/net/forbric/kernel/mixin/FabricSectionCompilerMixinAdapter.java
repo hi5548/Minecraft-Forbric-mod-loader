@@ -38,6 +38,27 @@ public final class FabricSectionCompilerMixinAdapter {
 			+ "Lnet/minecraft/client/renderer/block/BlockQuadOutput;FFFLnet/minecraft/client/renderer/block/BlockAndTintGetter;"
 			+ "Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;"
 			+ "Lnet/minecraft/client/renderer/block/dispatch/BlockStateModel;J)V";
+	/** The 1.21.1 generation of the same mixin, and the per-block redirect the merge disarmed. */
+	static final String MIXIN_1_21_1 = "net/fabricmc/fabric/mixin/client/indigo/renderer/SectionBuilderMixin";
+	static final String HANDLER_1_21_1 = "hookBuildRenderBlock";
+	private static final String DISPATCHER = "net/minecraft/client/renderer/block/BlockRenderDispatcher";
+	private static final String MODEL_DATA = "Lnet/neoforged/neoforge/client/model/data/ModelData;";
+	private static final String RENDER_TYPE = "Lnet/minecraft/client/renderer/RenderType;";
+	private static final String RENDER_BATCHED = "L" + DISPATCHER + ";renderBatched";
+	/** Vanilla's seven-argument call — what the guest's {@code @At} names, and what the merged body no longer makes. */
+	private static final String OLD_ARGS = "(Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/core/BlockPos;"
+			+ "Lnet/minecraft/world/level/BlockAndTintGetter;Lcom/mojang/blaze3d/vertex/PoseStack;"
+			+ "Lcom/mojang/blaze3d/vertex/VertexConsumer;ZLnet/minecraft/util/RandomSource;)V";
+	/** NeoForge's nine-argument overload — the one call the merged {@code SectionCompiler.compile} makes. */
+	private static final String NEW_ARGS = OLD_ARGS.substring(0, OLD_ARGS.length() - 2) + MODEL_DATA + RENDER_TYPE + ")V";
+	private static final String HANDLER_OLD = "(L" + DISPATCHER + ";"
+			+ OLD_ARGS.substring(1, OLD_ARGS.length() - 2) + ")V";
+	private static final String HANDLER_NEW = "(L" + DISPATCHER + ";"
+			+ OLD_ARGS.substring(1, OLD_ARGS.length() - 2) + MODEL_DATA + RENDER_TYPE + ")V";
+	private static final String INDIGO_TESSELLATE =
+			"Lnet/fabricmc/fabric/impl/client/indigo/renderer/render/TerrainRenderContext;tessellateBlock("
+					+ "Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/core/BlockPos;"
+					+ "Lnet/minecraft/client/resources/model/BakedModel;Lcom/mojang/blaze3d/vertex/PoseStack;)V";
 
 	private FabricSectionCompilerMixinAdapter() { }
 
@@ -46,7 +67,9 @@ public final class FabricSectionCompilerMixinAdapter {
 	}
 
 	public static int adapt(ClassNode mixin, Function<String, ClassNode> targets) {
-		if (!enabled() || !MIXIN.equals(mixin.name) || mixin.methods.stream().anyMatch(m -> ORIGINAL.equals(m.name))) return 0;
+		if (!enabled()) return 0;
+		if (MIXIN_1_21_1.equals(mixin.name)) return renderBlockRedirect(mixin, targets);
+		if (!MIXIN.equals(mixin.name) || mixin.methods.stream().anyMatch(m -> ORIGINAL.equals(m.name))) return 0;
 		ClassNode target = targets.apply(TARGET);
 		if (target == null) return 0;
 		MethodNode stub = method(target, "compile", OLD), live = method(target, "compile", LIVE);
@@ -95,6 +118,55 @@ public final class FabricSectionCompilerMixinAdapter {
 		setMethod(draw, "compile" + LIVE);
 		ForbricLog.info("[Forbric/Renderer] Fabric's renderer setup and block emission now run in the live chunk compile overload");
 		return 2;
+	}
+
+	/**
+	 * The 1.21.1 generation of the same mixin — {@code SectionBuilderMixin} — whose per-block redirect the merge
+	 * disarmed. Its {@code @At(INVOKE)} names vanilla's SEVEN-argument
+	 * {@code BlockRenderDispatcher.renderBatched}, and the merged {@code SectionCompiler.compile} does not make that
+	 * call: {@code javap -c} of the staged merged base shows exactly one, ending
+	 * {@code …util/RandomSource;Lnet/neoforged/neoforge/client/model/data/ModelData;Lnet/minecraft/client/renderer/RenderType;)V}
+	 * — NeoForge widened the callee. (The seven-argument method is still *declared*; it is simply not called there,
+	 * which is why this is an anchor problem and not a missing member.) The redirect therefore bound nowhere and
+	 * Indigo's wrapper never ran: a block whose model is not vanilla-adapted was handed to NeoForge's renderer with
+	 * no Indigo path at all.
+	 *
+	 * <p>The wrapper is sound as compiled and is left alone except for the call it forwards to. For an
+	 * Indigo-adapter model it routes to {@code TerrainRenderContext.tessellateBlock} — untouched — and otherwise it
+	 * forwards its sample verbatim. Widening the handler by the two parameters the merged site passes and handing
+	 * them straight to the same overload keeps NeoForge's model data and render type exactly where the merged body
+	 * would have put them: nothing is dropped, added or reordered, and the Indigo fast path is not consulted for
+	 * them. The annotation target and the handler descriptor move together, which is precisely what Mixin checks
+	 * when it binds a redirect.
+	 */
+	private static int renderBlockRedirect(ClassNode mixin, Function<String, ClassNode> targets) {
+		// Idempotent: the widened descriptor is the post-retarget shape.
+		if (mixin.methods.stream().anyMatch(m -> HANDLER_1_21_1.equals(m.name) && m.desc.equals(HANDLER_NEW))) return 0;
+		MethodNode handler = method(mixin, HANDLER_1_21_1, HANDLER_OLD);
+		if (handler == null || grouped(handler)) return 0;
+		AnnotationNode redirect = MixinFit.injectorOf(handler);
+		if (redirect == null || !redirect.desc.equals("Lorg/spongepowered/asm/mixin/injection/Redirect;")) return 0;
+		List<AnnotationNode> ats = MixinFit.atNodes(redirect);
+		if (ats.size() != 1 || !(RENDER_BATCHED + OLD_ARGS).equals(MixinFit.value(ats.getFirst(), "target"))) return 0;
+		// The single call the wrapper forwards to, and the Indigo fast path that must stay exactly as compiled.
+		MethodInsnNode forward = null;
+		for (var insn : handler.instructions) if (insn instanceof MethodInsnNode call && (RENDER_BATCHED + OLD_ARGS).equals("L" + call.owner + ";" + call.name + call.desc)) forward = call;
+		if (forward == null || count(handler, RENDER_BATCHED + OLD_ARGS) != 1 || count(handler, INDIGO_TESSELLATE) != 1) return 0;
+		ClassNode compiler = targets.apply("net/minecraft/client/renderer/chunk/SectionCompiler");
+		if (compiler == null) return 0;
+		int sites = 0;
+		for (MethodNode m : compiler.methods) sites += count(m, RENDER_BATCHED + NEW_ARGS);
+		if (sites != 1) return 0;
+		for (int i = 0; i < ats.getFirst().values.size(); i += 2)
+			if ("target".equals(ats.getFirst().values.get(i))) ats.getFirst().values.set(i + 1, RENDER_BATCHED + NEW_ARGS);
+		handler.instructions.insertBefore(forward, new VarInsnNode(Opcodes.ALOAD, 9));
+		handler.instructions.insertBefore(forward, new VarInsnNode(Opcodes.ALOAD, 10));
+		forward.desc = NEW_ARGS;
+		handler.desc = HANDLER_NEW;
+		handler.maxStack = 10;
+		handler.maxLocals = 11;
+		ForbricLog.info("[Forbric/Renderer] retargeted Indigo's per-block redirect onto the merged compile body's nine-argument renderBatched — the tesselateBlock path is unchanged and NeoForge's model data and render type are forwarded verbatim");
+		return 1;
 	}
 
 	private static boolean matches(AnnotationNode injector, String kind, String anchor) {

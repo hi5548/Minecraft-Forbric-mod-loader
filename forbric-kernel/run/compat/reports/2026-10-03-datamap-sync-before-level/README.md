@@ -735,3 +735,27 @@ W7Harness has launched a full corpus sweep on the box, pinned to the same commit
 driver on every subject — including its teardown — which exercises the stop path in bulk; the observable to read
 when the single arm does run is **`exit=0` (or the driver's clean-stop marker), the join line still present,
 `frames>0`, and the row no longer `TIMEOUT`**. Nothing here is claimed as verified until that row exists.
+
+**First evidence, from the contended smoke-fix row** (`reports/2026-10-03-client-smoke-fix/`,
+`run=TIMEOUT world=True frames=1 stopped=False cause=boot-timeout seconds=301 contended=TRUE`, sha `16a95295…`):
+
+- **The screenshot path works end-to-end for the first time.** The console shows
+  `screenshot requested at world tick 100` — the un-gating did it — and the row records `frames=1`. (Kept here with
+  the caveat that the clean-stop half is still unverified; this row is timing-suspect and speaks only to the
+  screenshot.)
+- **That same row exposed a defect in this fix's alarm**: the first version verified the file with an immediate
+  `listFiles` and logged `wrote nothing`, while the row recorded `frames=1`. `Screenshot.grab` defers `_grab`
+  through `RenderSystem.recordRenderCall` whenever the caller is not the thread `RenderSystem` considers its render
+  thread — which this tick thread is not — so the file lands a frame or two later and the immediate check raced it.
+  Fixed by deferring the verification two ticks (`verifyPendingScreenshot`), with the loud warning kept for a file
+  that really never appears. An alarm that fires when the thing worked is the same false-true-string family this
+  report has been removing, so it is recorded rather than quietly dropped.
+- **The stop path was reached but did not complete**: the console stops at
+  `requesting clean disconnect after 220 world tick(s)` with no `clean disconnect observed` and no "neither
+  disconnectWithSavingScreen nor disconnect()" warning, i.e. `leaveWorld` found and invoked `disconnect()` without
+  throwing and the tick thread never returned to see `level == null`. Read in the merged `Minecraft`:
+  `disconnect()` → `disconnect(ProgressScreen, false)`, which nulls `level` only after `updateScreenAndTick` and a
+  `runTick(false)` loop waiting on `IntegratedServer.isShutdown()` — a synchronous server shutdown inside the tick
+  thread, consistent with a contended box stalling it. So this row cannot say either way, and the quiet arm is the
+  discriminator; if it still `TIMEOUT`s on an idle box, that `isShutdown()` loop is the first suspect and the
+  second read is whether `stop()` then ends `Minecraft.run()` in this merged client.

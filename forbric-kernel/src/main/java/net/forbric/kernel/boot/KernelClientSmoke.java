@@ -112,6 +112,10 @@ public final class KernelClientSmoke {
 	private static boolean drillDone;
 	private static boolean probed;
 	private static final java.util.Set<Integer> shotsTaken = new java.util.HashSet<>();
+	/** The screenshot written a frame or two after the request, verified then rather than synchronously. */
+	private static java.io.File pendingShotDir;
+	private static int pendingShotTick = -1;
+	private static int pendingShotBefore;
 	private static boolean idsLoggedBeforeConnect;
 	private static Object lastScreen;
 	private static boolean screenReported;
@@ -311,6 +315,7 @@ public final class KernelClientSmoke {
 		// world — gating it here made every configured screenshot tick below READY_TICKS unreachable (the harness
 		// asks for readyTicks/2), so the step silently never ran.
 		screenshotIfDue(minecraft);
+		verifyPendingScreenshot();
 		if (ready) keyBindsScreenIfDue(minecraft);
 		if (ready) modsScreenIfDue(minecraft);
 		if (ready && !tooltipProbed) probeTooltip(level, player);
@@ -1861,19 +1866,39 @@ public final class KernelClientSmoke {
 			java.util.function.Consumer<Object> onSaved = message -> { };
 			grab.invoke(null, gameDirectory, target, onSaved);
 
-			// Fail loudly rather than log a request that wrote nothing: _grab runs synchronously on the render
-			// thread, so a missing file is a real failure, not a race with a later frame.
+			// Do NOT verify here. Screenshot.grab defers _grab through RenderSystem.recordRenderCall whenever the
+			// caller is not the thread RenderSystem considers its render thread — which this tick thread is not —
+			// so the file lands a frame or two later, and an immediate listFiles() warns about a file that is about
+			// to exist. Measured: an immediate check logged "wrote nothing" on a run whose row recorded frames=1.
 			java.io.File dir = new java.io.File(gameDirectory, "screenshots");
-			java.io.File[] files = dir.listFiles((ignored, name) -> name.endsWith(".png"));
-			if (files == null || files.length == 0) {
-				ForbricLog.warn("[Forbric/ClientSmoke] screenshot at world tick %d wrote nothing to %s", worldTicks, dir);
-			} else {
-				ForbricLog.info("[Forbric/ClientSmoke] screenshot at world tick %d — %s",
-						worldTicks, files[files.length - 1].getName());
-			}
+			java.io.File[] before = dir.listFiles((ignored, name) -> name.endsWith(".png"));
+			pendingShotDir = dir;
+			pendingShotBefore = before == null ? 0 : before.length;
+			pendingShotTick = worldTicks + 2;
+			ForbricLog.info("[Forbric/ClientSmoke] screenshot requested at world tick %d — verifying after the frame lands",
+					worldTicks);
 		} catch (Throwable t) {
 			ForbricLog.warn("[Forbric/ClientSmoke] could not take a screenshot at world tick %d: %s", worldTicks,
 					String.valueOf(t));
+		}
+	}
+
+	/**
+	 * Verifies a requested screenshot once the deferred write has had frames to run. A file that never appears is
+	 * still a loud failure; the only change from the synchronous version is that the check waits for the write
+	 * instead of racing it.
+	 */
+	private static void verifyPendingScreenshot() {
+		if (pendingShotTick < 0 || worldTicks < pendingShotTick) return;
+		java.io.File dir = pendingShotDir;
+		int before = pendingShotBefore;
+		pendingShotTick = -1;
+		java.io.File[] files = dir == null ? null : dir.listFiles((ignored, name) -> name.endsWith(".png"));
+		int now = files == null ? 0 : files.length;
+		if (now > before) {
+			ForbricLog.info("[Forbric/ClientSmoke] screenshot written — %s", files[now - 1].getName());
+		} else {
+			ForbricLog.warn("[Forbric/ClientSmoke] screenshot requested but no file appeared in %s", dir);
 		}
 	}
 

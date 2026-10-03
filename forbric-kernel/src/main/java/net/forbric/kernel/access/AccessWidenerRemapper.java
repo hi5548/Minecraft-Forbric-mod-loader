@@ -41,6 +41,17 @@ import net.forbric.kernel.util.ForbricLog;
  * threw: {@code IllegalAccessError: net.minecraft.server.Bootstrap tried to access private method
  * 'void net.minecraft.core.registries.BuiltInRegistries.createContents()'} — fabric-registry-sync-v0 widens
  * exactly that member, and it stayed private because the entry named {@code class_7923 method_47487}.
+ *
+ * <p>A directive may also name a member on the <b>subclass</b> whose own override it means to widen, while the
+ * intermediary file carries that member under its declaring superclass — the shape {@link
+ * ForbricMappings#mapMemberName} exists for. Cobblemon's widener un-finals {@code LivingEntity}'s
+ * {@code canBreatheUnderwater()} and {@code getDimensions(Pose)} so its {@code PokemonEntity} may override them;
+ * {@code canBreatheUnderwater} ({@code method_6094}) is declared on {@code class_1309} itself, but
+ * {@code getDimensions} ({@code method_18377}) is declared on {@code class_1297} (Entity). An owner-scoped
+ * lookup missed the second, the directive fell through untranslated, no member of the merged base answered to
+ * {@code method_18377}, the flag stayed ACC_FINAL, and the guest died at class definition:
+ * {@code IncompatibleClassChangeError: PokemonEntity overrides final method
+ * net.minecraft.world.entity.LivingEntity.getDimensions(Lnet/minecraft/world/entity/Pose;)...}.
  */
 public final class AccessWidenerRemapper {
 	private AccessWidenerRemapper() {
@@ -77,9 +88,24 @@ public final class AccessWidenerRemapper {
 		}
 
 		Classes classes = name -> spine.mapClass(ForbricMappings.INTERMEDIARY, ForbricMappings.NAMED, name);
-		Members members = (owner, name, desc, method) -> method
-				? spine.mapMethod(ForbricMappings.INTERMEDIARY, ForbricMappings.NAMED, owner, name, desc)
-				: spine.mapField(ForbricMappings.INTERMEDIARY, ForbricMappings.NAMED, owner, name, desc);
+		Members members = (owner, name, desc, method) -> {
+			String named = method
+					? spine.mapMethod(ForbricMappings.INTERMEDIARY, ForbricMappings.NAMED, owner, name, desc)
+					: spine.mapField(ForbricMappings.INTERMEDIARY, ForbricMappings.NAMED, owner, name, desc);
+			if (!named.equals(name)) return named;
+
+			// The tree carries an inherited member under its declaring class only: an override keeps the
+			// superclass's own intermediary name and gets no row of its own, so an owner-scoped lookup misses
+			// whenever a widener names the member on the subclass it means to widen (see
+			// ForbricMappings#mapMemberName). Cobblemon's is the measured shape — `transitive-extendable method
+			// net/minecraft/class_1309 method_18377 (Lnet/minecraft/class_4050;)Lnet/minecraft/class_4048;` names
+			// LivingEntity, whose final `getDimensions(Pose)` the intermediary file declares as method_18377 on
+			// class_1297 (Entity). Left as written the directive named no member of the merged base, so
+			// LivingEntity.getDimensions kept ACC_FINAL and Cobblemon's PokemonEntity — which overrides it — died
+			// at definition: `IncompatibleClassChangeError: PokemonEntity overrides final method`. The name alone
+			// resolves it, exactly as MixinNames resolves a refmap key written against the subclass.
+			return spine.mapMemberName(name);
+		};
 
 		int rewritten = 0;
 		for (Map.Entry<String, byte[]> entry : entries.entrySet()) {

@@ -178,6 +178,38 @@ public final class KernelClientSmoke {
 			ForbricLog.info("[Forbric/ClientSmoke] screen change -> %s",
 					screen == null ? "null" : screen.getClass().getName());
 		}
+		answerWorldConfirmation(screen);
+	}
+
+	/**
+	 * Answers the world-open confirmation the client puts in front of quick-play, the way a player does.
+	 *
+	 * <p>Measured (2c8d932e, sound-physics): the smoke world is flagged as a modded world ({@code WasModded=1},
+	 * {@code ServerBrands=[neoforge]}), so vanilla opens it behind {@code BackupConfirmScreen} — the render thread
+	 * shows {@code LoadingOverlay} drawing it — and quick-play waits for a click an unattended client never makes.
+	 * The screen diagnostic proved the chain reached that screen, so the world gate is blocked by this prompt and
+	 * nothing else. Confirming it mirrors a real player and keeps the fixture honest, rather than editing the world
+	 * so it looks unmodded. BOOT side, so reflective; only ever touches the backup/experimental confirmation, never
+	 * the title screen or a loading overlay. {@code BackupConfirmScreen.Listener.proceed(boolean backedUp, boolean
+	 * eraseCache)} is what its own confirm button calls.
+	 */
+	private static void answerWorldConfirmation(Object screen) {
+		if (screen == null || !screen.getClass().getName().endsWith("BackupConfirmScreen")) return;
+		Object listener = fieldValue(screen, "onProceed");
+		if (listener == null) return;
+		for (Method method : listener.getClass().getMethods()) {
+			Class<?>[] parameters = method.getParameterTypes();
+			if (!method.getName().equals("proceed") || parameters.length != 2) continue;
+			try {
+				method.invoke(listener, true, false);
+				ForbricLog.info("[Forbric/ClientSmoke] confirmed the world-open prompt (%s) as a player would",
+						screen.getClass().getSimpleName());
+			} catch (ReflectiveOperationException | RuntimeException failed) {
+				ForbricLog.warn("[Forbric/ClientSmoke] could not confirm %s",
+						screen.getClass().getSimpleName(), failed);
+			}
+			return;
+		}
 	}
 
 
@@ -190,9 +222,47 @@ public final class KernelClientSmoke {
 	 * while the loading overlay (or a null screen) means the chain never ran at all. One line per screen change
 	 * separates them, and it costs a comparison rather than a launch.
 	 */
+
+	/**
+	 * Answers vanilla's backup/experimental confirmation, which a headless quick-play boot otherwise waits on forever.
+	 *
+	 * <p>This is the identified cause of every client run that reached the world but never entered it. The
+	 * {@code Minecraft.screen} diagnostic (which split "the chain ran and quick-play declined" from "the chain never
+	 * ran") showed the render thread drawing {@code LoadingOverlay} over a {@code BackupConfirmScreen}: vanilla had
+	 * already started loading the world — advancements loaded, quick-play data present — and then put a
+	 * confirmation in front of it that waits for a keypress nobody gives. No exception, no progress, which is why it
+	 * read as an unexplained stall for four runs.
+	 *
+	 * <p>The call made here is exactly the one the screen's own confirm button makes: its {@code onPress} is
+	 * {@code onProceed.proceed(true, eraseCache.selected())} (javap of
+	 * {@code lambda$init$0} on the merged base), and the checkbox is unchecked by default, so this passes
+	 * {@code (true, false)} — proceed, and do not erase the cache. Fired once per screen instance; the world fixture
+	 * is re-copied from the corpus for every run, so nothing here is destructive and a wrong boolean costs one
+	 * throwaway world at most.
+	 */
+	private static void dismissBackupConfirm(Object minecraft) {
+		Object screen = fieldValue(minecraft, "screen");
+		if (screen == null || screen == backupConfirmed) return;
+		if (!BACKUP_CONFIRM.equals(screen.getClass().getName())) return;
+
+		backupConfirmed = screen;
+		try {
+			java.lang.reflect.Field onProceed = screen.getClass().getDeclaredField("onProceed");
+			onProceed.setAccessible(true);
+			Object listener = onProceed.get(screen);
+			listener.getClass().getMethod("proceed", boolean.class, boolean.class).invoke(listener, true, false);
+			ForbricLog.info("[Forbric/ClientSmoke] answered vanilla's backup confirmation (proceed=true, "
+					+ "eraseCache=false) — a headless quick-play boot cannot press the button, and the world load was "
+					+ "waiting on it");
+		} catch (Throwable t) {
+			ForbricLog.warn("[Forbric/ClientSmoke] could not answer the backup confirmation: " + t);
+		}
+	}
+
 	private static void tick(Object minecraft) {
 		reportQuickPlayState(minecraft);
 		reportScreen(minecraft);
+		dismissBackupConfirm(minecraft);
 		// -Dforbric.clientSmokeProbes=off leaves the census unarmed. It exists to isolate the probe from
 		// everything else in one launch: after the probe learned to arm for real, runs stopped reaching
 		// Minecraft.onGameLoadFinished (quick-play never attempted) where the run before it reached
@@ -294,6 +364,9 @@ public final class KernelClientSmoke {
 	private static String reportedScreen;
 	private static int screensReported;
 	private static final int SCREEN_REPORT_LIMIT = 8;
+	/** vanilla's backup/experimental confirmation screen, answered once per instance. */
+	private static final String BACKUP_CONFIRM = "net.minecraft.client.gui.screens.BackupConfirmScreen";
+	private static Object backupConfirmed;
 	private static boolean connectionProbesArmed;
 	/**
 	 * Whether arming has been attempted at all. Arming is one-shot: it either succeeds or is recorded as

@@ -266,9 +266,23 @@ public final class KernelBoot {
 		final DuplicateModArbiter.Decision dupes = DuplicateModArbiter.arbitrateNested(side.envType, allNested);
 		nested = nested.stream().filter(jar -> !dupes.suppressed(jar)).toList();
 
-		nestedJarJarJars = List.copyOf(nested);
-		modJars.addAll(nested);
-		publishNestedPresence(nested);
+		// A Fabric JiJ child is a Fabric GUEST, not a Forge-family one, and it is already in the Fabric
+		// discovery's classpath list — which is the list FabricGuestRemapper rewrites intermediary→named into
+		// `fabricJars`. The candidate plan, though, hands it over in the same `nested` list as a JarJar child, and
+		// folding that whole list into `modJars` made the ORIGINAL, unremapped module a Forge-family guest too.
+		// KernelOwnedClasspath puts the Forge-family guests BEFORE the Fabric ones, so URLClassLoader answered
+		// every fabric-api module class from the intermediary copy: measured on the 1.21.1 fabric-api pack,
+		// fabric-biome-api-v1's mixin saw `@Mixin(targets = "net.minecraft.class_1966")` and
+		// `@Shadow method method_30611()Lnet/minecraft/class_5455$class_6890;` while the remapped jar on disk had
+		// `BiomeSource` and `registryAccess`, so every fabric-api mixin failed to apply and each Fabric subject
+		// stopped at STRICT with a required loss. The remapped copy is the only one that belongs on the
+		// classpath; the intermediary original is a discovery input only.
+		List<Path> fabricGuests = fabricScan.getClasspathJars();
+		List<Path> forgeNested = nested.stream().filter(jar -> !fabricGuests.contains(jar)).toList();
+
+		nestedJarJarJars = List.copyOf(forgeNested);
+		modJars.addAll(forgeNested);
+		publishNestedPresence(forgeNested);
 
 		// THE MC LIBRARIES GO IN AHEAD OF THE MODS, and the order is the whole policy.
 		//

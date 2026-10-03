@@ -494,8 +494,9 @@ public final class MixinRetarget {
 	 * callee. Only an {@code @Inject} follows a substitution, since its handler sees neither the call's arguments nor
 	 * its result, only the point. And only with no slice, {@code @Group}, sugar, parameter annotation or {@code @At}
 	 * args; a shift of BEFORE or AFTER and no ordinal past the first (the row's call is made once); for a mod of an
-	 * ecosystem the row lists (the others were compiled against the replacement, or against neither, and miss natively
-	 * too); in a mixin with one target. A handler that captures locals moves only when the live method's local variable
+	 * ecosystem the row lists, a family the callers do not have counting as a refusal for a CARRIER row but not for
+	 * one this kernel published (the others were compiled against the replacement, or against neither, and miss
+	 * natively too); in a mixin with one target. A handler that captures locals moves only when the live method's local variable
 	 * table holds exactly those at the new call ({@link InsertedLambdaArgumentShim#localsAtCall}) — Mixin reads the same
 	 * table to decide what it captures; with no table there is no proof and the point stays.
 	 *
@@ -510,8 +511,23 @@ public final class MixinRetarget {
 			List<String> selectors, ClassNode target, Function<String, byte[]> resolver) {
 		if (!INJECT.equals(injector.desc) || selectors.size() != 1
 				|| "off".equalsIgnoreCase(System.getProperty(SUBSTITUTED_CALL_PROPERTY, "on"))) return List.of();
+		// No bail on an unknown ecosystem: the TABLE decides. A carrier row refuses a family it does not list — an
+		// unknown one included, and `Set.of(...).contains(null)` would throw before it could — while a row THIS kernel
+		// published matches on the point alone, because the call its anchor names is one the kernel removed from the
+		// base for every guest. A bundled library whose config no installed mod claims has no family at all (Sinytra
+		// Connector, whose finding reads "belongs to no installed mod"), and its anchor is exactly the one that has to
+		// move. Measured on the real boot: bailing here left it on the deleted call through two kernels while the swap
+		// was published twice, with the anchor text byte-identical to before the swap existed.
 		net.forbric.api.Ecosystem ecosystem = MixinStubRebind.ecosystemOf(mixinName);
-		if (ecosystem == null) return List.of();
+		if (ecosystem == null) {
+			// Printed because a headless driver cannot produce this condition and twice now that difference hid a
+			// real defect: a bundled library's config has no installed mod to claim it (Sinytra Connector's finding
+			// reads "belongs to no installed mod"), so the family the filter sees here is unknown — and whether an
+			// unknown family may match a row is exactly what decided whether this guest's anchor moved at all.
+			ForbricLog.info("[Forbric/Mixin] %s: no ecosystem the kernel can name for this guest — the substitution "
+					+ "table is consulted on the point alone (a row THIS kernel published matches; a carrier row cannot "
+					+ "be family-checked and is skipped)", mixinName);
+		}
 		List<MethodNode> own = resolveSelector(target, selectors.get(0), resolver).stream().filter(target.methods::contains).toList();
 		if (own.size() != 1) return List.of();
 		MethodNode method = own.get(0);

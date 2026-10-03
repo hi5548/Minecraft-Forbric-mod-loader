@@ -144,22 +144,38 @@ public final class MergedBaseCalleeSwaps {
 	 * replacement, or against neither, and its anchor missing is what it would do natively.
 	 */
 	public static Substitution substitution(String target, String method, String anchor, Ecosystem ecosystem) {
-		if (ecosystem == null) return null;
 		MixinFit.Member want = MixinFit.parseMember(anchor);
 		if (want == null) return null;
-		for (Substitution row : SUBSTITUTED) {
-			if (covers(row, target, method, ecosystem, want)) return row;
+		// A carrier row is family-scoped and needs to know the family: an unknown one is not evidence about a
+		// carrier's swap, so those rows are skipped rather than guessed at.
+		if (ecosystem != null) {
+			for (Substitution row : SUBSTITUTED) {
+				if (covers(row, target, method, ecosystem, want, false)) return row;
+			}
 		}
-		// Kernel-made swaps last: a carrier row for the same point is the one the mods were compiled against.
+		// Kernel-made swaps are consulted even when the guest cannot be placed in a family at all. A bundled library
+		// arrives with a config no installed mod claims (Sinytra Connector's finding reads "belongs to no installed
+		// mod"), so its ecosystem is unknown — while the call its anchor names is one THIS kernel removed from the
+		// base, for every guest. An unknown family is not evidence that the guest never had that call, so these rows
+		// match on the point alone. Measured on the real boot: with the row family-scoped AND the null guard in place,
+		// the anchor stayed on the deleted call through two kernels even though the swap was published twice.
 		for (Substitution row : KERNEL_SUBSTITUTED) {
-			if (covers(row, target, method, ecosystem, want)) return row;
+			if (covers(row, target, method, ecosystem, want, true)) return row;
 		}
 		return null;
 	}
 
 	/** Whether {@code row} is about this anchor: same target, same method, an ecosystem the mod belongs to, same member. */
-	private static boolean covers(Substitution row, String target, String method, Ecosystem ecosystem, MixinFit.Member want) {
-		if (!row.target().equals(target) || !row.method().equals(method) || !row.ecosystems().contains(ecosystem)) return false;
+	private static boolean covers(Substitution row, String target, String method, Ecosystem ecosystem, MixinFit.Member want,
+			boolean unknownEcosystemStillMatches) {
+		if (!row.target().equals(target) || !row.method().equals(method)) return false;
+		if (ecosystem == null) {
+			// Set.of(...).contains(null) throws, and an unmatched family is a refusal unless the caller said the point
+			// alone is enough (a kernel-made row).
+			if (!unknownEcosystemStillMatches) return false;
+		} else if (!row.ecosystems().contains(ecosystem)) {
+			return false;
+		}
 		MixinFit.Member have = MixinFit.parseMember(row.member());
 		return want.name().equals(have.name()) && (want.owner() == null || want.owner().equals(have.owner()))
 				&& (want.desc() == null || want.desc().equals(have.desc()));

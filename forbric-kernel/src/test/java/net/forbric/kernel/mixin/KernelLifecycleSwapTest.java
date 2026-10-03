@@ -95,6 +95,21 @@ class KernelLifecycleSwapTest {
 	 * here: Sinytra Connector is Fabric-ecosystem and anchors on NeoForge's loader class on purpose, and family
 	 * filtering left its handler behind on a real boot.
 	 */
+	/**
+	 * The condition the REAL boot is in, and the one that made two kernels report the same miss: a guest the kernel
+	 * cannot place in a family at all. Sinytra Connector arrives as a bundled library whose config no installed mod
+	 * claims — the finding even reads "belongs to no installed mod" — so its ecosystem is unknown, and the swap must
+	 * still move its anchor, because the call it points at is one this kernel removed from the base for every guest.
+	 */
+	@Test
+	void aGuestWithNoKnownEcosystemStillMoves() {
+		MixinStubRebind.forget();
+		MergedBaseCalleeSwaps.kernelSubstituted(row());
+		MixinRetarget.Plan plan = MixinRetarget.plan(MixinFit.parse(guest(TRIGGER)), resolver(call(HOOK)));
+		assertEquals(2, plan.rewrites().size(), plan.describe());
+		assertEquals(HOOK, plan.rewrites().get(0).to());
+	}
+
 	@Test
 	void aGuestOfAnyEcosystemMoves() {
 		MixinStubRebind.noteEcosystem(MIXIN, Ecosystem.FABRIC);

@@ -111,6 +111,12 @@ import net.forbric.kernel.util.ForbricLog;
  * {@code Either.map}). Both anchors are gone and neither handler fits the replacement, so both are pruned with the
  * loss named.
  *
+ * <p>And fabric-content-registries-v0's {@code AbstractFurnaceBlockEntityMixin}: its two fuel-map {@code @Redirect}s
+ * in {@code isFuel}/{@code getBurnDuration} cannot attach either, because the merged base routes both call sites
+ * through {@code ForgeHooks.getBurnTime} (an {@code int}), and a handler that returns the fuel {@code Map} cannot
+ * match that call — so it cannot be retargeted, only stood down, with the loss recorded. The mixin's
+ * {@code fuelTimeMapHook} and its other anchors stay.
+ *
  * <p><b>A lambda-selector retarget is NOT local — measured 2026-10-03, reverted.</b> A transformer that rewrote a
  * guest mixin's selectors onto the lambda the merged base declares cleared {@code SerializableRegistriesMixin}'s
  * finding, and the same subject then reported eleven more CONFIRMED {@code mixin-injector} losses plus a balm
@@ -136,6 +142,8 @@ public final class GuestInjectorPruner implements ClassTransformer {
 	static final String BREWING_STAND_MIXIN = "net.fabricmc.fabric.mixin.item.BrewingStandBlockEntityMixin";
 	static final String ANVIL_HANDLER_MIXIN = "net.fabricmc.fabric.mixin.item.AnvilScreenHandlerMixin";
 	static final String INGREDIENT_MIXIN = "net.fabricmc.fabric.mixin.recipe.ingredient.IngredientMixin";
+	static final String FURNACE_CONTENT_MIXIN =
+			"net.fabricmc.fabric.mixin.content.registry.AbstractFurnaceBlockEntityMixin";
 	private static final String SHARED_INDEX = "Lcom/llamalad7/mixinextras/sugar/ref/LocalIntRef;";
 
 	/**
@@ -190,7 +198,12 @@ public final class GuestInjectorPruner implements ClassTransformer {
 					"Lnet/minecraft/world/inventory/AnvilMenu;createResult")),
 			INGREDIENT_MIXIN, List.of(new Prune("useCustomIngredientPacketCodec",
 					"(Lnet/minecraft/network/codec/StreamCodec;)Lnet/minecraft/network/codec/StreamCodec;",
-					"Lnet/minecraft/world/item/crafting/Ingredient;<clinit>")));
+					"Lnet/minecraft/world/item/crafting/Ingredient;<clinit>")),
+			FURNACE_CONTENT_MIXIN, List.of(
+					new Prune("canUseAsFuelRedirect", "()Ljava/util/Map;",
+							"Lnet/minecraft/world/level/block/entity/AbstractFurnaceBlockEntity;isFuel"),
+					new Prune("getFuelTimeRedirect", "()Ljava/util/Map;",
+							"Lnet/minecraft/world/level/block/entity/AbstractFurnaceBlockEntity;getBurnDuration")));
 
 	/** The mixin config each entry is declared in, which names the owning mod on the finding. */
 	static final Map<String, String> CONFIGS = Map.of(MODEL_MANAGER_MIXIN, "fabric-model-loading-api-v1.mixins.json",
@@ -198,7 +211,8 @@ public final class GuestInjectorPruner implements ClassTransformer {
 			WORLD_CHUNK_MIXIN, "fabric-lifecycle-events-v1.mixins.json",
 			BREWING_STAND_MIXIN, "fabric-item-api-v1.mixins.json",
 			ANVIL_HANDLER_MIXIN, "fabric-item-api-v1.mixins.json",
-			INGREDIENT_MIXIN, "fabric-recipe-api-v1.mixins.json");
+			INGREDIENT_MIXIN, "fabric-recipe-api-v1.mixins.json",
+			FURNACE_CONTENT_MIXIN, "fabric-content-registries-v0.mixins.json");
 
 	/** Whether an entry applies on this boot, beyond the pruner's own switch. */
 	private static final Map<String, BooleanSupplier> ACTIVE = Map.of(MODEL_MANAGER_MIXIN, () -> true,
@@ -206,7 +220,8 @@ public final class GuestInjectorPruner implements ClassTransformer {
 			WORLD_CHUNK_MIXIN, () -> true,
 			BREWING_STAND_MIXIN, () -> true,
 			ANVIL_HANDLER_MIXIN, () -> true,
-			INGREDIENT_MIXIN, () -> true);
+			INGREDIENT_MIXIN, () -> true,
+			FURNACE_CONTENT_MIXIN, () -> true);
 
 	/** What is lost when an entry's class loads and is not pruned. */
 	private static final Map<String, String> COSTS = Map.of(MODEL_MANAGER_MIXIN,
@@ -222,7 +237,10 @@ public final class GuestInjectorPruner implements ClassTransformer {
 			ANVIL_HANDLER_MIXIN, "the redirect stays in the mixin, cannot attach (the merged createResult no longer "
 					+ "calls Enchantment.canEnchant) and is reported as a required loss, so a STRICT launch halts on it",
 			INGREDIENT_MIXIN, "the value modifier stays in the mixin, cannot attach (the merged <clinit> builds the codec "
-					+ "with Either.map, not StreamCodec.map) and is reported as a required loss, so a STRICT launch halts on it");
+					+ "with Either.map, not StreamCodec.map) and is reported as a required loss, so a STRICT launch halts on it",
+			FURNACE_CONTENT_MIXIN, "the two redirects stay in the mixin, cannot attach (the merged isFuel/getBurnDuration "
+					+ "call ForgeHooks.getBurnTime, not getFuel) and are reported as required CONFIRMED losses, so a "
+					+ "STRICT launch halts on them");
 
 	/** Why an entry's injectors cannot stay, for the log line. */
 	private static final Map<String, String> REASONS = Map.of(MODEL_MANAGER_MIXIN,
@@ -241,7 +259,10 @@ public final class GuestInjectorPruner implements ClassTransformer {
 					+ "so the redirect's handler cannot bind",
 			INGREDIENT_MIXIN, "the merged Ingredient.<clinit> builds the packet codec through Either.map, not the "
 					+ "StreamCodec.map the @ModifyExpressionValue selects; the owner and return type both differ, so the "
-					+ "modifier binds nowhere");
+					+ "modifier binds nowhere",
+			FURNACE_CONTENT_MIXIN, "the merged isFuel (+2) and getBurnDuration (+19) call ForgeHooks.getBurnTime, not "
+					+ "getFuel; a @Redirect handler returning the fuel Map cannot match a call returning an int, so the "
+					+ "two cannot be retargeted onto the ForgeHooks call site");
 
 	/** What happens to an entry's mixin when a reshaped fabric-api leaves it untouched. */
 	private static final Map<String, String> DRIFT = Map.of(MODEL_MANAGER_MIXIN, "it will read PARTIAL and apply half — the state that made every block "
@@ -252,7 +273,9 @@ public final class GuestInjectorPruner implements ClassTransformer {
 			BREWING_STAND_MIXIN, "the two injectors soft-skip with Mixin's own warnings, exactly as they did before "
 					+ "this entry, and only captureItemStack binds",
 			ANVIL_HANDLER_MIXIN, "the redirect soft-skips with Mixin's own warning, exactly as it did before this entry",
-			INGREDIENT_MIXIN, "the value modifier soft-skips with Mixin's own warning, exactly as it did before this entry");
+			INGREDIENT_MIXIN, "the value modifier soft-skips with Mixin's own warning, exactly as it did before this entry",
+			FURNACE_CONTENT_MIXIN, "the two redirects soft-skip with Mixin's own warnings, exactly as they did before "
+					+ "this entry, and the mixin's other three anchors still bind");
 
 	/** The finding a removed injector records, or none when a kernel repair does its job. */
 	private static final Map<String, String> LOSSES = Map.of(MODEL_MANAGER_MIXIN,
@@ -271,7 +294,10 @@ public final class GuestInjectorPruner implements ClassTransformer {
 					+ "mixin's other anchor still binds",
 			INGREDIENT_MIXIN, "the kernel removed this injector: fabric-recipe-api's custom Ingredient packet codec no "
 					+ "longer replaces the built-in one (the merged <clinit> uses Either.map); the mixin's injectCodec "
-					+ "still binds");
+					+ "still binds",
+			FURNACE_CONTENT_MIXIN, "the kernel removed this injector: fabric-content-registries-v0's furnace fuel map is no "
+					+ "longer consulted by isFuel/getBurnDuration (the merged base routes both through "
+					+ "ForgeHooks.getBurnTime); the mixin's fuelTimeMapHook and its other anchors still bind");
 
 	/**
 	 * The finding an entry's removed injectors record on this boot, or null when something does their job:

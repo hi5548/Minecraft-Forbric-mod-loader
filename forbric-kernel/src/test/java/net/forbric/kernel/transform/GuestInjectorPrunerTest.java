@@ -449,6 +449,65 @@ class GuestInjectorPrunerTest {
 		return writer.toByteArray();
 	}
 
+	/**
+	 * fabric-content-registries-v0's furnace mixin: its two fuel-map {@code @Redirect}s cannot attach (the merged
+	 * {@code isFuel}/{@code getBurnDuration} call {@code ForgeHooks.getBurnTime}), and a Map-returning handler cannot
+	 * match an int-returning call, so both are stood down; {@code fuelTimeMapHook} stays. Synthetic bytes.
+	 */
+	@Test
+	void theFurnaceFuelRedirectsArePrunedAndTheFuelMapHookStays() throws Exception {
+		net.forbric.api.CompatibilityFindings.reset();
+		byte[] original = furnaceContentMixin();
+		assertEquals(3, read(original).methods.size(), "premise: the two redirects and the working hook");
+
+		byte[] pruned = new GuestInjectorPruner().transform(GuestInjectorPruner.FURNACE_CONTENT_MIXIN, original, null);
+		assertNotSame(original, pruned);
+		ClassNode after = read(pruned);
+		assertEquals(null, methodByDesc(after, "canUseAsFuelRedirect", "()Ljava/util/Map;"));
+		assertEquals(null, methodByDesc(after, "getFuelTimeRedirect", "()Ljava/util/Map;"));
+		assertNotNull(methodByDesc(after, "fuelTimeMapHook",
+				"(Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;)V"), "the fuel-map hook stays");
+
+		String config = GuestInjectorPruner.CONFIGS.get(GuestInjectorPruner.FURNACE_CONTENT_MIXIN);
+		var findings = net.forbric.api.CompatibilityFindings.all();
+		for (String gone : List.of("canUseAsFuelRedirect", "getFuelTimeRedirect")) {
+			var finding = findings.stream().filter(f -> f.id().startsWith("mixin-injector:" + config + ":"
+					+ GuestInjectorPruner.FURNACE_CONTENT_MIXIN + "#" + gone + "(")).findFirst()
+					.orElseThrow(() -> new AssertionError("no finding for pruned " + gone + ": " + findings));
+			assertEquals(net.forbric.api.CompatibilityFinding.Confidence.CONFIRMED, finding.confidence(), gone);
+			assertFalse(finding.required(), gone);
+			assertTrue(finding.detail().contains("fuel map"), finding.detail());
+		}
+		assertTrue(net.forbric.api.CompatibilityFindings.confirmedRequired().isEmpty());
+		assertSame(pruned, new GuestInjectorPruner().transform(GuestInjectorPruner.FURNACE_CONTENT_MIXIN, pruned, null));
+	}
+
+	private static byte[] furnaceContentMixin() {
+		String furnace = "net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity";
+		ClassWriter writer = new ClassWriter(0);
+		writer.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, GuestInjectorPruner.FURNACE_CONTENT_MIXIN, null, "java/lang/Object", null);
+		org.objectweb.asm.AnnotationVisitor mixin = writer.visitAnnotation("Lorg/spongepowered/asm/mixin/Mixin;", true);
+		org.objectweb.asm.AnnotationVisitor targets = mixin.visitArray("targets");
+		targets.visit(null, furnace);
+		targets.visitEnd();
+		mixin.visitEnd();
+		injector(writer, "canUseAsFuelRedirect", "()Ljava/util/Map;",
+				"Lorg/spongepowered/asm/mixin/injection/Redirect;",
+				"L" + furnace.replace('.', '/') + ";isFuel(Lnet/minecraft/world/item/ItemStack;)Z", "INVOKE",
+				"L" + furnace.replace('.', '/') + ";getFuel()Ljava/util/Map;");
+		injector(writer, "getFuelTimeRedirect", "()Ljava/util/Map;",
+				"Lorg/spongepowered/asm/mixin/injection/Redirect;",
+				"L" + furnace.replace('.', '/') + ";getBurnDuration(Lnet/minecraft/world/item/ItemStack;)I", "INVOKE",
+				"L" + furnace.replace('.', '/') + ";getFuel()Ljava/util/Map;");
+		injector(writer, "fuelTimeMapHook",
+				"(Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;)V",
+				"Lorg/spongepowered/asm/mixin/injection/Inject;",
+				"L" + furnace.replace('.', '/') + ";getFuel()Ljava/util/Map;", "RETURN",
+				"L" + furnace.replace('.', '/') + ";getFuel()Ljava/util/Map;");
+		writer.visitEnd();
+		return writer.toByteArray();
+	}
+
 	@Test
 	void aSecondPassChangesNothingFurther() throws Exception {
 		GuestInjectorPruner pruner = new GuestInjectorPruner();

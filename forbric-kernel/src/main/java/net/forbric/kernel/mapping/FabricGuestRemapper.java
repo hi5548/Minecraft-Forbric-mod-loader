@@ -82,7 +82,7 @@ public final class FabricGuestRemapper {
 	 * selector-resolution losses while the new stage was never given the jar. Bumping this constant is the one-line
 	 * answer, and it costs one re-remap of the tree per cache directory.
 	 */
-	private static final String REMAP_VERSION = "1.21.1-3-refmap-selectors";
+	private static final String REMAP_VERSION = "1.21.1-5-shadow-methods";
 
 	private FabricGuestRemapper() {
 	}

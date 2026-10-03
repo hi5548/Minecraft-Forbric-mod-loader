@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -80,17 +81,30 @@ public final class MixinNames {
 	private static final String MIXIN = "Lorg/spongepowered/asm/mixin/Mixin;";
 
 	/** Annotation → the string keys that carry member references (or classes, for {@code @Mixin}). */
-	private static final Map<String, Set<String>> SELECTOR_KEYS = Map.of(
-			"Lorg/spongepowered/asm/mixin/Mixin;", Set.of("targets"),
-			"Lorg/spongepowered/asm/mixin/injection/Inject;", Set.of("method"),
-			"Lorg/spongepowered/asm/mixin/injection/Redirect;", Set.of("method"),
-			"Lorg/spongepowered/asm/mixin/injection/ModifyArg;", Set.of("method"),
-			"Lorg/spongepowered/asm/mixin/injection/ModifyArgs;", Set.of("method"),
-			"Lorg/spongepowered/asm/mixin/injection/ModifyConstant;", Set.of("method"),
-			"Lorg/spongepowered/asm/mixin/injection/ModifyVariable;", Set.of("method"),
-			"Lorg/spongepowered/asm/mixin/injection/At;", Set.of("target", "value"),
-			"Lorg/spongepowered/asm/mixin/gen/Accessor;", Set.of("value"),
-			"Lorg/spongepowered/asm/mixin/gen/Invoker;", Set.of("value"));
+	private static final Map<String, Set<String>> SELECTOR_KEYS = Map.ofEntries(
+			Map.entry("Lorg/spongepowered/asm/mixin/Mixin;", Set.of("targets")),
+			Map.entry("Lorg/spongepowered/asm/mixin/injection/Inject;", Set.of("method")),
+			Map.entry("Lorg/spongepowered/asm/mixin/injection/Redirect;", Set.of("method")),
+			Map.entry("Lorg/spongepowered/asm/mixin/injection/ModifyArg;", Set.of("method")),
+			Map.entry("Lorg/spongepowered/asm/mixin/injection/ModifyArgs;", Set.of("method")),
+			Map.entry("Lorg/spongepowered/asm/mixin/injection/ModifyConstant;", Set.of("method")),
+			Map.entry("Lorg/spongepowered/asm/mixin/injection/ModifyVariable;", Set.of("method")),
+			Map.entry("Lorg/spongepowered/asm/mixin/injection/At;", Set.of("target", "value")),
+			Map.entry("Lorg/spongepowered/asm/mixin/gen/Accessor;", Set.of("value")),
+			Map.entry("Lorg/spongepowered/asm/mixin/gen/Invoker;", Set.of("value")),
+			// MixinExtras' own injectors carry a `method` selector exactly like the vanilla ones, and a mod that
+			// uses them writes it in the same development namespace: measured on fabric-data-attachment-api-v1,
+			// BannerBlockEntityMixin's @ModifyExpressionValue(method = "toInitialChunkDataNbt") and
+			// ChunkDataSenderMixin's @WrapOperation(method = "sendChunkBatches") were left untranslated because
+			// their annotation was not in this table, so MixinFit judged both UNFIT and STRICT stopped — while the
+			// refmap named the runtime members (class_2573/method_16887, class_8608/method_52386) all along.
+			Map.entry("Lcom/llamalad7/mixinextras/injector/ModifyExpressionValue;", Set.of("method")),
+			Map.entry("Lcom/llamalad7/mixinextras/injector/ModifyReturnValue;", Set.of("method")),
+			Map.entry("Lcom/llamalad7/mixinextras/injector/ModifyReceiver;", Set.of("method")),
+			Map.entry("Lcom/llamalad7/mixinextras/injector/WrapWithCondition;", Set.of("method")),
+			Map.entry("Lcom/llamalad7/mixinextras/injector/v2/WrapWithCondition;", Set.of("method")),
+			Map.entry("Lcom/llamalad7/mixinextras/injector/wrapoperation/WrapOperation;", Set.of("method")),
+			Map.entry("Lcom/llamalad7/mixinextras/injector/wrapmethod/WrapMethod;", Set.of("method")));
 
 	private MixinNames() {
 	}
@@ -122,7 +136,7 @@ public final class MixinNames {
 		// The refmap, by mixin class, is what Mixin itself uses to turn a selector it cannot read in the running
 		// namespace into one it can; the kernel's own fit check reads the selector as written, so the selector has
 		// to BE the runtime one. See translateSelectors.
-		Map<String, Map<String, String>> refmaps = refmapTables(entries);
+		Map<String, Refmap> refmaps = refmapTables(entries);
 
 		boolean changed = false;
 		for (Map.Entry<String, byte[]> entry : new ArrayList<>(entries.entrySet())) {
@@ -161,11 +175,11 @@ public final class MixinNames {
 
 	/** The class with its selector strings translated, or null when nothing changed. */
 	private static byte[] translateSelectors(byte[] bytes, ForbricMappings spine, Map<String, List<String>> targets,
-			Map<String, Map<String, String>> refmaps) {
+			Map<String, Refmap> refmaps) {
 		ClassNode node = new ClassNode();
 		new ClassReader(bytes).accept(node, ClassReader.SKIP_FRAMES);
 		List<String> mixinTargets = targets.getOrDefault(node.name, List.of());
-		Map<String, String> refmap = refmaps.getOrDefault(node.name, Map.of());
+		Refmap refmap = refmaps.getOrDefault(node.name, Refmap.EMPTY);
 		boolean[] touched = {false};
 
 		walk(node.visibleAnnotations, mixinTargets, spine, refmap, touched);
@@ -186,7 +200,7 @@ public final class MixinNames {
 	}
 
 	private static void walk(List<AnnotationNode> annotations, List<String> mixinTargets, ForbricMappings spine,
-			Map<String, String> refmap, boolean[] touched) {
+			Refmap refmap, boolean[] touched) {
 		if (annotations == null) return;
 		for (AnnotationNode annotation : annotations) {
 			Set<String> keys = SELECTOR_KEYS.get(annotation.desc);
@@ -248,10 +262,51 @@ public final class MixinNames {
 	 * normal (remapped) path. Substituting the refmap's answer makes the selector the runtime one for every reader,
 	 * Mixin included — its refmap lookup for the new string misses and its declared-name path finds the member.
 	 */
-	private static String selector(ForbricMappings spine, List<String> mixinTargets, Map<String, String> refmap,
-			String value) {
-		String resolved = refmap.getOrDefault(value, value);
-		return translateSelector(spine, mixinTargets, resolved);
+	private static String selector(ForbricMappings spine, List<String> mixinTargets, Refmap refmap, String value) {
+		String exact = refmap.bySelector().get(value);
+		if (exact != null) return translateSelector(spine, mixinTargets, exact);
+
+		String translated = translateSelector(spine, mixinTargets, value);
+		String name = memberName(value);
+		String byName = name == null || refmap.ambiguous().contains(name) ? null : refmap.byName().get(name);
+		if (byName == null) return translated;
+
+		// The key did not match because the selector's owner/descriptor had ALREADY been rewritten when this pass
+		// ran: tiny-remapper's MixinExtension translates a selector it can resolve into the SOURCE namespace, so
+		// {@code "setStack(ILnet/minecraft/item/ItemStack;)V"} (the refmap key) arrives as
+		// {@code Lnet/minecraft/class_2624;setStack(ILnet/minecraft/class_1799;)V} — owner and descriptor mapped,
+		// member name untouched, and the exact lookup above misses. Measured on fabric-transfer-api-v1's
+		// LockableContainerBlockEntityMixin, where MixinFit then reports "BaseContainerBlockEntity.setStack(…)" and
+		// suppresses the mixin while the refmap names method_5447 (= setItem) all along.
+		return memberName(translated) != null && memberName(translated).equals(name)
+				? translateSelector(spine, mixinTargets, byName)
+				: translated;
+	}
+
+	/** The bare member name of a selector, or null when it is not one (a class name, a constant, empty). */
+	private static String memberName(String selector) {
+		String rest = selector;
+		int semi = selector.indexOf(';');
+		int paren = selector.indexOf('(');
+		if (semi >= 0 && (paren < 0 || semi < paren)) rest = selector.substring(semi + 1);
+
+		int open = rest.indexOf('(');
+		int colon = rest.indexOf(':');
+		String name = open > 0 ? rest.substring(0, open) : colon > 0 ? rest.substring(0, colon) : rest;
+		return name.isEmpty() || name.indexOf('/') >= 0 ? null : name;
+	}
+
+	/**
+	 * One mixin's refmap in the two shapes this pass needs: the selector exactly as written (the key Mixin itself
+	 * looks up), and the bare member name (for a selector whose owner/descriptor a remapper already rewrote, see
+	 * {@link #selector}). {@code ambiguous} holds the bare names two entries disagree about; they are never served.
+	 */
+	private record Refmap(Map<String, String> bySelector, Map<String, String> byName, Set<String> ambiguous) {
+		static final Refmap EMPTY = new Refmap(Map.of(), Map.of(), Set.of());
+
+		Refmap(Map<String, String> bySelector, Map<String, String> byName) {
+			this(bySelector, byName, new LinkedHashSet<>());
+		}
 	}
 
 	/**
@@ -260,15 +315,15 @@ public final class MixinNames {
 	 * both — {@code mappings} is the per-mixin table and {@code data}'s namespace tables are the flattened lookup
 	 * Mixin keeps beside it.
 	 */
-	private static Map<String, Map<String, String>> refmapTables(Map<String, byte[]> entries) {
-		Map<String, Map<String, String>> tables = new HashMap<>();
+	private static Map<String, Refmap> refmapTables(Map<String, byte[]> entries) {
+		Map<String, Refmap> tables = new HashMap<>();
 		for (Map.Entry<String, byte[]> entry : entries.entrySet()) {
 			if (entry.getKey().endsWith(".json")) collectRefmap(entry.getValue(), tables);
 		}
 		return tables;
 	}
 
-	private static void collectRefmap(byte[] bytes, Map<String, Map<String, String>> tables) {
+	private static void collectRefmap(byte[] bytes, Map<String, Refmap> tables) {
 		Config root;
 		try {
 			root = JsonFormat.minimalInstance().createParser()
@@ -286,15 +341,29 @@ public final class MixinNames {
 		}
 	}
 
-	private static void collectRefmapSection(Object section, Map<String, Map<String, String>> tables) {
+	private static void collectRefmapSection(Object section, Map<String, Refmap> tables) {
 		if (!(section instanceof UnmodifiableConfig byMixin)) return;
 
 		for (UnmodifiableConfig.Entry mixin : new ArrayList<>(byMixin.entrySet())) {
 			if (!(mixin.getValue() instanceof Config refs)) continue;
-			Map<String, String> table = tables.computeIfAbsent(mixin.getKey(), key -> new LinkedHashMap<>());
+			Refmap table = tables.computeIfAbsent(mixin.getKey(), key -> new Refmap(new LinkedHashMap<>(),
+					new LinkedHashMap<>()));
 
 			for (UnmodifiableConfig.Entry ref : new ArrayList<>(refs.entrySet())) {
-				if (ref.getValue() instanceof String value) table.putIfAbsent(ref.getKey(), value);
+				if (!(ref.getValue() instanceof String value)) continue;
+				String key = ref.getKey();
+				table.bySelector().putIfAbsent(key, value);
+
+				String name = memberName(key);
+				// Name-only lookup, and only while it is unambiguous inside this mixin: two entries that share a
+				// bare name but disagree about the member are dropped rather than guessed between.
+				if (name == null || table.ambiguous().contains(name)) continue;
+
+				String previous = table.byName().putIfAbsent(name, value);
+				if (previous != null && !previous.equals(value)) {
+					table.byName().remove(name);
+					table.ambiguous().add(name);
+				}
 			}
 		}
 	}

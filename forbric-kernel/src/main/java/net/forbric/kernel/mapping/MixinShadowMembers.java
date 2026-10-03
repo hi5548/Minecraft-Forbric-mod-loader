@@ -78,12 +78,21 @@ public final class MixinShadowMembers {
 	private MixinShadowMembers() {
 	}
 
-	/** One shadowed declaration the spine can resolve, and the runtime name it must take. */
-	private record Rename(IMappingProvider.Member member, String runtimeName) {}
+	/** One shadowed declaration the spine can resolve, the runtime name it must take, and which map it belongs in. */
+	private record Rename(IMappingProvider.Member member, String runtimeName, boolean method) {}
 
 	/**
-	 * {@code delegate} plus one field mapping per shadowed declaration in {@code guestJar}. Identity — the delegate
+	 * {@code delegate} plus one member mapping per shadowed declaration in {@code guestJar}. Identity — the delegate
 	 * itself — when the jar has no mixin that shadows anything the spine can map.
+	 *
+	 * <p>{@code acceptMethod} for the methods and {@code acceptField} for the fields, never one for both: the two
+	 * are separate maps inside tiny-remapper, and a method registered as a field is looked up only against the
+	 * class's FIELDS, finds nothing, and silently renames nothing. Measured on the 1.21.1 fabric-api pack after the
+	 * JiJ-classpath fix let the remapped classes actually load: every {@code @Shadow} FIELD took its runtime name
+	 * ({@code field_25318} → {@code resources}) while every {@code @Shadow} METHOD stayed intermediary
+	 * ({@code method_10190}, {@code method_30611}, {@code method_8608}, …), so Mixin reported
+	 * "@Shadow method method_30611()Lnet/minecraft/core/RegistryAccess$Frozen; … was not located in the target class
+	 * net.minecraft.server.MinecraftServer" and STRICT stopped — the same failure the field half had already fixed.
 	 */
 	public static IMappingProvider withRenames(IMappingProvider delegate, Path guestJar, ForbricMappings spine)
 			throws IOException {
@@ -96,7 +105,11 @@ public final class MixinShadowMembers {
 		return acceptor -> {
 			delegate.load(acceptor);
 			for (Rename rename : renames) {
-				acceptor.acceptField(rename.member(), rename.runtimeName());
+				if (rename.method()) {
+					acceptor.acceptMethod(rename.member(), rename.runtimeName());
+				} else {
+					acceptor.acceptField(rename.member(), rename.runtimeName());
+				}
 			}
 		};
 	}
@@ -128,7 +141,7 @@ public final class MixinShadowMembers {
 						continue;
 					}
 					String mapped = mapShadowedField(targets, spine, field.name);
-					record(out, seen, node.name, field.name, field.desc, mapped);
+					record(out, seen, node.name, field.name, field.desc, mapped, false);
 				}
 
 				for (MethodNode method : node.methods) {
@@ -138,7 +151,7 @@ public final class MixinShadowMembers {
 					if (!shadow && !overwrite) continue;
 
 					String mapped = mapShadowedMethod(targets, spine, method.name);
-					record(out, seen, node.name, method.name, method.desc, mapped);
+					record(out, seen, node.name, method.name, method.desc, mapped, true);
 				}
 			}
 		}
@@ -147,10 +160,10 @@ public final class MixinShadowMembers {
 	}
 
 	private static void record(List<Rename> out, Map<String, Boolean> seen, String owner, String name, String desc,
-			String mapped) {
+			String mapped, boolean method) {
 		if (mapped == null) return;
 		if (seen.putIfAbsent(owner + "#" + name + desc, Boolean.TRUE) != null) return;
-		out.add(new Rename(new IMappingProvider.Member(owner, name, desc), mapped));
+		out.add(new Rename(new IMappingProvider.Member(owner, name, desc), mapped, method));
 	}
 
 	/**

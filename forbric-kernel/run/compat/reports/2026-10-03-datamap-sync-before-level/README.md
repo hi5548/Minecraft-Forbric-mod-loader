@@ -111,3 +111,46 @@ them are named above rather than performed. No fix is landed. The claim here is 
 worth having on its own: the kernel does not touch this payload, the send site is vanilla's, and the receive side
 has no guard — so the divergence is in the client's dispatch/join ordering, not in the payload or registration
 path.
+
+## 7. The separating read — performed; verdict is candidate 2's mechanism, enabled by an inline hand-off
+
+Both receipts Main asked for, from bytecode:
+
+**Thread hand-off (receipt 1).** `ClientboundCustomPayloadPacket.handle(ClientCommonPacketListener)` is a
+one-instruction body — `listener.handleCustomPayload(packet)` — with **0** `ensureRunningOnSameThread` calls, and
+`ClientPacketListener.handleCustomPayload` has **0** as well (105 elsewhere in that class, including
+`handleLogin`). So the login packet is marshalled to the main thread and the custom payload is **not**: the payload
+is dispatched wherever the connection's thread happens to be.
+
+**Where the payload's work lands (receipt 2).** `ClientPayloadContext.enqueueWork(Runnable)`
+(neoforge-runtime.jar):
+
+```java
+if (listener.getMainThreadEventLoop().isSameThread()) {
+    runnable.run();                                    // INLINE — runs immediately, right here
+    return CompletableFuture.completedFuture(null);
+}
+return NetworkRegistry.guard(listener.getMainThreadEventLoop().submit(runnable), payloadId);
+```
+
+**Verdict.** The hand-off is *conditional*. When the payload is handled on a network thread, the work is submitted
+to the main-thread queue and therefore runs **after** `handleLogin`'s marshalled task — the level exists and
+NeoForge's unguarded dereference is safe, which is why vanilla/NeoForge never sees this. When the payload is handled
+**on the main thread**, `isSameThread()` is true and the work runs **inline, synchronously, at that moment** — so if
+that moment is inside the client's login/level-loading window, `Minecraft.level` is still null and
+`ClientRegistryManager` NPEs. The observed failure is therefore candidate 2 (arrival inside `handleLogin`'s
+window), reached through the inline branch — not a missing hand-off of the kind candidate 1 described, and not an
+earlier `placeNewPlayer` on our server side.
+
+**Fix layer.** The send side is vanilla-correct and cannot be moved without inventing a deferral NeoForge does not
+have. What differs is that our client path delivers this payload synchronously, on the main thread, before the level
+exists. Two shapes, with costs:
+
+- *Keep the delivery, defer the work*: make the kernel's synchronous delivery not run payload work inline ahead of
+  the level — narrow, but it is a behaviour change in the delivery path and needs a client arm to show it does not
+  perturb other payloads.
+- *Reorder the client join sequence* so the payload is handled after the level exists, mirroring what the queue
+  does for us on a real network thread: correct in principle, but a join-sequence change, which is a harness
+  decision rather than a local repair, and it can mask a genuine ordering defect elsewhere.
+
+Neither is a guess-safe local fix; the decision belongs to whoever owns the client join sequence, per the brief.

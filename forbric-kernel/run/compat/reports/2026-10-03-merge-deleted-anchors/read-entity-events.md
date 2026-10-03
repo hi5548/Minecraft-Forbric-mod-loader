@@ -121,5 +121,10 @@ whole-mixin pin would delete them.
 
 ## Bottom line
 
-* `EntityMixin`: 2/2 losses are translation gaps; the merged instructions exist. Restore in `MixinNames`, not a pin.
-* `LivingEntityMixin`: 2 translation gaps, 2 lambda renumbers, 2 refactors; 15/21 anchors live. Retarget/report.
+* `EntityMixin`: 2/2 losses are translation gaps; the merged instructions exist. **Fixed** in `MixinNames`
+  (dotted-owner refmap key in `memberName`), not pinned.
+* `LivingEntityMixin`: the 2 translation gaps (`isSleeping`, `broadcastEntityEvent`) are **fixed by the same
+  pass**; the 2 lambda renumbers are declined by `LambdaSelectorRetarget` because each names two same-descriptor
+  candidates (`$11`/`$12`, `$9`/`$10`) — its uniqueness rule forbids guessing; the 2 host refactors moved the
+  behaviour to `BlockState` with a different handler ABI, so no annotation rewrite can carry them. 15/21 anchors
+  stay live, so nothing here is pinned.

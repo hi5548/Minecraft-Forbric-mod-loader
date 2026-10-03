@@ -283,12 +283,29 @@ public final class MixinNames {
 				: translated;
 	}
 
-	/** The bare member name of a selector, or null when it is not one (a class name, a constant, empty). */
+	/**
+	 * The bare member name of a selector, or null when it is not one (a class name, a constant, empty).
+	 *
+	 * <p>Three owner spellings, and Fabric's refmaps use all of them as KEYS: {@code Lowner;name(desc)ret} /
+	 * {@code Lowner;name:desc} (the first ';' opens the owner), the dotted {@code pkg/Owner.name(desc)ret}, and a
+	 * name with no owner at all. The dotted form used to fall into the "a member name never contains '/'" rejection
+	 * at the bottom, so {@link #collectRefmapSection}'s name table was empty for every dotted key and
+	 * {@link #selector}'s name fallback could never fire. That is the whole reason a refmap entry like
+	 * {@code net/minecraft/entity/LivingEntity.isSleeping()Z} did not resolve an {@code @At(target=…)} written
+	 * {@code Lnet/minecraft/entity/LivingEntity;isSleeping()Z} — the two spellings never meet, and only the name
+	 * fallback can join them.
+	 */
 	private static String memberName(String selector) {
 		String rest = selector;
 		int semi = selector.indexOf(';');
 		int paren = selector.indexOf('(');
-		if (semi >= 0 && (paren < 0 || semi < paren)) rest = selector.substring(semi + 1);
+		if (semi >= 0 && (paren < 0 || semi < paren)) {
+			rest = selector.substring(semi + 1);
+		} else if (paren > 0) {
+			// Dotted owner: everything through the last '.' before the descriptor is the owner, not the member.
+			int dot = selector.lastIndexOf('.', paren - 1);
+			if (dot > 0) rest = selector.substring(dot + 1);
+		}
 
 		int open = rest.indexOf('(');
 		int colon = rest.indexOf(':');
@@ -374,6 +391,15 @@ public final class MixinNames {
 	 */
 	private static String translateSelector(ForbricMappings spine, List<String> mixinTargets, String value) {
 		if (value.isEmpty()) return value;
+
+		// A bare constructor descriptor — `(Lnet/minecraft/class_1935;)Lnet/minecraft/class_1799;` — is what an
+		// @At(value="NEW", target=…) carries when it names a synthetic or implicit construction. It has no member
+		// name, so every path below treats it as a member-less constant and returns it untouched, leaving the
+		// class_* names inside intermediary. Measured on fabric-item-api-v1's BrewingStandBlockEntityMixin, whose
+		// @At(NEW) target is exactly this shape and whose @WrapOperation then never bound in doBrew — reported as
+		// "@At(NEW) BrewingStandBlockEntity.class_1799 is not constructed in doBrew" while the merged base builds
+		// an `ItemStack` there. Only class names inside the descriptor move; arity and primitives are untouched.
+		if (value.charAt(0) == '(') return mapDescriptor(spine, value);
 
 		// A bare value that carries a package path but no member syntax is a CLASS name, not a member: Fabric's
 		// refmaps carry those for anonymous inner classes, where the entry reads

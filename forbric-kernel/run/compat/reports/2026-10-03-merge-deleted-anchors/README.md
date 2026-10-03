@@ -125,13 +125,47 @@ are re-derived here only if they reappear on the current kernel; the current arm
 
 | # | config : mixin | CONFIRMED injector(s) | merged-base read | verdict |
 |---|---|---|---|---|
-| 1 | `fabric-data-generation-api-v1` : `server.MainMixin` | `main` | `@At(NEW) ServerPropertiesLoader`; class absent, `new DedicatedServerSettings`@456 | **ANCHOR GONE → stood down (landed)** |
+| 1 | `fabric-data-generation-api-v1` : `server.MainMixin` | `main` | `@At(NEW) ServerPropertiesLoader`; class absent, `new DedicatedServerSettings`@456 | **ANCHOR GONE → stood down (landed, 4b9eca4e)** |
 | 2 | `fabric-registry-sync-v0` : `MainMixin` | – | `Util.startTimerHackThread`@429 present | **SURVIVES** (pin is freeze-timing) |
-| 3 | `fabric-data-attachment-api-v1` : `EntityMixin` | `readEntityAttachments`, `writeEntityAttachments` | `load`→`readAdditionalSaveData`@635; `saveWithoutId`→`addAdditionalSaveData`@496 | **TRANSLATION GAP** (instruction present under the refmap's name) |
-| 4 | `fabric-entity-events-v1` : `LivingEntityMixin` | 6 (see read 1) | mix: 2 translation gaps, 2 merge refactors, 2 lambda renumbers | **MIXED** (retarget) |
-| 5 | `fabric-content-registries-v0` : `AbstractFurnaceBlockEntityMixin` | `canUseAsFuelRedirect`, `getFuelTimeRedirect` | `isFuel`/`getBurnDuration` call `ForgeHooks.getBurnTime`, not `getFuel` | **ANCHOR GONE at the call site**; 3/5 anchors survive → per-injector loss |
-| 6 | `fabric-item-api-v1` : `BrewingStandBlockEntityMixin` | `hasStackRecipeRemainder`, `createStackRecipeRemainder` | `doBrew` calls `ItemStack.hasCraftingRemainingItem()`; `@At(NEW)` target is the raw intermediary descriptor `(Lclass_1935;)Lclass_1799;` | **MIXED** (owner moved Item→ItemStack; + translation gap) |
-| 7 | `fabric-lifecycle-events-v1` : `WorldChunkMixin` | `onRemoveBlockEntity` | slice `from=createBlockEntity … to=Map.remove` is empty: `Map.remove`@30/47 precede `createBlockEntity`@92 | **ORDER/SHAPE CHANGE** (retarget the slice) |
+| 3 | `fabric-data-attachment-api-v1` : `EntityMixin` | `readEntityAttachments`, `writeEntityAttachments` | `load`→`readAdditionalSaveData`@635; `saveWithoutId`→`addAdditionalSaveData`@496 | **TRANSLATION GAP → retargeted (landed, kernel fix)** |
+| 4 | `fabric-entity-events-v1` : `LivingEntityMixin` | 6 (see read 1) | 2 translation gaps (`isSleeping`@hurt+90, `broadcastEntityEvent`@die+178) **retargeted (landed)**; 2 lambda renumbers **declined (ambiguous, below)**; 2 host refactors **declined (handler ABI changed)** | **MIXED** |
+| 5 | `fabric-content-registries-v0` : `AbstractFurnaceBlockEntityMixin` | `canUseAsFuelRedirect`, `getFuelTimeRedirect` | `isFuel`/`getBurnDuration` call `ForgeHooks.getBurnTime`, not `getFuel` | **per-injector loss** (call site replaced by ForgeHooks); 3/5 anchors survive → pruner's job, not pinned |
+| 6 | `fabric-item-api-v1` : `BrewingStandBlockEntityMixin` | `hasStackRecipeRemainder`, `createStackRecipeRemainder` | `@At(NEW)` target is the raw intermediary descriptor `(Lclass_1935;)Lclass_1799;` → **retargeted (landed)**; `Item.hasCraftingRemainingItem` moved to `ItemStack.hasCraftingRemainingItem` → **declined** | **MIXED** |
+| 7 | `fabric-lifecycle-events-v1` : `WorldChunkMixin` | `onRemoveBlockEntity` | slice `from=createBlockEntity … to=Map.remove` is empty: `Map.remove`@30/47 precede `createBlockEntity`@92 | **ORDER/SHAPE CHANGE** → needs a slice retarget (two `Map.remove` sites); reported |
+
+### Retargets landed this pass (kernel fix, one commit)
+
+The translation gaps are one defect with one cause, not six per-mixin patches: `MixinNames` translated an
+`@At(target=…)` only through an **exact** refmap-key match, and Fabric's refmap keys spell the same member
+differently from the annotation. Two sub-cases, both fixed in `MixinNames`:
+
+* **Dotted-owner refmap key.** `memberName` returns null for any string containing `/`, so for a key like
+  `net/minecraft/entity/LivingEntity.isSleeping()Z` the name table (`byName`) was never populated and
+  `selector`'s name fallback could never fire — while the annotation spells the member
+  `Lnet/minecraft/entity/LivingEntity;isSleeping()Z`. `memberName` now strips a dotted owner (everything through
+  the last `.` before the descriptor) as well as a `Lowner;` owner. This resolves #3 (both injectors) and #4's
+  `isSleeping` / `broadcastEntityEvent` (the merged `hurt`/`die` carry those exact calls).
+* **Bare constructor descriptor.** An `@At(value="NEW", target="(L…;)L…;")` has no member name, so every member
+  path returned it untouched and the `class_*` names inside stayed intermediary. `translateSelector` now maps a
+  leading-`(` value through `mapDescriptor`, class by class. This resolves #6's `createStackRecipeRemainder`
+  (`new ItemStack` is in the merged `doBrew`).
+
+### Declined, with the reason this pass did not touch it
+
+* **Lambda renumbers (#4, `lambda$stopSleeping$9`, `lambda$checkBedExists$7`).** `LambdaSelectorRetarget` already
+  covers these selectors (they are `method=` annotation strings it walks) — but its rule rewrites only when
+  enclosing-name + descriptor picks out **exactly one** member, and the merged base declares **two**
+  same-descriptor candidates per lambda (`lambda$stopSleeping$11`/`$12`, `lambda$checkBedExists$9`/`$10`). It
+  declines them, by design, rather than guess — the `$41` trap. Not a gap in that transformer; a real ambiguity.
+* **Host refactors (#4, `startSleeping`/`getBedOrientation`).** The behaviour moved to `BlockState`, but the
+  handler ABI did not: `setOccupiedState` matches `Level.setBlock(BlockPos,BlockState,I)Z` and
+  `onGetSleepingDirection` matches `BedBlock.getBedOrientation(BlockGetter,BlockPos)Direction`, whereas the new
+  call sites are `BlockState.setBedOccupied(Level,BlockPos,LivingEntity,Z)V` and
+  `BlockState.getBedDirection(LevelReader,BlockPos)Direction`. An annotation-only retarget cannot re-shape the
+  handler, so these are genuine per-injector losses until a bespoke adapter exists.
+* **Owner move (#6, `Item.hasCraftingRemainingItem` → `ItemStack.hasCraftingRemainingItem`)** and **slice order
+  (#7)**: same class of change — the member and its owner/position moved, so there is no string to rewrite;
+  reported.
 
 ### Why only #1 was pinned
 
@@ -149,15 +183,41 @@ the merged base, so a pin would delete a restorable feature.
 * [`read-balm-cropblock.md`](read-balm-cropblock.md) — balm `FabricCropBlockMixin` /
   `InvalidInjectionException` → `VerifyError`.
 
-## What was landed
+## What was landed (two commits)
 
-* `forbric-kernel/src/main/java/net/forbric/kernel/mixin/MergedBaseMixinCompat.java` — the entry above with the
-  instruction evidence and cost in the comment.
+Commit `4b9eca4e` — the Cluster-1 stand-down:
+
+* `forbric-kernel/src/main/java/net/forbric/kernel/mixin/MergedBaseMixinCompat.java` — the `server.MainMixin`
+  entry with the instruction evidence and cost in the comment.
 * `forbric-kernel/src/test/java/net/forbric/kernel/mixin/ForbricMixinServiceTest.java` —
   `theDataGenerationMainMixinStandDownReachesItsOwnConfigAndIsLiftable`: the shipped entry reaches its own
-  config's suppression set and `-Dforbric.keepMixins` still lifts it. Fails before the entry exists (the
-  `suppressedMixinsFor` assertion), passes after.
-* Verified: `cd forbric-kernel && ./gradlew test --tests 'net.forbric.kernel.mixin.ForbricMixinServiceTest'
-  --tests 'net.forbric.kernel.mixin.MergedBaseMixinCompatPinnedContractsTest' --console=plain --offline`
-  → `15 tests, 2 skipped, 0 failed`. (The 2 skipped are the fabric-api-fixture tests; the 26.2 fixture is not
-  present in this checkout, so `TestFixtures.require` skips them.)
+  config's suppression set and `-Dforbric.keepMixins` still lifts it. Fails before the entry exists.
+
+Commit `HEAD` — the translation retargets:
+
+* `forbric-kernel/src/main/java/net/forbric/kernel/mapping/MixinNames.java` — `memberName` reads a dotted-owner
+  refmap key; `translateSelector` maps a bare constructor descriptor. Both with the measured shapes in the
+  comments.
+* `forbric-kernel/src/test/java/net/forbric/kernel/mapping/MixinNamesTest.java` — three tests over the REAL 1.21.1
+  mappings (`MappingFixtures`): the dotted no-arg key, the dotted descriptor key, and the `NEW` constructor
+  descriptor. All three **fail before the fix** (`3 tests, 0 skipped, 3 failed` on the pre-fix tree) and pass
+  after.
+
+Verified:
+
+```
+cd forbric-kernel && ./gradlew cleanTest test \
+  --tests net.forbric.kernel.mapping.MixinNamesTest \
+  -Pforbric.mcLibraries=<p0/mc-1.21.1>/libraries --console=plain --offline
+  → test: 3 tests, 0 skipped, 0 failed        # with the mapping fixtures reachable
+cd forbric-kernel && ./gradlew test --tests 'net.forbric.kernel.mixin.*' \
+  -Pforbric.mcLibraries=<p0/mc-1.21.1>/libraries --console=plain --offline
+  → test: 500 tests, 191 skipped, 1 failed    # LootSupersessionProofTest, missing fixture, pre-existing
+                                              # (proven by stash + rerun on the base tree)
+```
+
+Regression scope checked: the `mapping.*` + `transform.*` packages carry 23 failures **both before and after**
+the `MixinNames` change (all staged-artifact/fixture dependent — `ForbricCacheTest`, `LambdaSelectorRetargetTest`,
+`LootTableEventBridgeInjectorTest`, `ModsButtonRedirectorTest`, `TransferTransactionHooksTest`,
+`MergedBaseParticleProvidersTest`); the only delta is the three new `MixinNamesTest` cases flipping from fail to
+pass.

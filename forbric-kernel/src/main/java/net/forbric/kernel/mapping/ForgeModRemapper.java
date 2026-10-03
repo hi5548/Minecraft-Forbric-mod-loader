@@ -136,7 +136,12 @@ public final class ForgeModRemapper {
 	 */
 	public static void remapJar(Path input, Path output, IMappingProvider provider, List<Path> remapClasspath,
 			boolean mixinAnnotations) throws IOException {
-		Files.deleteIfExists(output);
+		// Remapped beside the output and moved into place only when it is complete. Writing to the final path is
+		// what let an interrupted remap leave a 22-byte empty zip where the cache expects a jar, and
+		// {@link ForbricCache#isCached} then called it a hit on every later boot; see that method for the fatal
+		// shape it produced. A repair pass runs first, so an entry left truncated by an older kernel heals.
+		Path partial = output.resolveSibling(output.getFileName() + ".partial");
+		Files.deleteIfExists(partial);
 
 		TinyRemapper.Builder builder = TinyRemapper.newRemapper()
 				.withMappings(provider)
@@ -147,7 +152,7 @@ public final class ForgeModRemapper {
 		}
 		TinyRemapper remapper = builder.build();
 
-		try (OutputConsumerPath out = new OutputConsumerPath.Builder(output).build()) {
+		try (OutputConsumerPath out = new OutputConsumerPath.Builder(partial).build()) {
 			out.addNonClassFiles(input);
 
 			if (remapClasspath != null) {
@@ -162,7 +167,8 @@ public final class ForgeModRemapper {
 			remapper.finish();
 		}
 
-		stripSigningMetadata(output);
+		stripSigningMetadata(partial);
+		Files.move(partial, output, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
 	}
 
 	/**

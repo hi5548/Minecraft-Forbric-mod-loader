@@ -46,8 +46,31 @@ public final class ForbricCache {
 		return dir.resolve(baseName + "-" + key.substring(0, Math.min(16, key.length())) + suffix);
 	}
 
+	/**
+	 * Whether {@code file} is a usable cache entry: a regular file AND a jar that actually has entries.
+	 *
+	 * <p>{@code Files.isRegularFile} alone is not enough, and the gap is not theoretical. {@code remapJar} writes to
+	 * the final path (see {@link ForgeModRemapper#remapJar}), so a remap interrupted by a kill — a killed run, a
+	 * machine under load, a window closed early — leaves a stub there, and a stub is a regular file. Measured on
+	 * 2026-10-03: {@code fabric-object-builder-api-v1-0.116.17-…jar} at <b>22 bytes</b> in a warm shared cache, an
+	 * empty zip (EOCD only). Every later boot on that cache read it as a hit, put the stub on the owned classpath,
+	 * and died in Mixin's own {@code Config.create} with
+	 * "The specified resource 'fabric-object-builder-v1.mixins.json' was invalid or could not be read" — a fatal
+	 * {@code MixinInitialisationError} that names a mixin config, so it reads as a config problem or a regression in
+	 * whichever kernel was current, never as a cache problem. The empty zip is also why it survived: a zero-entry
+	 * jar is VALID, so the signing-metadata pass rewrites it happily and the file keeps its place.
+	 *
+	 * <p>Rejecting the entry sends the caller down its remap path, which rewrites the file from scratch — so a
+	 * poisoned cache now heals itself instead of poisoning every run until someone deletes it by hand.
+	 */
 	public static boolean isCached(Path file) {
-		return Files.isRegularFile(file);
+		if (!Files.isRegularFile(file)) return false;
+
+		try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(file.toFile())) {
+			return zip.size() > 0;
+		} catch (IOException unreadable) {
+			return false;
+		}
 	}
 
 	/** Hex SHA-256 over the concatenation of the given files' contents and string tokens (order matters). */

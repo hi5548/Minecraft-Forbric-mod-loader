@@ -790,9 +790,35 @@ but a bare `disconnect()` from our tick does not. So on this merged client the w
 kills the run at the boot timeout. `stop()` itself is fine: `Minecraft.run()` loops on the `running` field
 (`run()` offset 29 reads it) and `stop()` clears it, so the missing piece is the server, not `run()`.
 
-**Fix (commit `…`, §19):** `leaveWorld` now halts the integrated server first —
+**Fix (commit `d18ea643`):** `leaveWorld` now halts the integrated server first —
 `(IntegratedServer) minecraft.singleplayerServer`, then `halt(true)` reflectively — exactly as
 `Minecraft.emergencySave()` does, and only then invokes `disconnectWithSavingScreen`/`disconnect`. That makes the
 `isShutdown()` wait terminate, which is what lets `level` null, the out-of-world branch run, and `stop()` be
-reached. A quiet arm on the new pin is the verification; if the server's own shutdown hangs on a subject, the
-harness timeout is then a real finding about that subject rather than about the driver's leaving path.
+reached. If the server's own shutdown hangs on a subject, the harness timeout is then a real finding about that
+subject rather than about the driver's leaving path.
+
+**The quiet arm on the fix: §19 is met, all three observables, on one row** (`reports/2026-10-03-client-halt/`,
+kernel `10e9dd65aab050b655aa562567755a4e3b49af37434e30bae54a2c5c372d9d71`, sha-verified, `contended=false`):
+
+```
+run=PASS  exit=0  stopped=true  world=true  frames=1  strict=true  loaded=true  mod=OK  cause=none
+seconds=39  cpu_busy_pct=86.4  load_1m=1.67  contended=false
+```
+
+Same subject, same harness, one pin from the pre-fix quiet row (`2026-10-03-client-quiet`: `TIMEOUT exit=143
+stopped=false seconds=301`) — **39 s and a clean stop versus 301 s and a kill, and the whole difference is the
+`halt(true)` before the disconnect.** Verbatim:
+
+```
+[Forbric/ClientSmoke] screenshot requested at world tick 100 — verifying after the frame lands
+[Forbric/ClientSmoke] screenshot written — 2026-10-03_10.32.45.png
+[Forbric/ClientSmoke] clean disconnect observed; stopping client
+[Forbric/ClientSmoke] Stopping!
+[Server thread/INFO]: Stopping server
+[Server thread/INFO]: ThreadedAnvilChunkStorage: All dimensions are saved
+```
+
+with `screenshots/2026-10-03_10.32.45.png` on disk (488885 bytes), the join line and `client-ready after 200 world
+tick(s)` present, both loaders' command trees, and the window title. `frames=1` and the clean stop hold together on
+the same row for the first time. `§19`'s three driver observables are met; the join acceptance criterion itself was
+met three fixes earlier (§14) and has not moved.

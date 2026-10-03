@@ -1978,9 +1978,24 @@ public final class KernelClientSmoke {
 	 * Leaves the world so the run can stop. Whichever spelling the merged {@code Minecraft} declares is invoked:
 	 * 1.21.1 saves and quits to the title with {@code disconnect()}, and a version carrying
 	 * {@code disconnectWithSavingScreen} gets that. The tick handler then waits for {@code level} to become null and
-	 * calls {@code stop()}, so a version with neither name is the only case that still needs the harness timeout.
+	 * calls {@code stop()}.
+	 *
+	 * <p>The integrated server is halted FIRST, exactly as the merged {@code Minecraft.emergencySave()} does.
+	 * {@code disconnect(Screen, boolean)} ends with {@code while (!integratedserver.isShutdown()) runTick(false)}, so
+	 * a server nothing has told to stop leaves that wait spinning on the tick thread — measured on an idle box as a
+	 * run that logged "requesting clean disconnect" and then sat there until the harness timeout, with the client
+	 * still in the world. Vanilla reaches that wait with the server already stopping (its button handlers halt it, or
+	 * the connection close does); invoking {@code disconnect()} alone here does not.
 	 */
 	private static void leaveWorld(Object minecraft) {
+		Object server = fieldValue(minecraft, "singleplayerServer");
+		if (server != null) {
+			try {
+				server.getClass().getMethod("halt", boolean.class).invoke(server, true);
+			} catch (ReflectiveOperationException | RuntimeException e) {
+				ForbricLog.warn("[Forbric/ClientSmoke] could not halt the integrated server before disconnecting", e);
+			}
+		}
 		if (invokeNoArg(minecraft, "disconnectWithSavingScreen")) return;
 		if (invokeNoArg(minecraft, "disconnect")) return;
 		ForbricLog.warn("[Forbric/ClientSmoke] neither Minecraft.disconnectWithSavingScreen nor Minecraft.disconnect() "

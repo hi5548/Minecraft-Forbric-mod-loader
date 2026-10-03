@@ -759,3 +759,40 @@ when the single arm does run is **`exit=0` (or the driver's clean-stop marker), 
   thread, consistent with a contended box stalling it. So this row cannot say either way, and the quiet arm is the
   discriminator; if it still `TIMEOUT`s on an idle box, that `isShutdown()` loop is the first suspect and the
   second read is whether `stop()` then ends `Minecraft.run()` in this merged client.
+
+**The quiet run, and the second read it triggered.** W7Harness re-ran the arm on an idle box
+(`contended=false`, `cpu_busy_pct=64.3`, local-disk output) on the re-pinned `05c6bb81` / sha `2ade1473…`,
+report `reports/2026-10-03-client-quiet/`. It settles both halves:
+
+- **Screenshot: proven.** `screenshot requested at world tick 100 — verifying after the frame lands`, then
+  `screenshot written — 2026-10-03_10.23.08.png`, and the 946 KB file is on disk; `frames=1`. The deferred
+  verification did exactly what §19 said it would, versus the old pin's false `wrote nothing`.
+- **Stop: still `TIMEOUT` on an idle box** (`exit=143 stopped=false world=true`), so it is not contention, and the
+  second read was owed. Console: `requesting clean disconnect after 220 world tick(s)` and then nothing.
+
+**Second read (bytecode, merged `Minecraft`).** `disconnect(Screen, boolean)` closes the connection, runs
+`updateScreenAndTick(screen)`, and then — when the level is still there and an `IntegratedServer` was present —
+executes
+
+```
+167: aload 4
+169: invokevirtual IntegratedServer.isShutdown:()Z
+172: ifne 183
+175: aload_0; iconst_0; invokevirtual runTick:(Z)V
+180: goto 167                // while (!server.isShutdown()) runTick(false);
+```
+
+and only **after** that loop sets `level = null` (offset 206), `updateLevelInEngines(null)` and `player = null`.
+Nothing in `disconnect` halts the server; vanilla arrives at that wait with the server already stopping (the
+Save-and-Quit button and `emergencySave` halt/disconnect in that order, and the connection close stops it there),
+but a bare `disconnect()` from our tick does not. So on this merged client the wait spins on the tick thread,
+`level` never becomes null, the "out of a world" branch never runs, `stop()` is never reached, and the harness
+kills the run at the boot timeout. `stop()` itself is fine: `Minecraft.run()` loops on the `running` field
+(`run()` offset 29 reads it) and `stop()` clears it, so the missing piece is the server, not `run()`.
+
+**Fix (commit `…`, §19):** `leaveWorld` now halts the integrated server first —
+`(IntegratedServer) minecraft.singleplayerServer`, then `halt(true)` reflectively — exactly as
+`Minecraft.emergencySave()` does, and only then invokes `disconnectWithSavingScreen`/`disconnect`. That makes the
+`isShutdown()` wait terminate, which is what lets `level` null, the out-of-world branch run, and `stop()` be
+reached. A quiet arm on the new pin is the verification; if the server's own shutdown hangs on a subject, the
+harness timeout is then a real finding about that subject rather than about the driver's leaving path.

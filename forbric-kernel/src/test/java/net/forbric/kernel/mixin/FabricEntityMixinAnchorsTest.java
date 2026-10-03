@@ -12,6 +12,21 @@ class FabricEntityMixinAnchorsTest {
  private ClassNode effects()throws Exception{return StagedFabricMixinFixture.mixin("fabric-entity-events-v1",ROOT+"effect/LivingEntityMixin");}
  private ClassNode elytra()throws Exception{return StagedFabricMixinFixture.mixin("fabric-entity-events-v1",ROOT+"elytra/LivingEntityMixin");}
  private ClassNode beds()throws Exception{return StagedFabricMixinFixture.mixin("fabric-entity-events-v1",ROOT+"LivingEntityMixin");}
+ /**
+  * The occupancy and sleeping-direction guards accept either selector spelling. fabric-api writes these bare on one
+  * API generation and owner+descriptor-qualified on another (`L...;lambda$stopSleeping$9(BlockPos)V`), and the
+  * merged body only has the lambda number the retarget moved it to — so the guard must compare bare member names.
+  */
+ @Test void selectorSpellingsNormalizeToBareMemberNames(){
+  assertEquals(List.of("startSleeping","lambda$stopSleeping$9"),FabricEntityMixinAnchors.bareNames(List.of(
+    "Lnet/minecraft/world/entity/LivingEntity;startSleeping(Lnet/minecraft/core/BlockPos;)V",
+    "Lnet/minecraft/world/entity/LivingEntity;lambda$stopSleeping$9(Lnet/minecraft/core/BlockPos;)V")));
+  assertEquals(List.of("getBedOrientation"),FabricEntityMixinAnchors.bareNames(List.of(
+    "Lnet/minecraft/world/entity/LivingEntity;getBedOrientation()Lnet/minecraft/core/Direction;")));
+  assertEquals(List.of("startSleeping","lambda$stopSleeping$0"),
+    FabricEntityMixinAnchors.bareNames(List.of("startSleeping","lambda$stopSleeping$0")),
+    "the bare spelling stays bare");
+ }
  @Test void actualBedBridgePreservesNativeCustomBedsAndFabricHandledOccupation()throws Exception{
   ClassNode mixin=beds(),target=StagedFabricMixinFixture.living(false);assertEquals(2,FabricEntityMixinAnchors.adapt(mixin,n->target),"occupation and sleeping direction");
   assertNull(MixinFit.injectorOf(StagedFabricMixinFixture.method(mixin,"setOccupiedState")));

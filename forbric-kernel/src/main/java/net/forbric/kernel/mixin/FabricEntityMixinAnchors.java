@@ -108,8 +108,12 @@ public final class FabricEntityMixinAnchors {
   if(old==null||hasGroup(old.visibleAnnotations)||hasGroup(old.invisibleAnnotations)||!bodyHash(old).equals(BED_BODY))return 0;
   AnnotationNode redirect=MixinFit.injectorOf(old);
   if(redirect==null||!redirect.desc.equals("Lorg/spongepowered/asm/mixin/injection/Redirect;"))return 0;
-  List<String> selectors=MixinFit.stringList(MixinFit.value(redirect,"method"));
-  if(!new java.util.HashSet<>(selectors).equals(java.util.Set.of("startSleeping","lambda$stopSleeping$0")))return 0;
+  List<String> selectors=bareNames(MixinFit.stringList(MixinFit.value(redirect,"method")));
+  // The annotation spells these bare on the 26.2 API generation and owner+descriptor-qualified on 1.21.1's
+  // (`L...;lambda$stopSleeping$9(BlockPos)V`); the identity is the enclosing name, and the lambda NUMBER is the
+  // toolchain's, moved to the merged body by LambdaSelectorRetarget before this adapter runs.
+  if(selectors.size()!=2||!selectors.contains("startSleeping")
+     ||selectors.stream().noneMatch(name->name.startsWith("lambda$stopSleeping$")))return 0;
   List<AnnotationNode> points=MixinFit.atNodes(redirect);
   if(points.size()!=1||!("L"+LEVEL+";setBlock("+POSITION+"L"+STATE+";I)Z").equals(MixinFit.value(points.getFirst(),"target")))return 0;
   for(String name:selectors){MethodNode host=method(target,name,"("+POSITION+")V");
@@ -158,7 +162,7 @@ public final class FabricEntityMixinAnchors {
   if(old==null||hasGroup(old.visibleAnnotations)||hasGroup(old.invisibleAnnotations)||!bodyHash(old).equals(SLEEP_DIRECTION_BODY))return 0;
   AnnotationNode wrap=MixinFit.injectorOf(old);
   if(wrap==null||!wrap.desc.equals("Lcom/llamalad7/mixinextras/injector/wrapoperation/WrapOperation;")
-    ||!MixinFit.stringList(MixinFit.value(wrap,"method")).equals(List.of("getBedOrientation")))return 0;
+    ||!bareNames(MixinFit.stringList(MixinFit.value(wrap,"method"))).equals(List.of("getBedOrientation")))return 0;
   List<AnnotationNode> points=MixinFit.atNodes(wrap);
   if(points.size()!=1||!"INVOKE".equals(MixinFit.value(points.getFirst(),"value"))
     ||!("Lnet/minecraft/world/level/block/BedBlock;getBedOrientation(Lnet/minecraft/world/level/BlockGetter;"+POSITION+")"+DIRECTION).equals(MixinFit.value(points.getFirst(),"target")))return 0;
@@ -302,6 +306,22 @@ public final class FabricEntityMixinAnchors {
   code.add(allowed);code.add(new FrameNode(Opcodes.F_SAME,0,null,0,null));code.add(new InsnNode(Opcodes.ICONST_0));code.add(new InsnNode(Opcodes.IRETURN));
  }
  static String bodyHash(MethodNode original) { return MixinInstructionFingerprint.hash(original); }
+
+ /**
+  * The bare member names of selector strings, owner and descriptor stripped — so a guard can accept either the bare
+  * spelling one API generation writes (`startSleeping`, `lambda$stopSleeping$0`) or the owner+descriptor-qualified
+  * one another writes (`Lnet/minecraft/world/entity/LivingEntity;lambda$stopSleeping$9(Lnet/minecraft/core/BlockPos;)V`).
+  */
+ static List<String> bareNames(List<String> selectors) {
+  List<String> out=new ArrayList<>(selectors.size());
+  for(String selector:selectors){
+   int semi=selector.indexOf(';');
+   String rest=semi>=0?selector.substring(semi+1):selector;
+   int open=rest.indexOf('('),colon=rest.indexOf(':');
+   out.add(open>0?rest.substring(0,open):colon>0?rest.substring(0,colon):rest);
+  }
+  return out;
+ }
 
  private static int move(ClassNode mixin,String handlerName,String handlerDesc,String selector,String replacementSelector,
    String oldKind,String oldTarget,String newKind,String newTarget) {

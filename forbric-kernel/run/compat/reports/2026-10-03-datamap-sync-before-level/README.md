@@ -513,3 +513,40 @@ this surface, and the crash report is at
 `reports/2026-10-03-client-decoder/per-mod/run/000-sound-physics-remastered__fabric/crash-reports/`. (W7Harness also
 noted the console's single `ClassCastException` string is inside kernel repair prose, `[Forbric/MergedBaseCompat]
 …`, not an occurrence.)
+
+## 15. Next bounded step: `FLUID_RENDER_TYPES` is an unwritten static — Forge's field/readers survived, NeoForge's `<clinit>` won
+
+**Status first: the client-side acceptance criterion is already met.** §14 records `joined world via quick-play`
+verbatim on the client arm. The crash below happens ~3 s *after* the join, in the render path, and is not a
+regression against that criterion — it is the next bounded step beyond it, on a different defect class.
+
+**The defect.** `net.minecraft.client.renderer.ItemBlockRenderTypes`:
+
+- `FLUID_RENDER_TYPES` (`Map<Holder.Reference<Fluid>, RenderType>`) is **MinecraftForge's** field: present in
+  merged and forge-patched, **absent entirely from neoforge-patched**. In merged it is declared and read but
+  **never assigned**: `PUTSTATIC FLUID_RENDER_TYPES` count is **merged 0, forge 1** (forge's `<clinit>` offset 127),
+  neoforge n/a.
+- The merged `<clinit>` builds `TYPE_BY_BLOCK`, `TYPE_BY_FLUID`, `CUTOUT_MIPPED`, `SOLID`, `BLOCK_RENDER_TYPES`
+  and then returns — NeoForge's set. Forge's last block,
+  `FLUID_RENDER_TYPES = Util.make(new Object2ObjectOpenHashMap(TYPE_BY_FLUID.size(), 0.5f), <filler>)`, is the one
+  the merge dropped.
+- But Forge's half otherwise survived: the field, Forge's reader `getRenderLayer(FluidState)` — the 403-site,
+  `getstatic FLUID_RENDER_TYPES` — and Forge's *filler callback* itself, which is present in merged and merely
+  never called (`lambda$static$3`: reads `TYPE_BY_FLUID`, maps each fluid through
+  `ForgeRegistries.FLUIDS.getDelegateOrThrow`, `put`s it into the map).
+
+So `FLUID_RENDER_TYPES` is null for the life of the process, and the first chunk section to compile NPEs at
+`ItemBlockRenderTypes.getRenderLayer:403 ← SectionCompiler.compile:72`, exactly as the arm's crash report shows.
+
+**Which family's half survived:** Forge's field, Forge's readers and Forge's filler; NeoForge's `<clinit>`. Same
+shape as the class of defect `MergedBaseUnwrittenStaticsTest` inventories ("one family's static initialiser wins
+whole and the loser's assignments go with it — while the fields the loser ADDED are kept as declarations"), and
+the repair follows that test's convention: a base that already assigns the field is returned untouched, and the
+missing assignment is injected into `<clinit>` (as `ForbricMergedBaseCompatTransformer` does for
+`ResourceManagerRegistryLoadTask.LOGGER` and `Ingredient.INVALIDATION_COUNTER`). Here the value is Forge's own,
+reconstructed from the surviving `TYPE_BY_FLUID` and filler, not invented.
+
+**Repair (commit and arm in §16).** `ItemBlockRenderTypesFluidMapRepair` (COREMOD), kill switch
+`-Dforbric.itemBlockRenderTypesFluidMap=off`; shape test from the staged merged base (field declared and unwritten
+before, assigned in `<clinit>` via the surviving filler after; `BasicVerifier` over the injected block; idempotence;
+kill switch). The arm in §16 is the verification that the render path now survives.

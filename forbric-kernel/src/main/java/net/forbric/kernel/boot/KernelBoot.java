@@ -602,6 +602,12 @@ public final class KernelBoot {
 		chain.register(TransformPhase.COREMOD,
 				new net.forbric.kernel.transform.PackScreenHiddenFilterInjector());
 
+		// …and the merged ItemBlockRenderTypes kept Forge's FLUID_RENDER_TYPES field, readers and filler but took
+		// NeoForge's <clinit>, which never assigns it — so the first compiled chunk section NPEs on a null map. See
+		// ItemBlockRenderTypesFluidMapRepair (the same unwritten-static defect class MergedBaseUnwrittenStaticsTest
+		// inventories).
+		chain.register(TransformPhase.COREMOD, new net.forbric.kernel.transform.ItemBlockRenderTypesFluidMapRepair());
+
 		// The pause menu's mods button opened NeoForge's list, which is every mod NeoForge loaded and, on this
 		// instance, a fraction of what is installed. It now opens the kernel's, which reads ModCatalog.
 		chain.register(TransformPhase.COREMOD, new net.forbric.kernel.transform.ModsButtonRedirector());

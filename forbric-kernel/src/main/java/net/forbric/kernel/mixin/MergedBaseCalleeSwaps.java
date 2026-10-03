@@ -120,6 +120,15 @@ public final class MergedBaseCalleeSwaps {
 		return KERNEL_SUBSTITUTED.size();
 	}
 
+	/** Every kernel-made row as {@code target.method(member, ecosystems)}, for the reader's diagnostic. */
+	public static String describeKernelRows() {
+		List<String> out = new java.util.ArrayList<>();
+		for (Substitution row : KERNEL_SUBSTITUTED) {
+			out.add(row.target() + "." + row.method() + "(" + row.member() + ", " + row.ecosystems() + ")");
+		}
+		return out.isEmpty() ? "none published" : String.join(" | ", out);
+	}
+
 	/** Drops the published swaps. For tests: the list is process-wide because the pass that fills it is. */
 	public static void forgetKernelSubstitutions() {
 		KERNEL_SUBSTITUTED.clear();

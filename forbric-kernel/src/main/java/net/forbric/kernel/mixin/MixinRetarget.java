@@ -562,10 +562,21 @@ public final class MixinRetarget {
 			boolean diagnose = "on".equalsIgnoreCase(System.getProperty(DIAGNOSE_PROPERTY, "off"));
 			int occurrences = row == null ? -1 : CarrierHelpers.occurrences(method, row.replacement());
 			if (row == null || occurrences != 1) {
-				if (diagnose) ForbricLog.info("[Forbric/Mixin] %s#%s: no move for %s in %s — row=%s ecosystem=%s "
-						+ "occurrences=%d kernel rows published at this ask=%d", mixinName, handler.name, member,
-						method.name + method.desc, row == null ? "none" : "found", ecosystem, occurrences,
-						MergedBaseCalleeSwaps.kernelRowCount());
+				if (diagnose) {
+					ForbricLog.info("[Forbric/Mixin] %s#%s: no move for %s in %s — row=%s ecosystem=%s "
+							+ "occurrences=%d kernel rows published at this ask=%d", mixinName, handler.name, member,
+							method.name + method.desc, row == null ? "none" : "found", ecosystem, occurrences,
+							MergedBaseCalleeSwaps.kernelRowCount());
+					if (row == null) {
+						// WHY no row answered, next to the ask. A published row can coexist with `row=none` — the boot
+						// showed one Main.main row already present when this ask returned none — and the two possible
+						// reasons need different fixes: the row is for another point (printed here), or it is for THIS
+						// point and something in the comparison refused it (also printed, as the four components).
+						ForbricLog.info("[Forbric/Mixin]   asked target=%s method=%s member=%s ecosystem=%s; kernel rows: %s",
+								target.name, method.name + method.desc, member, ecosystem,
+								MergedBaseCalleeSwaps.describeKernelRows());
+					}
+				}
 				continue;
 			}
 			if (captured.length > 0) {

@@ -274,6 +274,25 @@ public final class KernelLifecycle {
 		// mod loading, which is what this now matches. On the CLIENT it moves later still, to onClientEntrypoints,
 		// because client setup itself moved there.
 		if (!side.isClient()) setupNeoForgeNetwork(cl, side);
+
+		// PORT(1.21.1): the client-side setup phase now runs from here, because it has no vanilla call site left.
+		// NeoForge 21.1.252's ClientModLoader offers begin(Minecraft, PackRepository, ReloadableResourceManager),
+		// completeModLoading(Runnable)Runnable and isLoading()Z — there is no finish()V — so
+		// NeoClientSetupHookInjector finds no call to hang on, warns on every boot ("no ClientModLoader.finish() call
+		// in Minecraft.<init> — the NeoForge client setup lifecycle will NOT fire"), and onNeoClientSetup was
+		// therefore called by nothing: FMLClientSetupEvent, the client-side common setup, the CLIENT_INIT event
+		// bridges, the client late-config pass and ClientNetworkRegistry.setup() all silently did not happen.
+		// AppleSkin's food tooltip, registered from FMLClientSetupEvent, is the visible one.
+		//
+		// Position, and why it is this one rather than the entrypoint window: the phases must land AFTER
+		// Minecraft.options exists — fireClientSetupLifecycle's own comment records that the container window
+		// inside Minecraft.<init> runs BEFORE Options, so key mappings registered there "would have nowhere to
+		// land". Measured order on this box puts this window after the entrypoint window (entrypoints 14:22:54,
+		// this window's banner 14:22:55), and the setup pass is once-only guarded
+		// (CLIENT_SETUP_FIRED.compareAndSet), so a client whose mains reach it twice cannot fire the phases twice.
+		// The observable that this is early or late enough is a mod that registers from FMLClientSetupEvent — a
+		// key mapping and a tooltip are the two the comments name.
+		if (side.isClient()) onNeoClientSetup();
 	}
 
 	/**

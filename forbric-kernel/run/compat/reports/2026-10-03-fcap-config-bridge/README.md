@@ -107,6 +107,12 @@ file watcher,盘上一次编辑两边都触发。两边读的是同一个文件�
 (`run/client-kernel/mods/ForgeConfigAPIPort-v21.1.6-1.21.1-Fabric.jar`,与仓库里 26.2 夹具同一约定,
 未入仓,缺席则 skip):
 
+```bash
+mkdir -p forbric-kernel/run/client-kernel/mods
+cp w7/corpus/mods/ForgeConfigAPIPort-v21.1.6-1.21.1-Fabric.jar forbric-kernel/run/client-kernel/mods/
+# sha256 2e3a8f0e3bda85a7d722720e7ce879cbd9d028d9395c6fc224d329b3c982d9b1
+```
+
 - `everyModIdKeyedRegistrationOfThe2116PortGoesThroughTheBridge`(2+4 个调用点全部改道,且不得残留
   `ConfigTracker.registerConfig`),
 - `theForgeFlavouredOverloadsHandBackARealMinecraftForgeConfig`(不得残留 `modConfig` 读;

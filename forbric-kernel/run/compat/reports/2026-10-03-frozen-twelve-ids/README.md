@@ -74,9 +74,9 @@ connector 那条**无代价**(handler 仍运行在装载窗口之前)。
 |---|---|---|
 | 1、3 | **启动**(better-teleport `PASS`/`world=true`/`cr=0`) | 首轮 5 个预判之一 |
 | 7、8、12 | **启动**(shadowguard `PASS`/`world=true`/`cr=0`) | 同上 |
-| 5 | **启动已定因:排序故障(发布晚于提问)** | `7eef89e4` 家族放宽 → 启动仍不动;`eaf80d0c` 未知生态假设 → **我预登记的标记行在启动上没有出现**,按事先写下的规则该假设**作废**(生态不是 null)。已排除:合并基底里触发调用只有一条(occurrences≠2)、驱动器读 raw 与 candidate 两份字节都能移、`substitutedCalls` 确实被调用且该 handler 无其它改写(锚点文本与前内核逐字符相同)。下一步:在替换决策处打印四个输入(row/ecosystem/occurrences/captures),由一次启动判读 |
+| 5 | **启动已闭合(`8d38e73d`,sha `53c23314…`,sun_fade `PASS/world=true/exit=0/cr=0`)** | 真因(第五次切割,启动逐字确认):替换行的 `target` 存的是**点号名**(`LifecycleHookInjector.SERVER_MAIN = "net.minecraft.server.Main"`,因为变换链以点号名称呼类),而读者一律传 ASM **内部名**,`covers` 用 `equals` ⇒ **行自发布起就谁也找不到**;并列日志四个分量全中、只有分隔符不同。修法:生产者边界归一化 + 幂等发布;测试按**生产的方式**造行、按**读者的方式**查回。锚点行由 `1/2 anchors resolve, missing: @At(INVOKE) …ServerModLoader.load in Main.main` 变为 2/2。**五个假设(家族过滤、未知生态、键写法、时序、重复发布)是同一个分隔符的五张脸**,其中两条(未知生态放宽、重复发布)本身是真发现,三条各耗一轮且只能由“打印实际值的启动”排除。 |
 | 9 | **仅驱动器读数**(启动不可测) | `cobblecoop` 自身 `registry-load` 到不了世界;真字节上 `UNFIT`→`PARTIAL` 已证,类级 finding 是否消失未在启动上确认 |
-| 2、4、6、10、11 | **未定**(仅驱动器读数 + 代码阅读) | 转 FrozenIds2;每条的原因与下一步已在上表列明 |
+| 2、4、6、10、11 | 转 **FrozenIds2**;其中 **id 4 已由该车道闭合**(bonfires-extended 本次 `PASS/world=true/cr=0/strict=TRUE`) | 本车道此前预测(2/4/6 仍在)被该校道落地超越 ⇒ **记为该校道成果**,不计入本车道预判 |
 
 **两条流程规则(都是测量出来的,不是推断)**:
 1. **诊断成对且默认关**(`-Dforbric.mixinRetarget.diagnose`,默认 `off` = 诊断前行为)。开关化当天即证明必要:

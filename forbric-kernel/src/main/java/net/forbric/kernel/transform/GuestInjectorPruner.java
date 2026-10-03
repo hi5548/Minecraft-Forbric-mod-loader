@@ -191,6 +191,10 @@ public final class GuestInjectorPruner implements ClassTransformer {
 	static final String TRADE_OFFERS_MIXIN =
 			"net.fabricmc.fabric.mixin.object.builder.TradeOffersTypeAwareBuyForOneEmeraldFactoryMixin";
 	static final String BALM_CROP_MIXIN = "net.blay09.mods.balm.mixin.FabricCropBlockMixin";
+	static final String SHADOWGUARD_FIRE_MIXIN = "org.krripe.shadowguard.mixin.FireBlockMixin";
+	static final String ARCHITECTURY_GAMEMODE_MIXIN =
+			"dev.architectury.mixin.fabric.MixinServerPlayerGameMode";
+	static final String ARCHITECTURY_PHANTOM_MIXIN = "dev.architectury.mixin.fabric.MixinPhantomSpawner";
 
 	/**
 	 * One table plus the entries that would push {@code Map.of} past its ten-pair limit. Java's {@code Map.of}
@@ -228,6 +232,49 @@ public final class GuestInjectorPruner implements ClassTransformer {
 			Map.entry(TRADE_OFFERS_MIXIN, List.of(new Prune("disableVanillaCheck",
 					"(Lnet/minecraft/core/DefaultedRegistry;)Ljava/util/stream/Stream;",
 					"Lnet/minecraft/world/entity/npc/VillagerTrades$EmeraldsForVillagerTypeItem;<init>"))),
+			// The merge WIDENED this method's signature, which no prefix can paper over: the module's handler was
+			// compiled against FireBlock.checkBurnOut(Level, BlockPos, int, RandomSource, int) and the merged
+			// (NeoForge) one takes a Direction before the callback. Mixin's own words, verbatim:
+			//   InvalidInjectionException: Invalid descriptor …->@Inject::shadowguard$protectFireTarget(…)V!
+			//   Expected (…,I,Lnet/minecraft/core/Direction;,Lorg/…/callback/CallbackInfo;)V but found (…,I,Lorg/…CallbackInfo;)V
+			// One handler that cannot bind aborts the WHOLE mixin, which is why its two siblings reported "no
+			// attachment" too and why the mixin-level finding exists at all. Removing this one handler lets the
+			// other two apply: $protectFireTick is @Inject(method = "tick", at = HEAD) and $protectFirePlacement is
+			// the @Redirect on ServerLevel.setBlock inside the same tick, both of which the merged base still has.
+			// Cost: ShadowGuard's fire-TARGET protection (the checkBurnOut veto) does not run on this subject.
+			Map.entry(SHADOWGUARD_FIRE_MIXIN, List.of(new Prune("shadowguard$protectFireTarget",
+					"(Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;ILnet/minecraft/util/RandomSource;"
+							+ "ILorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V",
+					"checkBurnOut"))),
+			// Both architectury handlers ANCHOR fine — what fails is the LOCAL CAPTURE. Mixin says so itself:
+			//   Injection warning: LVT in …ServerPlayerGameMode::destroyBlock(…)Z has incompatible changes at opcode 39
+			//                      in callback architectury.mixins.json:MixinServerPlayerGameMode …->@Inject::onBreak
+			// The merge changed the locals at that point (NeoForge's fire/break patches insert their own), so the
+			// @Inject.locals capture cannot be satisfied and the injection is skipped. The kernel already softens the
+			// capture (CAPTURE_FAILHARD → CAPTURE_FAILSOFT) so the game survives, and the census counts the skipped
+			// handler as a required loss. A capture is not a selector: there is nothing to retarget, and rewriting the
+			// handler's own signature is the module's code, not ours. Removing the handler keeps the rest of the mixin.
+			// Cost: architectury's block-break event (onBreak) does not fire on subjects whose closure carries it.
+			Map.entry(ARCHITECTURY_GAMEMODE_MIXIN, List.of(new Prune("onBreak",
+					"(Lnet/minecraft/core/BlockPos;"
+							+ "Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;"
+							+ "Lnet/minecraft/world/level/block/entity/BlockEntity;"
+							+ "Lnet/minecraft/world/level/block/state/BlockState;)V",
+					"Lnet/minecraft/server/level/ServerPlayerGameMode;destroyBlock"))),
+			// Same cause as the entry above, different handler: LVT …PhantomSpawner::tick(…)I has incompatible
+			// changes at opcode 267. Cost: architectury's phantom-spawn event (checkPhantomSpawn) does not fire.
+			Map.entry(ARCHITECTURY_PHANTOM_MIXIN, List.of(new Prune("checkPhantomSpawn",
+					"(Lnet/minecraft/server/level/ServerLevel;ZZ"
+							+ "Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;"
+							+ "Lnet/minecraft/util/RandomSource;ILjava/util/Iterator;"
+							+ "Lnet/minecraft/server/level/ServerPlayer;Lnet/minecraft/core/BlockPos;"
+							+ "Lnet/minecraft/world/DifficultyInstance;Lnet/minecraft/stats/ServerStatsCounter;II"
+							+ "Lnet/minecraft/core/BlockPos;"
+							+ "Lnet/minecraft/world/level/block/state/BlockState;"
+							+ "Lnet/minecraft/world/level/material/FluidState;"
+							+ "Lnet/minecraft/world/entity/SpawnGroupData;II"
+							+ "Lnet/minecraft/world/entity/monster/Phantom;)V",
+					"Lnet/minecraft/world/level/levelgen/PhantomSpawner;tick"))),
 			Map.entry(BALM_CROP_MIXIN, List.of(
 					new Prune("getGrowthSpeed",
 							"(FLnet/minecraft/world/level/block/Block;Lnet/minecraft/world/level/BlockGetter;"
@@ -307,7 +354,10 @@ public final class GuestInjectorPruner implements ClassTransformer {
 	/** The two entries the config table cannot hold; see the class docs for their evidence and cost. */
 	private static final Map<String, String> EXTRA_CONFIGS = Map.ofEntries(
 			Map.entry(TRADE_OFFERS_MIXIN, "fabric-object-builder-v1.mixins.json"),
-			Map.entry(BALM_CROP_MIXIN, "balm.fabric.mixins.json"));
+			Map.entry(BALM_CROP_MIXIN, "balm.fabric.mixins.json"),
+			Map.entry(SHADOWGUARD_FIRE_MIXIN, "shadowguard.mixins.json"),
+			Map.entry(ARCHITECTURY_GAMEMODE_MIXIN, "architectury.mixins.json"),
+			Map.entry(ARCHITECTURY_PHANTOM_MIXIN, "architectury.mixins.json"));
 
 	/** The mixin config each entry is declared in, which names the owning mod on the finding. */
 	static final Map<String, String> CONFIGS = with(Map.of(MODEL_MANAGER_MIXIN, "fabric-model-loading-api-v1.mixins.json",
@@ -324,7 +374,10 @@ public final class GuestInjectorPruner implements ClassTransformer {
 	/** Whether an entry applies on this boot, beyond the pruner's own switch. */
 	private static final Map<String, BooleanSupplier> EXTRA_ACTIVE = Map.ofEntries(
 			Map.entry(TRADE_OFFERS_MIXIN, () -> true),
-			Map.entry(BALM_CROP_MIXIN, () -> true));
+			Map.entry(BALM_CROP_MIXIN, () -> true),
+			Map.entry(SHADOWGUARD_FIRE_MIXIN, () -> true),
+			Map.entry(ARCHITECTURY_GAMEMODE_MIXIN, () -> true),
+			Map.entry(ARCHITECTURY_PHANTOM_MIXIN, () -> true));
 
 	private static final Map<String, BooleanSupplier> ACTIVE = with(Map.of(MODEL_MANAGER_MIXIN, () -> true,
 			ITEM_STACK_MIXIN, GuestInjectorPruner::fabricTooltipBridgeOn,

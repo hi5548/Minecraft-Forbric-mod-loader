@@ -154,3 +154,35 @@ exists. Two shapes, with costs:
   decision rather than a local repair, and it can mask a genuine ordering defect elsewhere.
 
 Neither is a guess-safe local fix; the decision belongs to whoever owns the client join sequence, per the brief.
+
+## 8. Option 2's general form, located but NOT landed — and why
+
+Main chose the join-sequence ordering (option 2). Searched for the kernel hook it would live in: there is none.
+`KernelLifecycle.setupNeoForgeNetwork(CLIENT)` only *invokes* NeoForge's own registration
+(`NetworkRegistry.setup()` then `ClientNetworkRegistry.setup()`); it registers payload types and client handlers and
+has no say in when a payload's work runs. Delivery is entirely NeoForge's:
+packet → `handleCustomPayload` → handler → `ClientPayloadContext.enqueueWork`.
+
+So option 2 **is expressible, but only as a bytecode repair**, in the same family as `ModLauncherClaimRewriter`:
+transform `ClientPayloadContext.enqueueWork` so the `isSameThread()` shortcut is gone and the work always goes
+through `getMainThreadEventLoop().submit(...)`. That mirrors exactly what the queue does for a real network thread,
+applies to every payload rather than special-casing this one, and is a deleted branch rather than new logic.
+
+Why it is not landed here, stated plainly rather than hidden in a commit:
+
+- It changes NeoForge's semantics for **every** payload, not just this one. Today a payload handled on the main
+  thread has its work run *inline*; afterwards it would run at the next queue drain — the same thread, the same
+  tick, a later point in it. Any handler that relies on immediacy when already on the main thread would change
+  behaviour, and nothing in the artifacts says whether any does.
+- The required test — "the same-thread branch must not run payload work ahead of the level-existing point" — is a
+  test of the *transformed* class, and it can be written without a JVM (transform the real class, assert the
+  `isSameThread` branch is gone and the `submit` path is unconditional). But a test of the shape is not a test of
+  the semantics, and I would be landing an unverified behavioural change in the client's payload path on the last
+  of my budget, with the arm that could falsify it deliberately deferred.
+
+**Recommendation instead**: land it with a fresh budget *and* the arm, or take the narrower honest form — keep the
+inline branch but make the one thing it runs depend on the level existing, which is option 1's shape and which Main
+has already rejected on the grounds of matching the platform's guarantee. I am recording both so the choice is
+made on the receipts rather than on my last-minute judgement; the transform is small enough that whoever takes it
+can land and test it inside one budget, and the confirmation is unchanged: `joined world via quick-play` on an arm
+pinned to the commit that carries it, with `compatibility_policy` and `mixin_fit` on the row.

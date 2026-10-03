@@ -50,15 +50,17 @@
 | S2 | servereconomy | fabric | PASS/OK/true | dependency-not-ok | **主体侧** ✅ | 行内 `dep_status`:其声明必需依赖 `placeholder-api-2.4.2+1.21.jar` = **ABSENT**——闭包里根本没解析到这个 jar。主体自己的依赖不可解析 |
 | S3 | beilin-data-portability | fabric | PASS/OK/true | dependency-not-ok | **主体侧** ✅ | `dep_status`:`beilin-entry-control-fabric-1.21.x-1.2.7.jar` = **FAILED**——失败的字节是它的依赖,不是它自己 |
 | S4 | cobblemon_skills_api | fabric | PASS/FAILED/true | noclassdef `net/puffish/skillsmod/api/reward/Reward` | **主体侧** ✅(控制台) | 控制台点名 Puffish Skills 的 API 类;而闭包只有 fabric-api,`puffish_skills` 未被解析进来——主体声明的依赖解析不到 |
-| S5 | cobblemon-auto-battle / cobblespawnregions / cobblemon-coop | fabric | FAIL/…/false | registry-load | **依赖侧数据,根因未定**(同 P2) | 失败**数据**属于依赖 Cobblemon 1.8.1,不属主体:`Unbound values … configured_feature]: [cobblemon:medicinal_leek]`、`Unknown registry key … block_predicate_type]: cobblemon:biome`、`Failed to parse cobblemon:worldgen/… from pack cobblemon`。但同一控制台里 Cobblemon 的 guest mixin 只**部分**施加(缺锚点成列列出),而 `cobblemon:biome`/`cobblemon:locate_predicate` 这类自定义注册表没进注册表,与那批缺锚点同源 ⇒ **不得**据此记成干净的主体侧;决定步骤见 P2 |
+| S5 | cobblemon-auto-battle / cobblespawnregions / cobblemon-coop | fabric | FAIL/…/false | registry-load | **内核侧**(由 W7Harness 的对照启动结案,见 §1.4 P2) | 失败数据属依赖 Cobblemon,但**根因在核**:真 Fabric 1.21.1 上 Cobblemon 注册 **43/43** 自定义注册表并干净启动;Forbric(`03c1f88a`)上注册 **0/43**,`registry errors: 5`、`world=false`、`cr=0`。此前我认为"数据属 Cobblemon ⇒ 主体侧"的读法**已被这次对照否掉** |
 | S6 | gardnercraft-mod | fabric | FAIL/FAILED/false | registry-load | **主体侧(数据面)** ✅(控制台) | `Failed to parse gardnercraft:trim_pattern/gardnercraft.json` → `Failed to get element gardnercraft:gardnercraft_armor_trim_smithing_template`:主体自己的 trim_pattern 引用自己没注册成功的条目(该行另有冻结 id 10/11,见 §0) |
 
-### 1.4 收尾(P1 已由复跑结案、P3 已结案;只余 P2 的根因待一次对照启动)
+### 1.4 收尾(P1、P2、P3 均已结案;无遗留的"未定")
+
+P2 的答案由 W7Harness 的对照启动给出,并且**推翻了本节先前"依赖侧数据"的读法**——这正是"决定步骤"存在的意义:
 
 | # | 主体 | loader | 行 | 存盘 cause | 现状与决定步骤 |
 |---|---|---|---|---|---|
 | P1 | more-gunpowder-creeper | forge | STALL/OK/true | boot-stall | 控制台 1011 行:Worker-Main 线程在 `LinearPalette.valueFor` 抛 `MissingPaletteEntryException: Missing Palette entry for index 10`(`ThreadedLevelLightEngine.runUpdate` → `runLightUpdates`),之后 spawn-area 停在 `18%`,没有 `Done (`、没有 `Stopping the server` ⇒ 真挂起。**已由夜间档的单独复跑结案**:在 `604a557d` 上用 600 s 窗口重跑 → `PASS / world=true / 172 s / cr=0`,中段线程转储 30 条、`main` RUNNABLE、无死锁(`/tmp/gunpowder-dump-1.txt`)。即 `boot-stall` **不再复现**,是其间某个提交修掉的;`boot-stall` 这个标签只是 harness 的 verdict 回退,不是证据 |
-| P2 | veinminer-enchantment | neoforge | FAIL/OK/false | registry-load | **依赖侧数据,根因未定**:失败的每个元素都是 Cobblemon 1.8.1 自己的(`Unbound values … [cobblemon:medicinal_leek]`、`Failed to parse cobblemon:worldgen/… from pack cobblemon`、`Unknown registry key … block_predicate_type]: cobblemon:biome`)。但**不能**就此记成干净的主体侧:同一控制台里 Cobblemon 的 guest mixin 在合并基座上**只部分施加**(`BeehiveBlockEntityMixin 3/4`、`PiglinBarterMixin 0/1`、`StructurePoolAccessor cannot bind`),而 `cobblemon:biome` 这类自定义注册表没进注册表,和这些缺锚点是同一批客方代码。**决定步骤**:把 Cobblemon 1.8.1 单独放上本内核,与它在真 Fabric 1.21.1 上的行为对比 —— `cobblemon:biome` 在真 Fabric 上注册成功而这里没有 ⇒ 内核侧;两边都没有 ⇒ Cobblemon 自己 |
+| P2 | veinminer-enchantment | neoforge | FAIL/OK/false | registry-load | **内核侧 ✅ 已结案(W7Harness 对照启动)**:真 Fabric 1.21.1 上 Cobblemon 1.8.1 打印 **43 条** `Registered the cobblemon:* registry` 并 `Done (1.065s)!`;Forbric **`03c1f88a`**(sha `5aaad474…`,`reports/2026-10-03-cobblemon-forbric/`)上 **0 条**、`registry errors: 5`、`run=FAIL world=false cr=0`。同一 mod 集(Cobblemon 1.8.1 + fabric-api 0.116.17)、同为 JDK 21、同一条 mod 自打的信号 ⇒ 不是 mod、不是数据。**最窄的下一步**:错误链从 `minecraft:root` 的嵌套 walk 起,点名 `cobblemon:medicinal_leek`(`minecraft:worldgen/configured_feature`)在 freeze 时 unbound;先确认 Forbric 到底**有没有**把 Cobblemon 的 datapack 扫进那个注册表,再谈 freeze。**与 `no-cooldown-enchantment` 同一张面**(datapack→registry 装载路径),可能一修两治 |
 | P3 | superb-warfare-perimeter | forge | FAIL/OK/true | noclassdef `com/atsuishio/superbwarfare/entity/vehicle/DroneEntity` | **主体/依赖侧** ✅:该 run 的 `mods/` 里**只有** `sbw-Perimeter-ops-1.6.0.jar`;它的 `META-INF/neoforge.mods.toml` 声明 `[[dependencies.sbwswarm]] modId = "superbwarfare"`,而宿主 mod superbwarfare 不在闭包里 ⇒ `ClassNotFoundException` 指向的是**未解析的声明依赖**,与 servereconomy 同一类 |
 
 ### 1.5 与夜间档 forge/fabric triage 的**一处实质分歧**(必须写在明面上)
@@ -145,7 +147,47 @@ java.util.zip.ZipException: duplicate entry: META-INF/mods.toml
 
 
 
-## 4. 交给 W7Harness 复核的 slug 清单(按需 fetch)与预期移动
+## 6. 新增:一条内核侧(未修,已定位到最窄一步),与两条复核环境注记
+
+**新增内核侧 K5(未修,已把范围收窄到三条真字节线索)**:Cobblemon 1.8.1 的自定义注册表在 Forbric 上
+**一个都没注册**(0/43;W7Harness 对照:真 Fabric 1.21.1 上 43/43 且 `Done (1.065s)!`),错误链从
+`minecraft:root` 的嵌套 walk 起,`cobblemon:medicinal_leek`(`minecraft:worldgen/configured_feature`)在
+freeze 时 unbound —— 该 JSON 引用的 `cobblemon:biome` 这类由 Cobblemon 自己注册的 predicate/placement 类型
+没进注册表,于是 entry 解析失败、freeze 报 unbound。
+
+从 `reports/2026-10-03-cobblemon-forbric/per-mod/run/000-cobblemon__fabric/console.log` 读出的三条线索
+(都指向"注册这一步",不是 freeze 机制):
+
+1. **不是"entrypoint 没跑"**:`1386:[12:52:19] Launching Cobblemon 1.8.1` —— Cobblemon 自己的初始化到了;
+   它之后没有任何一条 `Registered the cobblemon:* registry`(参考启动 43 条)。所以断点在**它的注册循环**
+   或它之前,不在 mod 装载。
+2. `1481:[Forbric/DatapackRegistries] fired MinecraftForge's declaration event and mirrored **0 custom registry
+   codec(s)** into the active loader list: []` —— 内核自己报"镜像了 0 个自定义注册表 codec";紧接着
+   `1482/1483` 只有 NeoForge/Forge 的 `neoforge:biome_modifier`/`forge:biome_modifier` 等 **2+2** 条进去。
+   这就是与参考启动的**直接不对称**:参考那边存在 43 个,这边声明事件后是空表。
+3. 同一份日志里内核有一条专门的修复说明,形状与本例一致:
+   `900:[Forbric/ResourceLoader] … every pack read as hidden, and **pack selection came back empty, which
+   empties every datapack registry** (only requiredNonEmpty ones report it)` —— "pack 选空 ⇒ 每个 datapack
+   注册表被清空"是内核已知的一种失败形状;K5 是否是同一处的**另一条分支**(只清空非 requiredNonEmpty 的),
+   下一次开工的第一件事就是对着这条读。
+
+**未修的理由**:剩余预算已尽,而下一步必须是**读真字节**(Cobblemon 走哪条注册路径、内核在哪一步把它的
+codec 挡在列表外),按纪律不猜着改注册表机制。**它与 `no-cooldown-enchantment` 是同一张面**(datapack→registry
+装载路径),可能一修两治:后者是主体数据写错版本(§1.3 S1),但两行都是从同一条
+`Freeze`/`RegistryDataLoader` 路径报出来的,别当两个 bug 分开修。
+
+**证明它的启动**:一个只装 Cobblemon(+fabric-api)的 subject run,由 W7Harness 跑;判据是
+`Registered the cobblemon:* registry` 计数回到 43 且 `world=true`。
+
+**W7Harness 提供的两条复核环境事实**(省下一次复跑的钱):
+
+1. `sweep.py` 会**静默忽略** `--only cobblemon`:Cobblemon 是 `kind: dependency` 行,不是可启动主体。
+   现已改为打印一行点名该行与原因;需要它当主体时得在一次性 corpus manifest 里提升它。
+2. Cobblemon 硬性 `requires java @ [21]`,本机默认 JDK 25 会在 mod 解析阶段就拒绝它;对照启动跑在
+   `/Library/Java/JavaVirtualMachines/jdk-21.jdk`。**任何 Cobblemon 对照实验都要显式 JDK 21**,否则
+   得到的"失败"与内核无关。
+
+
 
 | slug | loader | 为什么 | 预期 |
 |---|---|---|---|

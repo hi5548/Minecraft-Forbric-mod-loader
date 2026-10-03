@@ -83,6 +83,13 @@ import net.forbric.kernel.util.ForbricLog;
  * (that table is one call for another at the same instruction), and a {@code Player} result is not a
  * {@code List<ExperienceOrb>}, so the handler is stood down and its cost recorded.
  *
+ * <p>The bonfires entry is the id-5 shape one layer in: the call its {@code @Redirect} names is gone because THIS
+ * kernel's own elytra repair ({@code ForbricMergedBaseCompatTransformer.askNeoForgeWhatAnItemsAttributesAre}) replaced
+ * {@code ItemStack.forEachModifier}'s {@code getOrDefault(ATTRIBUTE_MODIFIERS, EMPTY)} read with
+ * {@code getAttributeModifiers()}. Retargeting is not possible — an {@code @Redirect} cannot follow a deleted call,
+ * and the replacement returns the computed modifiers, not the raw component — so the handler is trimmed and the
+ * loss (bonfires' reinforced-item attack-damage modifier) recorded.
+ *
  * <p>Guest mixin classes reach the transform chain through {@code ForbricClassLoader.getPreMixinClassBytes},
  * which is also what {@link net.forbric.kernel.mixin.MixinFit} and Mixin itself read, so the pruned bytes are
  * the only bytes anyone judges or applies. Both methods must be present, each carrying an injector annotation
@@ -213,6 +220,7 @@ public final class GuestInjectorPruner implements ClassTransformer {
 	static final String SCREEN_HANDLER_PLAYER_MIXIN =
 			"net.fabricmc.fabric.mixin.screenhandler.ServerPlayerEntityMixin";
 	static final String OPAC_XP_ORB_MIXIN = "xaero.pac.common.mixin.MixinOptionalExperienceOrb";
+	static final String BONFIRES_ITEM_STACK_MIXIN = "wehavecookies56.bonfires.mixins.ItemStackMixin";
 
 	/**
 	 * One table plus the entries that would push {@code Map.of} past its ten-pair limit. Java's {@code Map.of}
@@ -339,7 +347,21 @@ public final class GuestInjectorPruner implements ClassTransformer {
 			// List<ExperienceOrb>, so the handler cannot be retargeted onto the surviving code. No other handler.
 			Map.entry(OPAC_XP_ORB_MIXIN, List.of(new Prune("onScanForEntities",
 					"(Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V",
-					"scanForEntities"))));
+					"scanForEntities"))),
+			// bonfires' ItemStackMixin#getOrDefaultRedirect redirects ItemStack.getOrDefault inside
+			// ItemStack.forEachModifier. The call is gone, and not from the merge: the KERNEL's own elytra repair
+			// (ForbricMergedBaseCompatTransformer.askNeoForgeWhatAnAttributesAre) rewrites that exact vanilla read —
+			// getOrDefault(DataComponents.ATTRIBUTE_MODIFIERS, ItemAttributeModifiers.EMPTY) plus its CHECKCAST —
+			// into getAttributeModifiers(), because NeoForge's canGlide reads an attribute only that method's event
+			// ever sets. MixinFit and Mixin both read the POST-transform bytes, so the redirect's @At(INVOKE) names a
+			// call that no longer exists on any subject. This is the id-5 shape (a guest anchored on what the kernel
+			// itself changed) but not recoverable to the same program point: an @Redirect cannot follow a deleted
+			// call, and getAttributeModifiers() returns the computed modifiers rather than the raw component. No
+			// other handler in this mixin.
+			Map.entry(BONFIRES_ITEM_STACK_MIXIN, List.of(new Prune("getOrDefaultRedirect",
+					"(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/core/component/DataComponentType;"
+							+ "Ljava/lang/Object;)Ljava/lang/Object;",
+					"Lnet/minecraft/world/item/ItemStack;forEachModifier"))));
 
 	static final Map<String, List<Prune>> TABLE = with(Map.of(MODEL_MANAGER_MIXIN, List.of(
 			new Prune("cancelVanillaDeserialize",
@@ -414,7 +436,8 @@ public final class GuestInjectorPruner implements ClassTransformer {
 			Map.entry(ARCHITECTURY_GAMEMODE_MIXIN, "architectury.mixins.json"),
 			Map.entry(ARCHITECTURY_PHANTOM_MIXIN, "architectury.mixins.json"),
 			Map.entry(SCREEN_HANDLER_PLAYER_MIXIN, "fabric-screen-handler-api-v1.mixins.json"),
-			Map.entry(OPAC_XP_ORB_MIXIN, "openpartiesandclaims.forge.mixins.json"));
+			Map.entry(OPAC_XP_ORB_MIXIN, "openpartiesandclaims.forge.mixins.json"),
+			Map.entry(BONFIRES_ITEM_STACK_MIXIN, "bonfires.mixins.json"));
 
 	/** The mixin config each entry is declared in, which names the owning mod on the finding. */
 	static final Map<String, String> CONFIGS = with(Map.of(MODEL_MANAGER_MIXIN, "fabric-model-loading-api-v1.mixins.json",
@@ -436,7 +459,8 @@ public final class GuestInjectorPruner implements ClassTransformer {
 			Map.entry(ARCHITECTURY_GAMEMODE_MIXIN, () -> true),
 			Map.entry(ARCHITECTURY_PHANTOM_MIXIN, () -> true),
 			Map.entry(SCREEN_HANDLER_PLAYER_MIXIN, () -> true),
-			Map.entry(OPAC_XP_ORB_MIXIN, () -> true));
+			Map.entry(OPAC_XP_ORB_MIXIN, () -> true),
+			Map.entry(BONFIRES_ITEM_STACK_MIXIN, () -> true));
 
 	static final Map<String, BooleanSupplier> ACTIVE = with(Map.of(MODEL_MANAGER_MIXIN, () -> true,
 			ITEM_STACK_MIXIN, GuestInjectorPruner::fabricTooltipBridgeOn,
@@ -482,6 +506,11 @@ public final class GuestInjectorPruner implements ClassTransformer {
 			Map.entry(OPAC_XP_ORB_MIXIN, "the handler stays in the mixin, cannot attach (the merged "
 					+ "ExperienceOrb.scanForEntities makes no Level.getNearestPlayer call) and is reported as a "
 					+ "required CONFIRMED loss, so a STRICT launch halts on it; the orb-targeting hook is gone either "
+					+ "way, since the call site the handler was written against does not exist"),
+			Map.entry(BONFIRES_ITEM_STACK_MIXIN, "the redirect stays in the mixin, cannot attach (the kernel's own "
+					+ "elytra repair removes the getOrDefault(ATTRIBUTE_MODIFIERS,EMPTY) read from "
+					+ "ItemStack.forEachModifier before Mixin ever reads the class) and is reported as a required "
+					+ "CONFIRMED loss, so a STRICT launch halts on it; the reinforced-damage substitution is gone either "
 					+ "way, since the call site the handler was written against does not exist"));
 
 	static final Map<String, String> COSTS = with(Map.of(MODEL_MANAGER_MIXIN,
@@ -543,7 +572,14 @@ public final class GuestInjectorPruner implements ClassTransformer {
 					+ "XpOrbTargetingEvent and picks its target with Level.getEntities(EntityTypeTest,AABB,Predicate) "
 					+ "— javap shows XpOrbTargetingEvent.<init>/getFollowingPlayer, EntityTypeTest.forClass and "
 					+ "Level.getEntities, and no getNearestPlayer anywhere — so the @At(INVOKE_ASSIGN) "
-					+ "Level.getNearestPlayer anchor has no call to bind to"));
+					+ "Level.getNearestPlayer anchor has no call to bind to"),
+			Map.entry(BONFIRES_ITEM_STACK_MIXIN, "the kernel's own elytra repair already replaced the call: "
+					+ "ForbricMergedBaseCompatTransformer.askNeoForgeWhatAnItemsAttributesAre turns "
+					+ "ItemStack.forEachModifier's vanilla getOrDefault(DataComponents.ATTRIBUTE_MODIFIERS, "
+					+ "ItemAttributeModifiers.EMPTY) read into getAttributeModifiers() — NeoForge's canGlide reads an "
+					+ "attribute only ItemAttributeModifierEvent sets — and MixinFit and Mixin both read the "
+					+ "post-transform bytes, so the @At(INVOKE) ItemStack.getOrDefault anchor is gone; an @Redirect "
+					+ "cannot follow a deleted call, and getAttributeModifiers() returns a different shape"));
 
 	static final Map<String, String> REASONS = with(Map.of(MODEL_MANAGER_MIXIN,
 			"NeoForge replaced CuboidModel.fromStream with UnbakedModelParser.parse at that site, so fabric's @Redirect "
@@ -590,7 +626,9 @@ public final class GuestInjectorPruner implements ClassTransformer {
 					+ "did before this entry — on the revision that carries the handler at all; on fabric-api 0.116.17 "
 					+ "the class never had it, so this entry is a no-op either way"),
 			Map.entry(OPAC_XP_ORB_MIXIN, "the injection is skipped with Mixin's own warning, exactly as it did before "
-					+ "this entry; this mixin has no other handler"));
+					+ "this entry; this mixin has no other handler"),
+			Map.entry(BONFIRES_ITEM_STACK_MIXIN, "the redirect soft-skips with Mixin's own warning, exactly as it did "
+					+ "before this entry; this mixin has no other handler"));
 
 	static final Map<String, String> DRIFT = with(Map.of(MODEL_MANAGER_MIXIN, "it will read PARTIAL and apply half — the state that made every block "
 					+ "model missingno",
@@ -637,7 +675,12 @@ public final class GuestInjectorPruner implements ClassTransformer {
 					+ "pickup hook no longer runs — the handler fed the player Level.getNearestPlayer returned into "
 					+ "ServerCore.onExperiencePickup to track followingPlayer, and the merged scanForEntities targets "
 					+ "orbs through NeoForge's XpOrbTargetingEvent and Level.getEntities(EntityTypeTest,AABB,Predicate) "
-					+ "instead; this mixin has no other handler"));
+					+ "instead; this mixin has no other handler"),
+			Map.entry(BONFIRES_ITEM_STACK_MIXIN, "the kernel removed this injector: bonfires' reinforced-item "
+					+ "attack-damage modifier no longer applies — the redirect read "
+					+ "ItemStack.getOrDefault(ATTRIBUTE_MODIFIERS, EMPTY) and added Bonfires.reinforceDamageModifier to "
+					+ "MAINHAND for a reinforced item, and the kernel's own elytra repair replaced that read with "
+					+ "getAttributeModifiers() before Mixin saw the class; this mixin has no other handler"));
 
 	static final Map<String, String> LOSSES = with(Map.of(MODEL_MANAGER_MIXIN,
 			"the kernel removed this injector: NeoForge's UnbakedModelParser now reads block models at its call site, so "

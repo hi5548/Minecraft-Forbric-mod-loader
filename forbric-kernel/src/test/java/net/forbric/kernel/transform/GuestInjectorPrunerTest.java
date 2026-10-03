@@ -579,6 +579,32 @@ class GuestInjectorPrunerTest {
 				"onScanForEntitiesKeepMe", "XpOrbTargetingEvent");
 	}
 
+	/**
+	 * The bonfires entry. The {@code @Redirect} names {@code ItemStack.getOrDefault} inside
+	 * {@code ItemStack.forEachModifier}, and this kernel's own elytra repair deletes that call before Mixin (or
+	 * MixinFit) reads the class, so the sole handler is stood down and the loss recorded. Red before the entry: the
+	 * class passes through untouched.
+	 */
+	@Test
+	void theBonfiresAttributeRedirectIsPrunedIntoAConfirmedFindingThatAsksNothing() throws Exception {
+		net.forbric.api.CompatibilityFindings.reset();
+		byte[] original = oneDeadInjector(GuestInjectorPruner.BONFIRES_ITEM_STACK_MIXIN,
+				"net.minecraft.world.item.ItemStack", "getOrDefaultRedirect",
+				"(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/core/component/DataComponentType;"
+						+ "Ljava/lang/Object;)Ljava/lang/Object;",
+				"Lorg/spongepowered/asm/mixin/injection/Redirect;",
+				"Lnet/minecraft/world/item/ItemStack;forEachModifier"
+						+ "(Lnet/minecraft/world/entity/EquipmentSlot;Ljava/util/function/BiConsumer;)V",
+				"INVOKE",
+				"Lnet/minecraft/world/item/ItemStack;getOrDefault(Lnet/minecraft/core/component/DataComponentType;"
+						+ "Ljava/lang/Object;)Ljava/lang/Object;",
+				"getOrDefaultRedirectKeepMe");
+		checkPrunedDeadInjector(original, GuestInjectorPruner.BONFIRES_ITEM_STACK_MIXIN, "getOrDefaultRedirect",
+				"(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/core/component/DataComponentType;"
+						+ "Ljava/lang/Object;)Ljava/lang/Object;",
+				"getOrDefaultRedirectKeepMe", "reinforced-item");
+	}
+
 	private static void checkPrunedDeadInjector(byte[] original, String mixin, String dead, String deadDesc,
 			String survivor, String detailNeedle) {
 		byte[] pruned = new GuestInjectorPruner().transform(mixin, original, null);

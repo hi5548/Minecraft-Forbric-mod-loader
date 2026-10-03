@@ -103,6 +103,26 @@ public final class TestFixtures {
 	}
 
 	/**
+	 * The named (Mojmap) game jar the merge is built FROM, for the version this checkout is built for.
+	 *
+	 * <p>Different from {@link #vanillaJar()}: a launcher's {@code versions/<v>/<v>.jar} ships obfuscated, while a
+	 * merge needs the renamed jar, which is a build intermediate. {@code MC_DIR} points at the staging tree the
+	 * game side was compiled from ({@code -Pforbric.mcLibraries=<mc>/libraries}), so the NeoForm output sits beside
+	 * it; a version whose launcher install happens to carry a named jar is preferred when one exists.
+	 */
+	public static Path namedGameJar() {
+		String version = System.getProperty("forbric.mcVersion", "1.21.1");
+		// The NeoForm intermediates first: a modern launcher jar is OBFUSCATED (`yv$15`, not `ByteBufCodecs$22`),
+		// so picking it by name would derive a census from the wrong namespace and skip on the anonymous-class
+		// count. Measured: the 1.21.1 launcher jar yields 6 matches for the `$N` shape, the named one 689.
+		for (String name : new String[]{"client-official.jar", "server-official.jar"}) {
+			Path neoform = minecraftDir().resolve(".forbric-build/" + name);
+			if (Files.isRegularFile(neoform)) return neoform;
+		}
+		return minecraftDir().resolve("versions/" + version + "/" + version + ".jar");
+	}
+
+	/**
 	 * Netty's codec library under {@link #minecraftDir()}: 26.2 ships netty 4.2's split {@code netty-codec-base},
 	 * which a launcher directory that also holds older versions keeps beside their {@code netty-codec}.
 	 */

@@ -558,7 +558,10 @@ class MixinFitTest {
 		String relocated = "net/minecraft/network/codec/ByteBufCodecs$13";
 		MixinFit.Result r = MixinFit.evaluate(injectRun(relocated), name -> (relocated + ".class").equals(name) ? withRun(relocated) : null);
 		assertEquals(MixinFit.Verdict.PARTIAL, r.verdict(), r.unresolved().toString());
-		assertTrue(r.unresolved().get(0).startsWith("@Mixin target") && r.unresolved().get(0).contains("ByteBufCodecs$12"), r.unresolved().toString());
+		// The NUMBER is the census's, and the census is the base's: this resolver knows nothing of 26.2, so it
+		// selects the 1.21.1 census, where vanilla's $13 body is at $18. On 26.2 the same target answers $12 —
+		// MergedBaseAnonymousDriftTest pins both, and the point here is that the home is NAMED either way.
+		assertTrue(r.unresolved().get(0).startsWith("@Mixin target") && r.unresolved().get(0).contains("ByteBufCodecs$18"), r.unresolved().toString());
 		assertTrue(!r.shouldSuppress(), "PARTIAL is kept by default");
 
 		// With NO other anchor at all it is still PARTIAL: a soft miss can never make a mixin UNFIT.

@@ -227,6 +227,10 @@ public final class MixinFit {
 		int bound = 0;
 
 		List<String> foreign = new ArrayList<>();
+		// Which anonymous-class census applies is a property of the BASE, not of the mixin, so it is asked of the
+		// same resolver every anchor is resolved against — a version constant would be one more thing to drift.
+		MergedBaseAnonymousDrift.Census census =
+				MergedBaseAnonymousDrift.forBase(name -> targetResolver.apply(name + ".class") != null);
 		for (String declared : targets) {
 			// The same move MixinAnonymousRetarget will make to the @Mixin annotation. Judged here too, because a
 			// verdict about the class the mixin will NOT be applied to is worse than no verdict: Polymer's two
@@ -248,9 +252,9 @@ public final class MixinFit {
 					added == null ? MixinAddedMembers.View.NONE : added, declared));
 			// A renumbered anonymous class: every member anchor may resolve and still belong to a different class
 			// than the one vanilla compiled at that name. Soft — it forces PARTIAL, never UNFIT.
-			if (moved == null && gameOwned && MergedBaseAnonymousDrift.drifted(targetName)) {
+			if (moved == null && gameOwned && census.drifted(targetName)) {
 				anchors.add(new Anchor("@Mixin target", targetName.substring(targetName.lastIndexOf('/') + 1)
-						+ " is not the class vanilla compiled at that name (" + MergedBaseAnonymousDrift.describe(targetName)
+						+ " is not the class vanilla compiled at that name (" + census.describe(targetName)
 						+ ")", false, true));
 			}
 			for (Anchor anchor : anchors) {

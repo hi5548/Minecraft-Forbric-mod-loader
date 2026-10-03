@@ -283,7 +283,7 @@ public final class KernelGuestMixinAdapter {
 						if (drifted != null) {
 							ForbricLog.warn("[Forbric/Mixin] guest mixin %s:%s targets %s, a renumbered anonymous class — on this "
 									+ "base that name is a different class (%s); its injections bind to unrelated code",
-									MixinConfigOwners.describe(configName), mixin, drifted, MergedBaseAnonymousDrift.describe(drifted));
+									MixinConfigOwners.describe(configName), mixin, drifted, MergedBaseAnonymousDrift.describeAny(drifted));
 						}
 						suspectDrift(configName, pkg, mixin, pluginClass, classBytes, required, fit);
 						notePartial(configName, mixin);
@@ -613,8 +613,14 @@ public final class KernelGuestMixinAdapter {
 	private static String driftedTarget(MixinFit.Result fit) {
 		for (String reason : fit.unresolved()) {
 			if (!reason.startsWith("@Mixin target ")) continue;
-			for (String name : MergedBaseAnonymousDrift.RELOCATED.keySet()) if (reason.contains(name.substring(name.lastIndexOf('/') + 1) + " is not")) return name;
-			for (String name : MergedBaseAnonymousDrift.RESHAPED) if (reason.contains(name.substring(name.lastIndexOf('/') + 1) + " is not")) return name;
+			for (MergedBaseAnonymousDrift.Census census : MergedBaseAnonymousDrift.CENSUSES) {
+				for (String name : census.relocated().keySet()) {
+					if (reason.contains(name.substring(name.lastIndexOf('/') + 1) + " is not")) return name;
+				}
+				for (String name : census.reshaped()) {
+					if (reason.contains(name.substring(name.lastIndexOf('/') + 1) + " is not")) return name;
+				}
+			}
 		}
 		return null;
 	}

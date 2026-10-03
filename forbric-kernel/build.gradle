@@ -364,6 +364,9 @@ test {
 	// against, so a prepared .dev/minecraft or -Pforbric.mcLibraries reaches the tests instead of a platform default.
 	environment 'MC_DIR', mcLibraries.parentFile.absolutePath
 	systemProperty 'forbric.fabricApi', stagedFabricApi.absolutePath
+	// Which game version the staged artifacts are, so a test that must pick the named (Mojmap) jar the merge was
+	// built FROM — not the obfuscated launcher one — can name it: TestFixtures.namedGameJar().
+	systemProperty 'forbric.mcVersion', mcVersion
 	// Refused when the tests RUN, never while the build is configured: this block configures every invocation,
 	// and a root that does not exist is the documented way to build the boot jar as a machine without staged
 	// artifacts would (above). run/test-staged-root.sh checks both halves.

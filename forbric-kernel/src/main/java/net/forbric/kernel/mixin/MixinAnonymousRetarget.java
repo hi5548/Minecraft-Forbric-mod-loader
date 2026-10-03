@@ -75,7 +75,7 @@ public final class MixinAnonymousRetarget {
 	 */
 	public static String home(String internalName, Predicate<String> present) {
 		if (!enabled() || internalName == null || present == null) return null;
-		List<String> candidates = MergedBaseAnonymousDrift.RELOCATED.get(internalName);
+		List<String> candidates = MergedBaseAnonymousDrift.forBase(present).relocated().get(internalName);
 		if (candidates == null || candidates.size() != 1) return null;
 		String home = candidates.get(0);
 		return present.test(home) ? home : null;

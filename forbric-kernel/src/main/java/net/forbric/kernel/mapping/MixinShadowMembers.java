@@ -36,7 +36,6 @@ import org.objectweb.asm.tree.MethodNode;
 
 import net.fabricmc.tinyremapper.IMappingProvider;
 
-import net.forbric.kernel.util.ByteScan;
 import net.forbric.kernel.util.ForbricLog;
 
 /**
@@ -138,14 +137,10 @@ public final class MixinShadowMembers {
 				try (InputStream in = zip.getInputStream(entry)) {
 					bytes = in.readAllBytes();
 				}
-				// A .class SUFFIX is not a class: see ByteScan.isClass for the AppleDouble entry that killed the
-				// launch in this exact line.
-				if (!ByteScan.isClass(bytes)) continue;
-
-				// An entry NAMED .class that ASM cannot read — empty, truncated, or a resource misnamed — must not
-				// take the boot down with it. This pass did not validate the input and cannot repair it, so it names
-				// what it skipped (once, counted, below) and keeps every class it CAN read. The same guard cleanses
-				// the jar the ENGINE is handed (ReadableClassEntries), or tiny-remapper dies on the entry next.
+				// A .class SUFFIX is not a class: an AppleDouble sidecar (__MACOSX/._X.class, a resource fork) and
+				// an entry ASM otherwise cannot read both land here, and both are handled by the ONE readable/parse
+				// decision below rather than by a second, silent predicate here — a guard that returned early would
+				// keep the entry out of `unreadable` and turn "which entry did we drop" back into a guess.
 				ClassNode node = ReadableClassEntries.parse(bytes, ClassReader.SKIP_FRAMES);
 				if (node == null) {
 					unreadable.add(entry.getName());

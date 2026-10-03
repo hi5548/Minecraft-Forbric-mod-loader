@@ -22,7 +22,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.List;
 import java.util.Set;
 import java.util.zip.ZipEntry;
@@ -90,10 +92,24 @@ final class ReadableClassEntries {
 		Path out = Files.createTempFile(workDir, stem(jar) + "-readable", ".jar");
 		try (ZipFile zip = new ZipFile(jar.toFile());
 				ZipOutputStream sink = new ZipOutputStream(Files.newOutputStream(out))) {
+			// A name may appear more than once — measured on CheaperGapples.jar, whose META-INF/mods.toml,
+			// META-INF/neoforge.mods.toml and AppleDouble sidecars are each in there twice — and a ZipOutputStream
+			// refuses the second `putNextEntry` for a name it already holds ("duplicate entry"), so copying every
+			// entry this jar kept could not cleanse the one jar shape that needed it most. Keep the LAST occurrence
+			// of every name, not the first: that is the record the original jar's readers resolve (ZipFile/JarFile
+			// walk the central directory in order and a later record overwrites an earlier one), so the cleansed
+			// copy answers the same bytes it did before the cleanse. `left` counts down each name's remaining
+			// occurrences, so an entry is written exactly when it is that name's last one.
+			Map<String, Integer> left = new HashMap<>();
+			for (Enumeration<? extends ZipEntry> count = zip.entries(); count.hasMoreElements(); ) {
+				left.merge(count.nextElement().getName(), 1, Integer::sum);
+			}
 			for (Enumeration<? extends ZipEntry> entries = zip.entries(); entries.hasMoreElements(); ) {
 				ZipEntry entry = entries.nextElement();
-				if (drop.contains(entry.getName())) continue;
-				sink.putNextEntry(new ZipEntry(entry.getName()));
+				String name = entry.getName();
+				boolean last = left.merge(name, -1, Integer::sum) == 0;
+				if (drop.contains(name) || !last) continue;
+				sink.putNextEntry(new ZipEntry(name));
 				try (InputStream in = zip.getInputStream(entry)) {
 					in.transferTo(sink);
 				}

@@ -116,6 +116,35 @@ cd forbric-kernel
 的 MC 类与本机未备的 `-Pforbric.fabricApi`/`-Pforbric.rebornEnergy`,故本次按"无 staged 游戏档"档位运行
 (`test` 任务在该档位只编译 main+test,跳过的只是游戏侧编译),三个用例读的是真实映射数据,不是合成对。
 
+## 5. 后续:AppleDouble 之后暴露的第二处——重打包不能死在重复条目名上(独立提交)
+
+K1 的守卫让 uhc-gapples 往前走了一步,随即死在**重打包**:
+
+```
+java.util.zip.ZipException: duplicate entry: META-INF/mods.toml
+```
+
+`CheaperGapples.jar` 里**真的**有两个 `META-INF/mods.toml`、两个 `META-INF/neoforge.mods.toml`
+(以及成对的 `__MACOSX/.../._<name>.class`)。zip 允许重名,Java 的 `ZipFile`/`JarFile` 按中央目录顺序解析、
+**后一条覆盖前一条**——所以"取最后一条"不是偏好,而是与原 jar 的读者看到的一致。`ZipOutputStream`
+则对已持有的名字拒绝第二次 `putNextEntry`,于是"要清洗的 jar"恰好清洗不了。
+
+- **策略:保留每个名字的最后一条**,理由如上;测试里把这条前提**在输入 jar 上**断言掉
+  (`assertEquals("last", ZipFile.getEntry(DUP))`),以免策略悄悄漂离它。
+- **红→绿**:`ReadableClassEntriesTest` 1/1——修前 `ZipException: duplicate entry: META-INF/mods.toml`,
+  修后通过;同批 4 个套件 **13/13,0 skip**。
+- **其它重打包点是否同形**:`MixinNames.translate`、`InheritedMemberRefs.translate`、
+  `InheritedMemberDecls.translate`、`AccessWidenerRemapper.remap` 都是**按条目名建 map 再重写**
+  (`LinkedHashMap<String,byte[]>`),重名在 map 里塌成一条(后写覆盖,同样是"最后一条胜"),因此不会出现
+  第二次 `putNextEntry` —— **同形不存在**。`ForgeModRemapper.remapJar` 把 jar 交给 tiny-remapper 的输出侧,
+  它现在只拿到已清洗的 jar,重复条目已不在其输入里(记录,未证)。
+- **附带**:`MixinShadowMembers.scan` 里我先前那道 `ByteScan.isClass(bytes) continue` 已删除——它是个
+  **静默**短路,会让条目进不了 `unreadable` 列表;可读性判定收归 `ReadableClassEntries.parse` 一处,
+  它**点名**跳过了谁。这同时修绿了同一批里 `MixinShadowMembersTest.anUnreadableClassEntryIsSkipped…`
+  (修前红:`the skipped entry must be named, not silently ignored`)。
+
+
+
 ## 4. 交给 W7Harness 复核的 slug 清单(按需 fetch)与预期移动
 
 | slug | loader | 为什么 | 预期 |

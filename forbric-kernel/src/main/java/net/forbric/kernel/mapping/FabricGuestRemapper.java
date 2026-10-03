@@ -17,6 +17,7 @@
 package net.forbric.kernel.mapping;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Enumeration;
@@ -134,9 +135,19 @@ public final class FabricGuestRemapper {
 			if (ForbricCache.isCached(out)) {
 				ForbricLog.debug("[Forbric/Mapping] reusing remapped guest %s", out.getFileName());
 			} else {
-				// Mixin-aware: the guest's annotation strings and its own shadowed declarations are names too.
-				IMappingProvider jarProvider = MixinShadowMembers.withRenames(provider, jar, spine);
-				ForgeModRemapper.remapJar(jar, out, jarProvider, sourceClasspath, true);
+				// Every pass below parses every .class entry: the shadow scan, tiny-remapper itself, then the
+				// selector/refmap, inherited-member and widener rewrites. One entry ASM cannot read must be dropped
+				// BEFORE the engine sees the jar, or the subject's boot dies on a mod that is already broken and
+				// nothing this kernel does can repair (see ReadableClassEntries — the guard the shadow scan alone
+				// was not enough for: tiny-remapper's own "error analyzing <entry>" was simply the next death).
+				Path readable = ReadableClassEntries.readable(jar, cacheDir);
+				try {
+					// Mixin-aware: the guest's annotation strings and its own shadowed declarations are names too.
+					IMappingProvider jarProvider = MixinShadowMembers.withRenames(provider, readable, spine);
+					ForgeModRemapper.remapJar(readable, out, jarProvider, sourceClasspath, true);
+				} finally {
+					if (!readable.equals(jar)) Files.deleteIfExists(readable);
+				}
 				// Mixin resolves names through the mod's refmap before it looks at the game, so the refmap is a
 				// namespace too: its selector strings, and the values of its refmap, are intermediary and must
 				// become named (see MixinNames — the extension translates neither).

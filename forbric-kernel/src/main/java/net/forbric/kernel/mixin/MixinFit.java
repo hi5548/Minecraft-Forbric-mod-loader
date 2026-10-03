@@ -231,12 +231,18 @@ public final class MixinFit {
 		// same resolver every anchor is resolved against — a version constant would be one more thing to drift.
 		MergedBaseAnonymousDrift.Census census =
 				MergedBaseAnonymousDrift.forBase(name -> targetResolver.apply(name + ".class") != null);
+		// The same move MixinAnonymousRetarget will make to the @Mixin annotation. Judged up front and kept, because a
+		// verdict about the class the mixin will NOT be applied to is worse than no verdict — Polymer's two
+		// ByteBufCodecs mixins were suppressed as UNFIT for anchors that resolve perfectly in their real home — and
+		// because the shadow-alias rule must be asked of EVERY target the mixin lands on, not one at a time.
+		List<String> homes = new ArrayList<>(targets.size());
 		for (String declared : targets) {
-			// The same move MixinAnonymousRetarget will make to the @Mixin annotation. Judged here too, because a
-			// verdict about the class the mixin will NOT be applied to is worse than no verdict: Polymer's two
-			// ByteBufCodecs mixins were suppressed as UNFIT for anchors that resolve perfectly in their real home.
 			String moved = MixinAnonymousRetarget.home(declared, name -> targetResolver.apply(name + ".class") != null);
-			String targetName = moved != null ? moved : declared;
+			homes.add(moved != null ? moved : declared);
+		}
+		for (int t = 0; t < targets.size(); t++) {
+			String declared = targets.get(t);
+			String targetName = homes.get(t);
 			byte[] targetBytes = targetResolver.apply(targetName + ".class");
 			// Not a class we can see (JDK, a mixin-generated type): nothing to prove, assume it fits.
 			if (targetBytes == null) continue;
@@ -249,10 +255,11 @@ public final class MixinFit {
 			boolean gameOwned = gameClass.test(targetName.replace('/', '.'));
 
 			List<Anchor> anchors = new ArrayList<>(anchorsOf(mixin, target, targetResolver,
-					added == null ? MixinAddedMembers.View.NONE : added, declared));
+					added == null ? MixinAddedMembers.View.NONE : added, declared, homes));
 			// A renumbered anonymous class: every member anchor may resolve and still belong to a different class
-			// than the one vanilla compiled at that name. Soft — it forces PARTIAL, never UNFIT.
-			if (moved == null && gameOwned && census.drifted(targetName)) {
+			// than the one vanilla compiled at that name. Soft — it forces PARTIAL, never UNFIT. A target that WAS
+			// retargeted is by definition already the right class, so the drift note is for the ones left as compiled.
+			if (targetName.equals(declared) && gameOwned && census.drifted(targetName)) {
 				anchors.add(new Anchor("@Mixin target", targetName.substring(targetName.lastIndexOf('/') + 1)
 						+ " is not the class vanilla compiled at that name (" + census.describe(targetName)
 						+ ")", false, true));
@@ -342,7 +349,7 @@ public final class MixinFit {
 	}
 
 	private static List<Anchor> anchorsOf(ClassNode mixin, ClassNode target, Function<String, byte[]> resolver,
-			MixinAddedMembers.View added, String declared) {
+			MixinAddedMembers.View added, String declared, List<String> homes) {
 		// The target again with its local variable tables, read once and only if an injector needs it.
 		Supplier<ClassNode> withLocals = new Supplier<>() {
 			private ClassNode read;
@@ -362,12 +369,16 @@ public final class MixinFit {
 		List<Anchor> out = new ArrayList<>();
 
 		// @Shadow fields: the member must still be declared (walking the superclass chain), or be added by a mixin
-		// Mixin applies to the target first (MixinAddedMembers: moreculling's shadow of fabric-renderer's mesh).
+		// Mixin applies to the target first (MixinAddedMembers: moreculling's shadow of fabric-renderer's mesh), or
+		// the merge renamed it and ShadowFieldAliases is about to say so in the annotation Mixin receives. The alias
+		// is asked of the same method the rewrite uses, over the same target set, so "resolved here" implies "bound
+		// there" — the two can never disagree.
 		if (mixin.fields != null) {
 			for (FieldNode f : mixin.fields) {
 				if (!has(f.visibleAnnotations, SHADOW_DESC) && !has(f.invisibleAnnotations, SHADOW_DESC)) continue;
 				out.add(new Anchor("@Shadow field", f.name, findField(target, f.name, f.desc, resolver) != null
-						|| addedBefore(added, declared, target.name, true, f.name, f.desc)));
+						|| addedBefore(added, declared, target.name, true, f.name, f.desc)
+						|| ShadowFieldAliases.binds(homes, f, resolver)));
 			}
 		}
 
@@ -768,8 +779,8 @@ public final class MixinFit {
 		return dead.isEmpty() ? null : String.join("; ", dead);
 	}
 
-	/** The target and its superclass chain, as far as the resolver can see. */
-	private static List<ClassNode> hierarchy(ClassNode node, Function<String, byte[]> resolver) {
+	/** The target and its superclass chain, as far as the resolver can see. Shared with {@link ShadowFieldAliases}. */
+	static List<ClassNode> hierarchy(ClassNode node, Function<String, byte[]> resolver) {
 		List<ClassNode> chain = new ArrayList<>();
 		ClassNode current = node;
 		for (int guard = 0; current != null && guard < 32; guard++) {

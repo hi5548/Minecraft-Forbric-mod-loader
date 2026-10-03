@@ -51,9 +51,22 @@ class ForbricCacheTest {
 		Path out = cache.resolve("mymod", key, ".jar");
 
 		assertTrue(out.startsWith(cache.dir()));
-		assertFalse(ForbricCache.isCached(out));
+		assertFalse(ForbricCache.isCached(out), "nothing is there yet");
 
+		// A stub that is a regular file but not a usable jar — a remap killed mid-write leaves one — must NOT read
+		// as a hit: isCached validates the zip, because such a stub on the classpath died in Mixin's Config.create.
 		Files.writeString(out, "x");
+		assertFalse(ForbricCache.isCached(out), "a non-jar stub must not read as a cache hit");
+
+		writeOneEntryJar(out);
 		assertTrue(ForbricCache.isCached(out));
+	}
+
+	private static void writeOneEntryJar(Path file) throws Exception {
+		try (java.util.zip.ZipOutputStream out = new java.util.zip.ZipOutputStream(Files.newOutputStream(file))) {
+			out.putNextEntry(new java.util.zip.ZipEntry("marker"));
+			out.write(new byte[] { 1 });
+			out.closeEntry();
+		}
 	}
 }

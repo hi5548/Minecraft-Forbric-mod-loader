@@ -61,6 +61,14 @@ import net.forbric.kernel.util.ForbricLog;
  * {@code mapField/mapMethod(intermediary, named, target, name, desc)}. A member the spine cannot map is left
  * exactly as written: renaming it on a guess would be worse than the unfit mixin it already is.
  *
+ * <p><b>What the spine cannot see at all.</b> A synthetic name — javac's {@code val$…} capture of a lambda local —
+ * is in NEITHER namespace, so a shadow of one is left as written even when the byte-merge renamed the field it was
+ * compiled against ({@code val$registryKey} → {@code val$p_319942_} in the merged {@code ByteBufCodecs$25}). That
+ * case is not a mapping question but a member-table one, and it is answered where the merged base's fields are
+ * readable: {@link net.forbric.kernel.mixin.ShadowFieldAliases} writes an {@code aliases} entry on the
+ * {@code @Shadow} when exactly one target field of the same descriptor is left, and {@code MixinFit} resolves the
+ * shadow by the same rule.
+ *
  * <p><b>Why a mapping layer and not a second bytecode pass.</b> {@link #withRenames} hands tiny-remapper one extra
  * entry per shadowed member, so the engine renames the declaration AND every use of it inside the mixin (which
  * shares the owner) in the same application it renames everything else. A separate post-pass would have to
@@ -118,6 +126,7 @@ public final class MixinShadowMembers {
 	private static List<Rename> scan(Path jar, ForbricMappings spine) throws IOException {
 		List<Rename> out = new ArrayList<>();
 		Map<String, Boolean> seen = new LinkedHashMap<>();
+		List<String> unreadable = new ArrayList<>();
 
 		try (ZipFile zip = new ZipFile(jar.toFile())) {
 			for (Enumeration<? extends ZipEntry> entries = zip.entries(); entries.hasMoreElements(); ) {
@@ -129,8 +138,15 @@ public final class MixinShadowMembers {
 					bytes = in.readAllBytes();
 				}
 
-				ClassNode node = new ClassNode();
-				new ClassReader(bytes).accept(node, ClassReader.SKIP_FRAMES);
+				// An entry NAMED .class that ASM cannot read — empty, truncated, or a resource misnamed — must not
+				// take the boot down with it. This pass did not validate the input and cannot repair it, so it names
+				// what it skipped (once, counted, below) and keeps every class it CAN read. The same guard cleanses
+				// the jar the ENGINE is handed (ReadableClassEntries), or tiny-remapper dies on the entry next.
+				ClassNode node = ReadableClassEntries.parse(bytes, ClassReader.SKIP_FRAMES);
+				if (node == null) {
+					unreadable.add(entry.getName());
+					continue;
+				}
 
 				List<String> targets = mixinTargets(node);
 				if (targets.isEmpty()) continue;
@@ -154,6 +170,12 @@ public final class MixinShadowMembers {
 					record(out, seen, node.name, method.name, method.desc, mapped, true);
 				}
 			}
+		}
+
+		if (!unreadable.isEmpty()) {
+			ForbricLog.warn("[Forbric/Mapping] %s: skipped %d unreadable .class entry(ies) — not a class this kernel can "
+					+ "parse, so no shadow inside them was renamed: %s", jar.getFileName(), unreadable.size(),
+					String.join(", ", unreadable));
 		}
 
 		return out;

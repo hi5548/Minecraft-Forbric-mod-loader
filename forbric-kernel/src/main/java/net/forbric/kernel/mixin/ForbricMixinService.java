@@ -317,6 +317,10 @@ public final class ForbricMixinService
 		// …and a target whose NUMBER the merge gave to a carrier's anonymous class is moved to where vanilla's
 		// body went. Before the twin pass: the class this lands on may itself have a renamed twin.
 		MixinAnonymousRetarget.retarget(node, this::mergedBaseHas);
+		// …and a @Shadow field whose NAME the merge renamed (a javac capture field, which the mapping spine never
+		// saw) gets the alias that names the one field of its descriptor the merged base kept. After the retarget
+		// above, so `targets` already names the class the body landed on; before Mixin attaches the field.
+		ShadowFieldAliases.apply(node, this::mergedBaseBytes);
 		// …and a target the byte merge had to rename gets its twin added, because the merged code that runs
 		// instantiates the renamed copy and the mixin names only the vanilla one.
 		MixinMergedTwin.addTwins(node, MixinMergedTwin.enabled() ? this::mergedBaseHas : binary -> false);
@@ -415,6 +419,19 @@ public final class ForbricMixinService
 			return loader().getPreMixinClassBytes(binary) != null;
 		} catch (Throwable absent) {
 			return false;
+		}
+	}
+
+	/**
+	 * The post-chain bytes of a class named as a resource path ({@code net/minecraft/Foo.class}), for a predicate that
+	 * reads a member table before Mixin is handed the class — {@link ShadowFieldAliases} is the caller. Same reader
+	 * as {@link #mergedBaseNodeFor}: the alias is written against what Mixin will actually attach to.
+	 */
+	private byte[] mergedBaseBytes(String path) {
+		try {
+			return loader().getPreMixinClassBytes(path.substring(0, path.length() - ".class".length()));
+		} catch (Throwable absent) {
+			return null;
 		}
 	}
 

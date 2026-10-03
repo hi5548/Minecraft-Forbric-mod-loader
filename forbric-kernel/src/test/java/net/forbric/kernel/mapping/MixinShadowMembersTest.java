@@ -17,12 +17,22 @@
 package net.forbric.kernel.mapping;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
 import org.junit.jupiter.api.Test;
@@ -71,22 +81,8 @@ class MixinShadowMembersTest {
 		Path jar = dir.resolve("guest-" + target.hashCode() + ".jar");
 		writeMixinJar(jar, target);
 
-		List<String> renames = new ArrayList<>();
 		IMappingProvider provider = MixinShadowMembers.withRenames(acceptor -> { }, jar, spine);
-		provider.load(new IMappingProvider.MappingAcceptor() {
-			@Override public void acceptClass(String srcName, String dstName) { }
-
-			@Override public void acceptMethod(IMappingProvider.Member member, String newName) { }
-
-			@Override public void acceptMethodArg(IMappingProvider.Member member, int index, String newName) { }
-
-			@Override public void acceptMethodVar(IMappingProvider.Member member, int index, int startOpIdx,
-					int asmIndex, String newName) { }
-
-			@Override public void acceptField(IMappingProvider.Member member, String newName) {
-				renames.add(member.owner + "." + member.name + member.desc + " -> " + newName);
-			}
-		});
+		List<String> renames = collect(provider);
 
 		assertEquals(List.of(MIXIN_CLASS + "." + FIELD + DESC + " -> collisionShape"), renames,
 				"the shadowed field must take the target's runtime name; anything else leaves Mixin binding a name "
@@ -96,7 +92,7 @@ class MixinShadowMembersTest {
 		Path out = dir.resolve("remapped-" + target.hashCode() + ".jar");
 		ForgeModRemapper.remapJar(jar, out, provider, List.of(), true);
 
-		try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(out.toFile())) {
+		try (ZipFile zip = new ZipFile(out.toFile())) {
 			byte[] bytes = zip.getInputStream(zip.getEntry(MIXIN_CLASS + ".class")).readAllBytes();
 			org.objectweb.asm.tree.ClassNode node = new org.objectweb.asm.tree.ClassNode();
 			new org.objectweb.asm.ClassReader(bytes).accept(node, org.objectweb.asm.ClassReader.SKIP_FRAMES);
@@ -126,6 +122,113 @@ class MixinShadowMembersTest {
 			out.putNextEntry(new ZipEntry(MIXIN_CLASS + ".class"));
 			out.write(writer.toByteArray());
 			out.closeEntry();
+		}
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------
+	// An entry NAMED .class that ASM cannot read
+	// ---------------------------------------------------------------------------------------------------------------
+
+	/**
+	 * CheaperGapples.jar carries a {@code .class} entry ASM cannot parse (empty/truncated), and the pass used to
+	 * hand it straight to {@code ClassReader}, killing the whole subject's remap before a single shadow was renamed.
+	 * The readable class beside it must still be processed, and the bad one must be named.
+	 */
+	@Test
+	void anUnreadableClassEntryIsSkippedInsteadOfKillingTheRemap(@TempDir Path dir) throws Exception {
+		ForbricMappings spine = spine();
+		Path jar = dir.resolve("guest-broken.jar");
+		writeMixinJar(jar, TARGET);
+		appendEntry(jar, "example/Broken.class", new byte[0]);
+
+		PrintStream err = System.err;
+		ByteArrayOutputStream log = new ByteArrayOutputStream();
+		List<String> renames;
+		try {
+			System.setErr(new PrintStream(log, true, StandardCharsets.UTF_8));
+			renames = collect(MixinShadowMembers.withRenames(acceptor -> { }, jar, spine));
+		} finally {
+			System.setErr(err);
+		}
+
+		assertEquals(List.of(MIXIN_CLASS + "." + FIELD + DESC + " -> collisionShape"), renames,
+				"the readable class must still be processed");
+		assertTrue(log.toString(StandardCharsets.UTF_8).contains("example/Broken.class"),
+				"the skipped entry must be named, not silently ignored: " + log);
+	}
+
+	/**
+	 * And the guard has to be the SAME one for the engine: skipping in the shadow scan alone only moves the death one
+	 * step down, into tiny-remapper's own {@code error analyzing <entry> from <jar>}. The jar the engine is handed is
+	 * cleansed first, so every pass behind sees only readable classes.
+	 */
+	@Test
+	void theEngineOnlySeesReadableClasses(@TempDir Path dir) throws Exception {
+		ForbricMappings spine = spine();
+		Path clean = dir.resolve("guest-clean.jar");
+		writeMixinJar(clean, TARGET);
+		assertEquals(clean, ReadableClassEntries.readable(clean, dir), "a clean jar is not copied");
+
+		Path broken = dir.resolve("guest-broken.jar");
+		writeMixinJar(broken, TARGET);
+		appendEntry(broken, "example/Broken.class", new byte[0]);
+
+		Path readable = ReadableClassEntries.readable(broken, dir);
+		assertNotEquals(broken, readable, "an unreadable entry must produce a cleansed copy");
+		Path out = dir.resolve("remapped.jar");
+		IMappingProvider provider = ForgeModRemapper.provider(spine, ForbricMappings.INTERMEDIARY,
+				ForbricMappings.NAMED);
+		ForgeModRemapper.remapJar(readable, out, MixinShadowMembers.withRenames(provider, readable, spine),
+				List.of(), true); // the engine must not throw
+
+		try (ZipFile zip = new ZipFile(out.toFile())) {
+			assertNull(zip.getEntry("example/Broken.class"), "the unreadable entry is dropped");
+			assertNotNull(zip.getEntry(MIXIN_CLASS + ".class"), "every readable class still ships");
+		}
+		Files.deleteIfExists(readable);
+	}
+
+	private static ForbricMappings spine() {
+		return FabricGuestMappings.of(MappingFixtures.intermediary(), MappingFixtures.mojmap()).mappings();
+	}
+
+	/** The field renames a provider announces, as {@code owner.name+desc -> runtimeName}. */
+	private static List<String> collect(IMappingProvider provider) {
+		List<String> renames = new ArrayList<>();
+		provider.load(new IMappingProvider.MappingAcceptor() {
+			@Override public void acceptClass(String srcName, String dstName) { }
+
+			@Override public void acceptMethod(IMappingProvider.Member member, String newName) { }
+
+			@Override public void acceptMethodArg(IMappingProvider.Member member, int index, String newName) { }
+
+			@Override public void acceptMethodVar(IMappingProvider.Member member, int index, int startOpIdx,
+					int asmIndex, String newName) { }
+
+			@Override public void acceptField(IMappingProvider.Member member, String newName) {
+				renames.add(member.owner + "." + member.name + member.desc + " -> " + newName);
+			}
+		});
+		return renames;
+	}
+
+	/** Adds an entry to an existing jar, so a real malformed one can sit beside a real readable class. */
+	private static void appendEntry(Path jar, String name, byte[] bytes) throws Exception {
+		Map<String, byte[]> entries = new LinkedHashMap<>();
+		try (ZipFile zip = new ZipFile(jar.toFile())) {
+			for (ZipEntry entry : java.util.Collections.list(zip.entries())) {
+				try (java.io.InputStream in = zip.getInputStream(entry)) {
+					entries.put(entry.getName(), in.readAllBytes());
+				}
+			}
+		}
+		entries.put(name, bytes);
+		try (ZipOutputStream out = new ZipOutputStream(Files.newOutputStream(jar))) {
+			for (Map.Entry<String, byte[]> entry : entries.entrySet()) {
+				out.putNextEntry(new ZipEntry(entry.getKey()));
+				out.write(entry.getValue());
+				out.closeEntry();
+			}
 		}
 	}
 }

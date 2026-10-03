@@ -44,6 +44,7 @@ import net.forbric.kernel.metadata.forge.EcosystemVersions;
 import net.forbric.kernel.mixin.KernelMixinBootstrap;
 import net.forbric.kernel.mixin.MixinConfigOwners;
 import net.forbric.kernel.transform.ChunkExecutorGuardInjector;
+import net.forbric.kernel.transform.ClientModLoadingWrapperRewriter;
 import net.forbric.kernel.transform.ClientPackHookInjector;
 import net.forbric.kernel.transform.ClientSmokeTickInjector;
 import net.forbric.kernel.transform.CommonNetworkInteropInjector;
@@ -935,6 +936,11 @@ public final class KernelBoot {
 		// while registering Forge's own client handlers, and as Launcher.INSTANCE being null on the NeoForge side.
 		chain.register(TransformPhase.COREMOD, new ModLauncherClaimRewriter());
 
+		// The other end of the same window: NeoForge's client loader wraps vanilla's screen-and-world runnable on
+		// the way out of Minecraft.buildInitialScreens, and its warnings/error branches replace it with a screen
+		// nothing dismisses — so no client reached a world. See ClientModLoadingWrapperRewriter for the javap.
+		chain.register(TransformPhase.COREMOD, new ClientModLoadingWrapperRewriter());
+
 		// With the launcher claim gone the bus generates its own wrapper — but into its child ASMClassLoader, a
 		// DIFFERENT runtime package from the listener, so package-private listeners (Forge's own
 		// DeferredRegister$EventDispatcher) are unreachable and every Forge DeferredRegister/NewRegistryEvent
@@ -1235,22 +1241,29 @@ public final class KernelBoot {
 		// body to apply the kernel's own pre-connection snapshot (KernelRegistryRevert) — and this neuter, registered
 		// after that injector, was emptying the rewritten body again. Do not add it back.
 
-		for (String owner : new String[] {
-				ForeignType.CLIENT_MOD_LOADER.binary(Ecosystem.NEOFORGE),
-				ForeignType.CLIENT_MOD_LOADER.binary(Ecosystem.FORGE)}) {
-			// begin() is NOT neutered: its call at Main.main bc 814 is the redirect target (→ onClientModLoading), so
-			// its genuine body is never reached from there. Neutering it instead defers registration to a point never
-			// reached and hangs the boot (empirically). The LATER client mod-loading calls in Minecraft.<init> are the
-			// ones to stub — they would run the FancyModLoader lifecycle the kernel replaces.
-			neuter.add(new MethodBodyNeuter.Target(owner, "finish", "()V",
-					"kernel owns client mod loading (registration in onClientModLoading)"));
-			neuter.add(new MethodBodyNeuter.Target(owner, "completeModLoading", "()Z",
-					"kernel owns client mod loading"));
-			// begin is NOT neutered: ClientPackHookInjector PREPENDS KernelLifecycle.onClientResourcePacks to its
-			// body, so the kernel gets the live PackRepository at the one correctly-timed point (Minecraft.<init>,
-			// pre-reload) while the carrier's own body still posts AddPackFindersEvent; the kernel then serves the
-			// ecosystem jars' assets itself. Neutering it threw that handle away.
-		}
+		// begin() is NOT neutered on either side: its call at Main.main bc 814 is the redirect target
+		// (→ onClientModLoading), so its genuine body is never reached from there. Neutering it instead defers
+		// registration to a point never reached and hangs the boot (empirically). The LATER client mod-loading calls
+		// in Minecraft.<init> are the ones to stub — they would run the FancyModLoader lifecycle the kernel replaces.
+		//
+		// PORT(1.21.1): those two stubs exist on the MinecraftForge carrier ONLY. NeoForge 21.1.252's client loader
+		// has neither — javap of neoforge-runtime.jar lists begin(Minecraft, PackRepository,
+		// ReloadableResourceManager), completeModLoading(Runnable)Runnable and isLoading()Z — so naming them for
+		// that owner made the neuter report "its anchor is gone" on every boot ("the neuter for finish()V,
+		// completeModLoading()Z would not be applied, and a neuter is a promise that the method cannot work here"),
+		// and left the genuine wrapper deciding the end of the window. What replaces them on that side is
+		// ClientModLoadingWrapperRewriter, which owns completeModLoading(Runnable) — the method vanilla's
+		// Minecraft.buildInitialScreens hands its screen-and-world runnable to, and the one whose warnings/error
+		// branches would otherwise replace that runnable with a screen nothing dismisses.
+		String forgeClientLoader = ForeignType.CLIENT_MOD_LOADER.binary(Ecosystem.FORGE);
+		neuter.add(new MethodBodyNeuter.Target(forgeClientLoader, "finish", "()V",
+				"kernel owns client mod loading (registration in onClientModLoading)"));
+		neuter.add(new MethodBodyNeuter.Target(forgeClientLoader, "completeModLoading", "()Z",
+				"kernel owns client mod loading"));
+		// begin is NOT neutered: ClientPackHookInjector PREPENDS KernelLifecycle.onClientResourcePacks to its
+		// body, so the kernel gets the live PackRepository at the one correctly-timed point (Minecraft.<init>,
+		// pre-reload) while the carrier's own body still posts AddPackFindersEvent; the kernel then serves the
+		// ecosystem jars' assets itself. Neutering it threw that handle away.
 	}
 
 	/** The game version, read from the base jar's {@code version.json} (vanilla ships it at the jar root). */

@@ -61,9 +61,10 @@ $ javap -v -p -cp <each of the three> net.minecraft.world.entity.LivingEntity | 
 ```
 
 **Verdict: neither the merge (`MergedBaseTool`/`PatchedMcBuilder`) nor a Forge/NeoForge patch sets this flag. It is
-the host's own `final`, correct for vanilla 1.21.1, and both platforms preserve it.** (Forge *does* patch the body —
-`merge-conflicts-1.21.1.txt:624` records `LivingEntity#canBreatheUnderwater()Z (forge hook lost)`, the merge keeping
-NeoForge's body — but that is a lost hook, orthogonal to finality, and it is why the merged body is vanilla's.)
+the host's own `final`, correct for vanilla 1.21.1, and both platforms preserve it.** The merge's own conflict row —
+`merge-conflicts-1.21.1.txt:624`, `LivingEntity#canBreatheUnderwater()Z (forge hook lost)` — is bookkeeping for a
+Forge-side divergence the merge resolved by keeping NeoForge's body; measured, that body is vanilla's in all three
+jars, and the flag is untouched either way.
 
 ## 2. The mod overrides it legitimately — through its own access widener
 

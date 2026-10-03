@@ -55,6 +55,8 @@ import net.forbric.kernel.util.ForbricLog;
  */
 public final class ItemBlockRenderTypesFluidMapRepair implements ClassTransformer {
 	static final String OWNER = "net.minecraft.client.renderer.ItemBlockRenderTypes";
+	/** The internal form, for the owners of the instructions this transformer writes. */
+	static final String INTERNAL = "net/minecraft/client/renderer/ItemBlockRenderTypes";
 	static final String FIELD = "FLUID_RENDER_TYPES";
 	static final String FIELD_DESC = "Ljava/util/Map;";
 	static final String SOURCE_FIELD = "TYPE_BY_FLUID";
@@ -101,13 +103,13 @@ public final class ItemBlockRenderTypesFluidMapRepair implements ClassTransforme
 		InsnList inject = new InsnList();
 		inject.add(new TypeInsnNode(Opcodes.NEW, HASH_MAP));
 		inject.add(new InsnNode(Opcodes.DUP));
-		inject.add(new FieldInsnNode(Opcodes.GETSTATIC, OWNER, SOURCE_FIELD, FIELD_DESC));
+		inject.add(new FieldInsnNode(Opcodes.GETSTATIC, INTERNAL, SOURCE_FIELD, FIELD_DESC));
 		inject.add(new MethodInsnNode(Opcodes.INVOKEINTERFACE, "java/util/Map", "size", "()I", true));
 		inject.add(new LdcInsnNode(0.5f));
 		inject.add(new MethodInsnNode(Opcodes.INVOKESPECIAL, HASH_MAP, "<init>", "(IF)V", false));
 		inject.add(new InsnNode(Opcodes.DUP));
-		inject.add(new MethodInsnNode(Opcodes.INVOKESTATIC, OWNER, filler.name, FILLER_DESC, false));
-		inject.add(new FieldInsnNode(Opcodes.PUTSTATIC, OWNER, FIELD, FIELD_DESC));
+		inject.add(new MethodInsnNode(Opcodes.INVOKESTATIC, INTERNAL, filler.name, FILLER_DESC, false));
+		inject.add(new FieldInsnNode(Opcodes.PUTSTATIC, INTERNAL, FIELD, FIELD_DESC));
 		clinit.instructions.insertBefore(lastReturn, inject);
 		clinit.maxStack = Math.max(clinit.maxStack, 4);
 		clinit.maxLocals = Math.max(clinit.maxLocals, 2);
@@ -133,7 +135,7 @@ public final class ItemBlockRenderTypesFluidMapRepair implements ClassTransforme
 		for (MethodNode method : node.methods) {
 			for (AbstractInsnNode insn : method.instructions) {
 				if (insn instanceof FieldInsnNode f && f.getOpcode() == Opcodes.PUTSTATIC
-						&& OWNER.equals(f.owner) && FIELD.equals(f.name)) return true;
+						&& INTERNAL.equals(f.owner) && FIELD.equals(f.name)) return true;
 			}
 		}
 		return false;

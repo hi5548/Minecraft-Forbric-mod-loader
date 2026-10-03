@@ -16,6 +16,7 @@
 
 package net.forbric.kernel.transform;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -74,11 +75,44 @@ class ItemBlockRenderTypesFluidMapRepairTest {
 		assertNotNull(call, "the assignment must call Forge's filler, not a hand-rolled map");
 		assertTrue(call.desc.equals(FILLER_DESC), "the filler takes the map it fills: " + call.desc);
 
+		// The injected instructions must name their owners in INTERNAL form: a dotted owner lands in the constant
+		// pool as an illegal class name and the JVM refuses to define the class (ClassFormatError: Illegal class
+		// name). Measured on the arm before this check existed.
+		FieldInsnNode store = fluidStore(after);
+		assertNotNull(store, "the injected store must be there");
+		assertEquals("net/minecraft/client/renderer/ItemBlockRenderTypes", store.owner,
+				"the store's owner must be the internal name, not the dotted one");
+		assertTrue(!call.owner.contains("."), "the filler call's owner must be the internal name: " + call.owner);
+
 		// The injected block is straight-line bytecode; BasicVerifier checks its stack depth and locals without
 		// loading anything (SimpleVerifier cannot resolve the game classes from the test classpath).
 		for (MethodNode method : after.methods) {
 			new Analyzer<>(new BasicVerifier()).analyze(after.name, method);
 		}
+	}
+
+	/**
+	 * The check the arm earned: a dotted owner in the injected instructions lands in the constant pool as an
+	 * illegal class name, and the JVM refuses to define the class ({@code ClassFormatError: Illegal class name}).
+	 * {@code initialize=false} keeps {@code <clinit>} from running, so the definition needs no game classes — it is
+	 * the class-file format itself that is under test.
+	 */
+	@Test
+	void theTransformedClassIsDefinable() throws Exception {
+		byte[] transformed = new ItemBlockRenderTypesFluidMapRepair().transform(OWNER, itemBlockRenderTypes(), null);
+		ClassLoader defining = new ClassLoader(getClass().getClassLoader()) {
+			@Override
+			protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+				if (OWNER.equals(name)) {
+					Class<?> loaded = findLoadedClass(name);
+					if (loaded == null) loaded = defineClass(name, transformed, 0, transformed.length);
+					if (resolve) resolveClass(loaded);
+					return loaded;
+				}
+				return super.loadClass(name, resolve);
+			}
+		};
+		assertNotNull(Class.forName(OWNER, false, defining));
 	}
 
 	@Test
@@ -112,6 +146,17 @@ class ItemBlockRenderTypesFluidMapRepairTest {
 			}
 		}
 		throw new AssertionError(FIELD + " must be assigned by <clinit>, not lazily by its first reader");
+	}
+
+	private static FieldInsnNode fluidStore(ClassNode node) {
+		for (MethodNode method : node.methods) {
+			for (AbstractInsnNode insn : method.instructions) {
+				if (insn instanceof FieldInsnNode f && f.getOpcode() == Opcodes.PUTSTATIC && FIELD.equals(f.name)) {
+					return f;
+				}
+			}
+		}
+		return null;
 	}
 
 	private static MethodInsnNode storeFillerCall(ClassNode node) {

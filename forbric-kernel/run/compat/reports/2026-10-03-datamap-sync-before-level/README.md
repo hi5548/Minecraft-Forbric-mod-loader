@@ -463,7 +463,7 @@ one unwrap). Each family is internally consistent; the merge took one half from 
 `CommonPlayerSpawnInfo`, `DimensionType`, `ByteBufCodecs` or `Holder` — those are NeoForge-identical across the
 merge.
 
-**Repair (commit pending, recorded in §14).** `RegistryNetworkSyncDecoderRepair` deletes the
+**Repair (committed as `a8b1fa12`, arm in §14).** `RegistryNetworkSyncDecoderRepair` deletes the
 `ConditionCodec.wrap` call in `loadContentsFromNetwork`, so the raw decoder reaches the loader and the wrap/unwrap
 is once. That is the same convention the kernel already uses for this class of merge artefact
 (`NeoConversionPostInjector`-style `ClassTransformer`, COREMOD-registered, anchored, `-D` kill switch). The
@@ -471,3 +471,45 @@ alternative — keeping the Forge wrap and making the loader Forge-shaped — wo
 shares the same loader with the plain decoder; and giving up Forge's own condition gate on known-pack entries is
 benign, since those entries are the core data the client already has, and NeoForge's conditional codec still skips
 entries whose NeoForge conditions are unmet.
+
+## 14. The arm against the registry-sync repair — the client JOINS THE WORLD
+
+W7Harness ran the same client arm against `a8b1fa12`, frozen kernel
+`407c662724478829ea9260e67f01345541dc1bdb22fdca5ea149534f5d927d1b` (its own clean-worktree build reproduced the sha
+exactly), report `reports/2026-10-03-client-decoder/`.
+
+**`joined world via quick-play` appears — verbatim:**
+
+```
+[07:59:32] [Render thread/INFO]: [Forbric/ClientSmoke] joined world via quick-play: W7Client
+```
+
+The two failures this report has been chasing are gone from the console: `handleDataMapSync` count **0**,
+`VerifyError` count **0**. Row:
+
+```
+run=CRASH  exit=null  world=TRUE  frames=0  strict=false  cause=crash  seconds=31  contended=false
+compatibility_policy=continue   mixin_fit=default   kernel_sha256=407c6627…
+```
+
+So the registry-sync repair fixed the join: the `ClassCastException` was the root (§13), the `handleDataMapSync` NPE
+was its downstream consequence, and neither the payload-ordering transform (§12, shown independent) nor the frame
+fix (§11, a prerequisite) is what unblocked it. This is the campaign's first `world=true` on the client surface.
+
+**The run then crashes ~3 s later, while batching sections — a new, distinct blocker, recorded verbatim and not
+diagnosed here:**
+
+```
+Description: Batching sections
+java.lang.NullPointerException: Cannot invoke "java.util.Map.get(Object)" because "net.minecraft.client.renderer.ItemBlockRenderTypes.FLUID_RENDER_TYPES" is null
+	at forbric/net.minecraft.client.renderer.ItemBlockRenderTypes.getRenderLayer(ItemBlockRenderTypes.java:403) ~[patched-mc-merged-1.21.1.jar:?]
+	at forbric/net.minecraft.client.renderer.chunk.SectionCompiler.compile(SectionCompiler.java:72) ~[patched-mc-merged-1.21.1.jar:?]
+```
+
+A static field is null on the merged base the first time a chunk section compiles — a merged-base class
+initialisation, a different class of defect from the two above, reached only now because the join is what first puts
+the client into the render path. It is out of this read's scope and is not diagnosed here; it is the next blocker on
+this surface, and the crash report is at
+`reports/2026-10-03-client-decoder/per-mod/run/000-sound-physics-remastered__fabric/crash-reports/`. (W7Harness also
+noted the console's single `ClassCastException` string is inside kernel repair prose, `[Forbric/MergedBaseCompat]
+…`, not an occurrence.)

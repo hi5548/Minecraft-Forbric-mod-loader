@@ -386,6 +386,69 @@ class GuestInjectorPrunerTest {
 				"a second pass changes nothing");
 	}
 
+	/**
+	 * The anvil and ingredient single-injector stand-downs: the dead injector is pruned, its working sibling stays,
+	 * and the loss is recorded (CONFIRMED, required=false) with the cost named. Synthetic bytes.
+	 */
+	@Test
+	void theAnvilAndIngredientDeadInjectorsArePrunedAndTheirSiblingsStay() throws Exception {
+		net.forbric.api.CompatibilityFindings.reset();
+		checkPrunedDeadInjector(oneDeadInjector(GuestInjectorPruner.ANVIL_HANDLER_MIXIN, "net.minecraft.world.inventory.AnvilMenu",
+				"callAllowEnchantingEvent", "(Lnet/minecraft/world/item/enchantment/Enchantment;"
+						+ "Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/core/Holder;)Z",
+				"Lorg/spongepowered/asm/mixin/injection/Redirect;",
+				"Lnet/minecraft/world/inventory/AnvilMenu;createResult()V", "INVOKE",
+				"Lnet/minecraft/world/item/enchantment/Enchantment;canEnchant(Lnet/minecraft/world/item/ItemStack;)Z", "keepMe"),
+				GuestInjectorPruner.ANVIL_HANDLER_MIXIN, "callAllowEnchantingEvent",
+				"(Lnet/minecraft/world/item/enchantment/Enchantment;Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/core/Holder;)Z",
+				"keepMe", "AllowEnchanting");
+
+		net.forbric.api.CompatibilityFindings.reset();
+		checkPrunedDeadInjector(oneDeadInjector(GuestInjectorPruner.INGREDIENT_MIXIN, "net.minecraft.world.item.crafting.Ingredient",
+				"useCustomIngredientPacketCodec",
+				"(Lnet/minecraft/network/codec/StreamCodec;)Lnet/minecraft/network/codec/StreamCodec;",
+				"Lcom/llamalad7/mixinextras/injector/ModifyExpressionValue;",
+				"Lnet/minecraft/world/item/crafting/Ingredient;<clinit>()V", "INVOKE",
+				"Lnet/minecraft/network/codec/StreamCodec;map(Ljava/util/function/Function;Ljava/util/function/Function;)"
+						+ "Lnet/minecraft/network/codec/StreamCodec;",
+				"injectCodec"), GuestInjectorPruner.INGREDIENT_MIXIN, "useCustomIngredientPacketCodec",
+				"(Lnet/minecraft/network/codec/StreamCodec;)Lnet/minecraft/network/codec/StreamCodec;",
+				"injectCodec", "custom Ingredient packet codec");
+	}
+
+	private static void checkPrunedDeadInjector(byte[] original, String mixin, String dead, String deadDesc,
+			String survivor, String detailNeedle) {
+		byte[] pruned = new GuestInjectorPruner().transform(mixin, original, null);
+		assertNotSame(original, pruned, dead + " must be pruned");
+		ClassNode after = read(pruned);
+		assertEquals(null, methodByDesc(after, dead, deadDesc), dead + " goes");
+		assertNotNull(method(after, survivor), survivor + " (the working sibling) stays");
+		String config = GuestInjectorPruner.CONFIGS.get(mixin);
+		var finding = net.forbric.api.CompatibilityFindings.all().stream()
+				.filter(f -> f.id().startsWith("mixin-injector:" + config + ":" + mixin + "#" + dead + "(")).findFirst()
+				.orElseThrow(() -> new AssertionError("no finding for pruned " + dead));
+		assertEquals(net.forbric.api.CompatibilityFinding.Confidence.CONFIRMED, finding.confidence());
+		assertFalse(finding.required(), dead + " is a shipped loss, not a continue-or-quit");
+		assertTrue(finding.detail().contains(detailNeedle), finding.detail());
+		assertTrue(net.forbric.api.CompatibilityFindings.confirmedRequired().isEmpty());
+	}
+
+	private static byte[] oneDeadInjector(String mixinClass, String target, String deadName, String deadDesc,
+			String annotation, String selector, String atValue, String atTarget, String survivor) {
+		ClassWriter writer = new ClassWriter(0);
+		writer.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, mixinClass, null, "java/lang/Object", null);
+		org.objectweb.asm.AnnotationVisitor mixin = writer.visitAnnotation("Lorg/spongepowered/asm/mixin/Mixin;", true);
+		org.objectweb.asm.AnnotationVisitor targets = mixin.visitArray("targets");
+		targets.visit(null, target);
+		targets.visitEnd();
+		mixin.visitEnd();
+		injector(writer, deadName, deadDesc, annotation, selector, atValue, atTarget);
+		injector(writer, survivor, "(Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V",
+				"Lorg/spongepowered/asm/mixin/injection/Inject;", selector, "TAIL", atTarget);
+		writer.visitEnd();
+		return writer.toByteArray();
+	}
+
 	@Test
 	void aSecondPassChangesNothingFurther() throws Exception {
 		GuestInjectorPruner pruner = new GuestInjectorPruner();

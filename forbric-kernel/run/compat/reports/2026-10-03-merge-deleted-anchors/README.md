@@ -133,6 +133,12 @@ are re-derived here only if they reappear on the current kernel; the current arm
 | 6 | `fabric-item-api-v1` : `BrewingStandBlockEntityMixin` | `hasStackRecipeRemainder`, `createStackRecipeRemainder` | `@At(NEW)` descriptor `(Lclass_1935;)Lclass_1799;` translated (landed), but merged `doBrew` constructs no `ItemStack`; `Item.hasCraftingRemainingItem` moved to `ItemStack.hasCraftingRemainingItem`; only `captureItemStack` (`ItemStack.shrink`) binds | **MIXED → per-injector stand-down LANDED (GuestInjectorPruner)** |
 | 7 | `fabric-lifecycle-events-v1` : `WorldChunkMixin` | `onRemoveBlockEntity` | member+host survive; the slice `from=createBlockEntity` is empty because `Map.remove`@30/47 precede `createBlockEntity`@92; the eviction the handler watches is the `blockEntities.remove`@30 | **RETARGETABLE-SLICE, no mechanism → per-injector stand-down LANDED (GuestInjectorPruner)** |
 
+### Complete enumeration
+
+[`complete-enumeration.md`](complete-enumeration.md) lists every distinct `mixin-injector` id at the widest depth
+(`reports/2026-10-03-cluster1-verdicts-2`, kernel `53e0e61e`) with its type and evidence, including the clusters
+that are not on the original table.
+
 ### Retargets landed this pass (kernel fix, one commit)
 
 The translation gaps are one defect with one cause, not six per-mixin patches: `MixinNames` translated an

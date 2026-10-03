@@ -102,6 +102,15 @@ import net.forbric.kernel.util.ForbricLog;
  * that cannot work; pruning them records each as a finding that asks nothing, with the cost named, and leaves the
  * working {@code captureItemStack} in place.
  *
+ * <p>Two more single-injector stand-downs of the same kind, each with a working sibling left in place:
+ * fabric-item-api-v1's {@code AnvilScreenHandlerMixin#callAllowEnchantingEvent} ({@code @Redirect} on
+ * {@code Enchantment.canEnchant} in {@code AnvilMenu.createResult}; the merged createResult checks
+ * {@code ItemStack.supportsEnchantment} instead) and fabric-recipe-api-v1's
+ * {@code IngredientMixin#useCustomIngredientPacketCodec} ({@code @ModifyExpressionValue} on
+ * {@code StreamCodec.map} in {@code Ingredient.<clinit>}; the merged {@code <clinit>} builds the codec through
+ * {@code Either.map}). Both anchors are gone and neither handler fits the replacement, so both are pruned with the
+ * loss named.
+ *
  * <p><b>A lambda-selector retarget is NOT local — measured 2026-10-03, reverted.</b> A transformer that rewrote a
  * guest mixin's selectors onto the lambda the merged base declares cleared {@code SerializableRegistriesMixin}'s
  * finding, and the same subject then reported eleven more CONFIRMED {@code mixin-injector} losses plus a balm
@@ -125,6 +134,8 @@ public final class GuestInjectorPruner implements ClassTransformer {
 	static final String ITEM_STACK_MIXIN = "net.fabricmc.fabric.mixin.item.ItemStackMixin";
 	static final String WORLD_CHUNK_MIXIN = "net.fabricmc.fabric.mixin.event.lifecycle.server.WorldChunkMixin";
 	static final String BREWING_STAND_MIXIN = "net.fabricmc.fabric.mixin.item.BrewingStandBlockEntityMixin";
+	static final String ANVIL_HANDLER_MIXIN = "net.fabricmc.fabric.mixin.item.AnvilScreenHandlerMixin";
+	static final String INGREDIENT_MIXIN = "net.fabricmc.fabric.mixin.recipe.ingredient.IngredientMixin";
 	private static final String SHARED_INDEX = "Lcom/llamalad7/mixinextras/sugar/ref/LocalIntRef;";
 
 	/**
@@ -172,19 +183,30 @@ public final class GuestInjectorPruner implements ClassTransformer {
 							"(Lnet/minecraft/world/level/ItemLike;"
 									+ "Lcom/llamalad7/mixinextras/injector/wrapoperation/Operation;)"
 									+ "Lnet/minecraft/world/item/ItemStack;",
-							"Lnet/minecraft/world/level/block/entity/BrewingStandBlockEntity;doBrew")));
+							"Lnet/minecraft/world/level/block/entity/BrewingStandBlockEntity;doBrew")),
+			ANVIL_HANDLER_MIXIN, List.of(new Prune("callAllowEnchantingEvent",
+					"(Lnet/minecraft/world/item/enchantment/Enchantment;Lnet/minecraft/world/item/ItemStack;"
+							+ "Lnet/minecraft/core/Holder;)Z",
+					"Lnet/minecraft/world/inventory/AnvilMenu;createResult")),
+			INGREDIENT_MIXIN, List.of(new Prune("useCustomIngredientPacketCodec",
+					"(Lnet/minecraft/network/codec/StreamCodec;)Lnet/minecraft/network/codec/StreamCodec;",
+					"Lnet/minecraft/world/item/crafting/Ingredient;<clinit>")));
 
 	/** The mixin config each entry is declared in, which names the owning mod on the finding. */
 	static final Map<String, String> CONFIGS = Map.of(MODEL_MANAGER_MIXIN, "fabric-model-loading-api-v1.mixins.json",
 			ITEM_STACK_MIXIN, "fabric-item-api-v1.mixins.json",
 			WORLD_CHUNK_MIXIN, "fabric-lifecycle-events-v1.mixins.json",
-			BREWING_STAND_MIXIN, "fabric-item-api-v1.mixins.json");
+			BREWING_STAND_MIXIN, "fabric-item-api-v1.mixins.json",
+			ANVIL_HANDLER_MIXIN, "fabric-item-api-v1.mixins.json",
+			INGREDIENT_MIXIN, "fabric-recipe-api-v1.mixins.json");
 
 	/** Whether an entry applies on this boot, beyond the pruner's own switch. */
 	private static final Map<String, BooleanSupplier> ACTIVE = Map.of(MODEL_MANAGER_MIXIN, () -> true,
 			ITEM_STACK_MIXIN, GuestInjectorPruner::fabricTooltipBridgeOn,
 			WORLD_CHUNK_MIXIN, () -> true,
-			BREWING_STAND_MIXIN, () -> true);
+			BREWING_STAND_MIXIN, () -> true,
+			ANVIL_HANDLER_MIXIN, () -> true,
+			INGREDIENT_MIXIN, () -> true);
 
 	/** What is lost when an entry's class loads and is not pruned. */
 	private static final Map<String, String> COSTS = Map.of(MODEL_MANAGER_MIXIN,
@@ -196,7 +218,11 @@ public final class GuestInjectorPruner implements ClassTransformer {
 					+ "merged order) and is reported as a required CONFIRMED loss, so a STRICT launch halts on it",
 			BREWING_STAND_MIXIN, "the two injectors stay in the mixin, cannot attach (the merged doBrew calls "
 					+ "ItemStack.hasCraftingRemainingItem and constructs no ItemStack) and are reported as required "
-					+ "losses, so a STRICT launch halts on them");
+					+ "losses, so a STRICT launch halts on them",
+			ANVIL_HANDLER_MIXIN, "the redirect stays in the mixin, cannot attach (the merged createResult no longer "
+					+ "calls Enchantment.canEnchant) and is reported as a required loss, so a STRICT launch halts on it",
+			INGREDIENT_MIXIN, "the value modifier stays in the mixin, cannot attach (the merged <clinit> builds the codec "
+					+ "with Either.map, not StreamCodec.map) and is reported as a required loss, so a STRICT launch halts on it");
 
 	/** Why an entry's injectors cannot stay, for the log line. */
 	private static final Map<String, String> REASONS = Map.of(MODEL_MANAGER_MIXIN,
@@ -209,7 +235,13 @@ public final class GuestInjectorPruner implements ClassTransformer {
 					+ "(+30 blockEntities, +47 pendingBlockEntities) BEFORE createBlockEntity (+92), so the slice is empty",
 			BREWING_STAND_MIXIN, "the merged doBrew calls ItemStack.hasCraftingRemainingItem()/getCraftingRemainingItem() "
 					+ "(the owner moved Item->ItemStack, and the handler's Item parameter no longer matches) and never "
-					+ "constructs an ItemStack through the (ItemLike)ItemStack ctor the @WrapOperation wraps");
+					+ "constructs an ItemStack through the (ItemLike)ItemStack ctor the @WrapOperation wraps",
+			ANVIL_HANDLER_MIXIN, "the merged AnvilMenu.createResult no longer calls Enchantment.canEnchant(ItemStack); "
+					+ "NeoForge moved the check to ItemStack.supportsEnchantment(Holder), a different owner and parameter, "
+					+ "so the redirect's handler cannot bind",
+			INGREDIENT_MIXIN, "the merged Ingredient.<clinit> builds the packet codec through Either.map, not the "
+					+ "StreamCodec.map the @ModifyExpressionValue selects; the owner and return type both differ, so the "
+					+ "modifier binds nowhere");
 
 	/** What happens to an entry's mixin when a reshaped fabric-api leaves it untouched. */
 	private static final Map<String, String> DRIFT = Map.of(MODEL_MANAGER_MIXIN, "it will read PARTIAL and apply half — the state that made every block "
@@ -218,7 +250,9 @@ public final class GuestInjectorPruner implements ClassTransformer {
 					+ "tooltip providers show only above the item id in advanced tooltips",
 			WORLD_CHUNK_MIXIN, "the redirect soft-skips with Mixin's own warning, exactly as it did before this entry",
 			BREWING_STAND_MIXIN, "the two injectors soft-skip with Mixin's own warnings, exactly as they did before "
-					+ "this entry, and only captureItemStack binds");
+					+ "this entry, and only captureItemStack binds",
+			ANVIL_HANDLER_MIXIN, "the redirect soft-skips with Mixin's own warning, exactly as it did before this entry",
+			INGREDIENT_MIXIN, "the value modifier soft-skips with Mixin's own warning, exactly as it did before this entry");
 
 	/** The finding a removed injector records, or none when a kernel repair does its job. */
 	private static final Map<String, String> LOSSES = Map.of(MODEL_MANAGER_MIXIN,
@@ -231,6 +265,12 @@ public final class GuestInjectorPruner implements ClassTransformer {
 			BREWING_STAND_MIXIN, "the kernel removed this injector: fabric-item-api's crafting-remainder substitution no "
 					+ "longer applies to the brewing stand (doBrew calls ItemStack.hasCraftingRemainingItem and "
 					+ "getCraftingRemainingItem directly); the mixin's captureItemStack (the ItemStack.shrink inject) "
+					+ "still binds",
+			ANVIL_HANDLER_MIXIN, "the kernel removed this injector: fabric-item-api's AllowEnchanting event no longer "
+					+ "fires from AnvilMenu.createResult (NeoForge checks ItemStack.supportsEnchantment instead); the "
+					+ "mixin's other anchor still binds",
+			INGREDIENT_MIXIN, "the kernel removed this injector: fabric-recipe-api's custom Ingredient packet codec no "
+					+ "longer replaces the built-in one (the merged <clinit> uses Either.map); the mixin's injectCodec "
 					+ "still binds");
 
 	/**

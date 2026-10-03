@@ -125,6 +125,69 @@ PLAY_C2S:          resolved == PLAY_C2S
   — its anchor is gone`。1.21.1 的 `ServerConfigurationNetworkAddon` 不覆写 `handle`,该方法继承自
   `AbstractChanneledNetworkAddon`(已注入),所以功能上仍被覆盖;这是 claim 的按类 REQUIRED 判定,不是载荷 CCE。
 
-## 5. 结果(W7Harness 回填)
+## 5. 结果(W7Harness 实测,已回填)
 
-_(运行后填写:内核 sha256、results.jsonl 的整行、控制台断言计数。)_
+运行由 `W7Harness` 执行、读数逐字回传。内核 sha256
+`99d074757f9ef68d4076a9ac53ab1c104e71147125e92c709a2996dd685f04b6` —— 它自己的 clean-worktree 构建
+(`e22a3d3d`,`PayloadInterop.java` 是唯一改动文件)复现了这个 sha。报告在
+`w7/reports/2026-10-04-ecosystem-register-payload/`。
+
+(本报告作者在 `e22a3d3d` 上另做的一次 `gradlew clean` + 同参数 `jar` 也产出同一 sha256
+`99d07475…`,即冻结的那份字节确实来自该提交,两边独立构建逐字节一致。)
+
+**验收判据成立:`joined world via quick-play` 在真实客户端启动里出现。** 这是本轮 campaign 的**第一次完整客户端启动**:
+
+```json
+{"subject": "fabric-api-0.116.17+1.21.1.jar", "slug": "fabric-api", "kind": "random",
+ "kernel_sha256": "99d074757f9ef68d4076a9ac53ab1c104e71147125e92c709a2996dd685f04b6",
+ "java": "/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home/bin/java — java version \"21.0.7\" 2025-04-15 LTS",
+ "compatibility_policy": "continue", "run": "PASS", "exit": 0, "stopped": true, "killed": false,
+ "world": true, "frames": 1, "mod": "OK", "confirmed_required": 1, "seconds": 30, "contended": false}
+```
+
+逐行结果文件(`per-mod/results.jsonl`)里 `"run":"PASS","exit":0,"stopped":true,"killed":false,"world":true,
+"frames":1,"seconds":30,"contended":false`。
+
+**三条预登记断言(逐条计数,取自该 run 的 console.log,2566 行):**
+
+```
+1) ClientSmoke] joined world via quick-play                                1   <- MET
+2) RegistrationPayload cannot be cast to …MinecraftRegisterPayload        0   <- MET
+3) Failed to encode … (minecraft:register)                               0   <- MET
+```
+
+控制台逐字(证明是真实启动、不是侥幸行):
+
+```
+[07:16:25] [Render thread/INFO]: [Forbric/ClientSmoke] joined world via quick-play: W7Client
+[07:16:29] [Render thread/INFO]: [Forbric/ClientSmoke] screenshot written — 2026-10-04_07.16.29.png
+[07:16:34] [Render thread/INFO]: [Forbric/ClientSmoke] client-ready after 200 world tick(s)
+[07:16:35] [Render thread/INFO]: [Forbric/ClientSmoke] requesting clean disconnect after 220 world tick(s)
+[07:16:37] [Render thread/INFO]: [Forbric/ClientSmoke] clean disconnect observed; stopping client
+```
+
+`contended=false`、30 秒结束端到端(对照:今天早些时候同样是 fabric-api 的两次运行分别停在 620 s/800 s
+的 `STALL`)。
+
+**一句话的诚实边界:进世界把审计带到了更深处,于是暴露出 1 条新的 `CONFIRMED required`(此前看不到):**
+
+```
+mixin-injector:fabric-renderer-indigo.mixins.json:
+  net.fabricmc.fabric.mixin.client.indigo.renderer.SectionBuilderMixin#hookBuildRenderBlock
+detail: A required injector has no attachment in the actual defined class
+```
+
+这是 **fabric-renderer-indigo** 车道的另一件事,不是 `minecraft:register` 载荷 CCE(后者计数为 0);
+内核已按既有机制把它的 `require 1 → 0` 软化(console 第 315 行逐字:`…hookBuildRenderBlock: require 1 → 0 …`),
+所以它没有杀掉这次启动。要说的实话:早先的 `confirmed_required: 0` 是**世界之前**量的,那是"启动停在哪"
+的计数,不是清白证明;这条只在进世界后才可见。**它作为独立车道登记,不作为本车道的阻塞。**
+
+**预登记 §4 里那条已知告警逐字确认、不计为阻塞:**
+
+```
+forbric-common-network-interop#fabricAddonHandle was handed
+  net.fabricmc.fabric.impl.networking.server.ServerConfigurationNetworkAddon and made no edit — its anchor is gone.
+```
+
+1.21.1 的 `ServerConfigurationNetworkAddon` 不覆写 `handle`(javap),该方法继承自已注入的
+`AbstractChanneledNetworkAddon`,所以功能上仍被覆盖;这是 claim 的按类 REQUIRED 判定,不是载荷 CCE。

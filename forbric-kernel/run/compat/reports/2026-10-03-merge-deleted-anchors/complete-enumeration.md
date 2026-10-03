@@ -77,10 +77,16 @@ the recurring moves a group fix could address are: `Enchantment.canEnchant` → 
   `BlockBehaviour$Properties.copyOf(BlockBehaviour)` (`class_4970$class_2251`), and the mod calls it with the
   fabric-api subclass `FabricBlockSettings` as owner — a game member reached through a non-game owner the remap
   did not resolve. A remap gap in an ordinary mod class (the mixin path resolves inherited members; this one did
-  not), not an anchor. Revealed, not caused, by the deeper boot.
-* **`cobblemon_skills_api` `mod=FAILED`**: `ClassNotFoundException: com/cobblemon/mod/…` — cobblemon core is not in
-  the subject's closure (`deps = [fabric-api]`), so its classes referencing cobblemon cannot load. A corpus/closure
-  limit (same family as miguelfaction's missing `migueleconomy`), subject-side, not kernel.
+  not), not an anchor. Revealed, not caused, by the deeper boot. Re-verified against the raw jar in
+  [`read-mod-failed-rows.md`](read-mod-failed-rows.md) §3.1, which shows the asymmetry directly: `ModBlocks.<clinit>`
+  uses `class_4970$class_2251.method_9630` (resolved) and `FabricBlockSettings.method_9630` (survived) side by side.
+* **`cobblemon_skills_api` `mod=FAILED`**: `NoClassDefFoundError: net/puffish/skillsmod/api/reward/Reward` — the
+  missing class is **Pufferfish's Skills'** (not cobblemon core, which this note said before), the subject's
+  `fabric.mod.json` declares only `fabricloader`/`minecraft`/`fabric`, and no puffish/skills jar is in the corpus at
+  all: an undeclared, absent dependency of the subject's own packaging (same family as miguelfaction's missing
+  `migueleconomy`), subject-side, not kernel. Verified against the real jar in
+  [`read-mod-failed-rows.md`](read-mod-failed-rows.md) §3.2, which also records what the `mod` field actually is and
+  that arm 11's FAILED came from the harness's console fallback, not from a kernel catalogue row.
 
 ### Arm 8 (`reports/2026-10-03-cluster1-verdicts-8`, kernel `61bd1c6d`) — the new depth
 

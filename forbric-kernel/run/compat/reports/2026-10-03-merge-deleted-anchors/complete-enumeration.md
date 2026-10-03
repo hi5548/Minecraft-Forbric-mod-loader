@@ -64,6 +64,14 @@ the recurring moves a group fix could address are: `Enchantment.canEnchant` → 
 `RecordCodecBuilder.mapCodec`, `CustomPacketPayload.codec` (moved), and the dead paths
 (`trapdoorUsableAsLadder`, `PiglinAi.isBarterCurrency`).
 
+### Outstanding, separate defect classes (not this pass)
+
+* **cobblemon Auto-Battle** — `IncompatibleClassChangeError`: its `PokemonEntity` overrides a merged-base
+  `final LivingEntity.canBreatheUnderwater`. An override/finality conflict, not an anchor, access or translation
+  issue; left to its own pass.
+* **balm `FabricCropBlockMixin`** — the apply-time `InvalidInjectionException` → `VerifyError` cluster
+  ([`read-balm-cropblock.md`](read-balm-cropblock.md)); an apply/recovery defect, its own owner.
+
 ### Remaining CONFIRMED per subject (the load gate)
 
 The last fabric blocker was `entity-events LivingEntityMixin#setOccupiedState`, resolved in two halves: `a48ae7fb`
@@ -74,4 +82,12 @@ accept the 1.21.1 selector spelling, so the adapter (which already existed, pinn
 `ModifySleepingDirection`. Verified on the real 1.21.1 guest + merged bytes with a throwaway: `adapt` returns 2 and
 both bridges pass `BasicVerifier`. So fabric `confirmedRequired` should reach 0 and STRICT should pass — the first
 loading fabric run — leaving balm's `FabricCropBlockMixin` apply-time cluster, which is separate.
+
+With `cr=0` reached, the first *revealed* blocker was `IllegalAccessError: Bootstrap tried to access private
+BuiltInRegistries.createContents()`, and it was not the mixin: the kernel's fabric access-widener pass
+(`ClassTweakerTransformer`) was **inert**, because fabric writes wideners in the intermediary namespace and the
+runtime classes are Mojmap (verified: `class_7923 method_47487 ()V`, and after `6875f090`'s remap the tweaker's
+targets become Mojmap and `createContents` becomes `public`). That fix needs a **fresh remap cache** (REMAP_VERSION
+bumped to `1.21.1-6-accesswidener-namespace`).
+
 

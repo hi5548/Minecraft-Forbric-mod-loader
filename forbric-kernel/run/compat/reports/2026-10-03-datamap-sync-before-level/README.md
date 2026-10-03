@@ -699,3 +699,39 @@ file` after the child exits, which did not affect this row.)
 
 The client acceptance criterion is met, with the strongest evidence yet: the join line, plus 200 world ticks, both
 loaders' command trees present, and a tooltip read through the merged item stack.
+
+## 19. Closing the two driver gaps
+
+Both were in `KernelClientSmoke`, the kernel's own smoke driver, and both were false-true-string defects:
+a stop step that logged it had asked to leave the world and never did, and a screenshot step that logged a request
+and wrote no file. Commit `82f0dbf2`, `build-kernel.sh` sha256
+`16a952955c54fde0bf20f1df932db8c4521550b89cc3a7668b488ad9b3dc21fe`.
+
+**The stop path.** 1.21.1's merged `Minecraft` has no `disconnectWithSavingScreen` (that name is 1.21.2+); it has
+`disconnect()`, `disconnect(Screen)`, `disconnect(Screen, boolean)` and `stop()`. The driver invoked only
+`disconnectWithSavingScreen`, found nothing, warned, and stayed in the world until the harness timeout
+(`run=TIMEOUT cause=no-frame`). `leaveWorld` now chains the spellings — `disconnectWithSavingScreen`, then
+`disconnect()` (1.21.1's save-and-quit-to-title, which clears the level so the tick handler's "out of a world"
+branch runs and calls `stop()`) — and only warns when neither exists. `invokeNoArg` returns whether it found a
+method, so the absence warnings are the caller's and name both candidates.
+
+**The screenshot.** Two bugs stacked:
+- It was gated on `ready`, but `ready` only becomes true at world tick `READY_TICKS`, while the harness asks for the
+  screenshot at tick `readyTicks/2` — always unreachable, so `screenshotIfDue` never even ran (the console's zero
+  mentions of a screenshot). It is now called unconditionally while in a world, which is what the property
+  (`forbric.clientSmokeScreenshots` = "world ticks at which to save") always meant.
+- The reflective call was `Screenshot.grab(Minecraft, boolean)`, a signature that does not exist in 1.21.1 — the
+  real one is `grab(File gameDirectory, RenderTarget target, Consumer<Component> onSaved)`, which is what the game's
+  own screenshot key calls. It now reads `Minecraft.gameDirectory` and `getMainRenderTarget()` and calls that; then
+  it lists `<gameDir>/screenshots/*.png` and **warns loudly if none appeared**, instead of logging a request that
+  wrote nothing. `_grab` runs synchronously on the render thread, where `tick` already is, so a missing file is a
+  real failure rather than a race.
+
+Tests: `KernelClientSmokeTest` + `ClientSmokeTickInjectorTest`, 13 tests 0 failed (they cover `screenshotDue`).
+
+**Verification status: the arm is queued, not run.** The single quiet-box arm was requested against `82f0dbf2` but
+W7Harness has launched a full corpus sweep on the box, pinned to the same commit and the same sha
+(`16a95295…`, matched against ClientGate's build evidence), so the one arm waits behind it. That sweep runs the
+driver on every subject — including its teardown — which exercises the stop path in bulk; the observable to read
+when the single arm does run is **`exit=0` (or the driver's clean-stop marker), the join line still present,
+`frames>0`, and the row no longer `TIMEOUT`**. Nothing here is claimed as verified until that row exists.

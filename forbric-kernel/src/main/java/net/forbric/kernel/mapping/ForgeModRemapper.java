@@ -136,12 +136,22 @@ public final class ForgeModRemapper {
 	 */
 	public static void remapJar(Path input, Path output, IMappingProvider provider, List<Path> remapClasspath,
 			boolean mixinAnnotations) throws IOException {
-		// Remapped beside the output and moved into place only when it is complete. Writing to the final path is
-		// what let an interrupted remap leave a 22-byte empty zip where the cache expects a jar, and
-		// {@link ForbricCache#isCached} then called it a hit on every later boot; see that method for the fatal
-		// shape it produced. A repair pass runs first, so an entry left truncated by an older kernel heals.
-		Path partial = output.resolveSibling(output.getFileName() + ".partial");
-		Files.deleteIfExists(partial);
+		// Remapped beside the output and moved into place only when it is complete, so an interrupted remap cannot
+		// leave a stub where the cache expects a jar (see ForbricCache#isCached for the fatal shape that produced).
+		//
+		// The staging name ends in `.jar` and is UNIQUE per attempt, and both halves are load-bearing:
+		//
+		//  * `.jar` because tiny-remapper's OutputConsumerPath decides archive-vs-directory from the path, and a
+		//    name it does not read as an archive makes it write a DIRECTORY of extracted entries instead
+		//    (LICENSE-, META-INF/, assets/, net/ …). Measured: the first version of this staging used
+		//    `<output>.partial`, and the second subject of a shared cache died on
+		//    `DirectoryNotEmptyException` out of `Files.deleteIfExists(partial)` — a non-empty directory that
+		//    `deleteIfExists` cannot remove, left behind by subject 1, killing every subject after it.
+		//  * unique because two processes can share a cache directory, and a fixed staging name is then a shared
+		//    mutable path. A stale staging path from an older run is simply not looked at, which is also what makes
+		//    the leftover harmless: nothing deletes it, so nothing throws on it.
+		Path partial = output.resolveSibling(output.getFileName() + "." + Long.toHexString(System.nanoTime())
+				+ ".partial.jar");
 
 		TinyRemapper.Builder builder = TinyRemapper.newRemapper()
 				.withMappings(provider)
@@ -152,23 +162,64 @@ public final class ForgeModRemapper {
 		}
 		TinyRemapper remapper = builder.build();
 
-		try (OutputConsumerPath out = new OutputConsumerPath.Builder(partial).build()) {
-			out.addNonClassFiles(input);
+		try {
+			try (OutputConsumerPath out = new OutputConsumerPath.Builder(partial).build()) {
+				out.addNonClassFiles(input);
 
-			if (remapClasspath != null) {
-				for (Path cp : remapClasspath) {
-					remapper.readClassPath(cp);
+				if (remapClasspath != null) {
+					for (Path cp : remapClasspath) {
+						remapper.readClassPath(cp);
+					}
 				}
+
+				remapper.readInputs(input);
+				remapper.apply(out);
+			} finally {
+				remapper.finish();
 			}
 
-			remapper.readInputs(input);
-			remapper.apply(out);
+			stripSigningMetadata(partial);
+			Files.move(partial, output, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
 		} finally {
-			remapper.finish();
+			// Nothing of an attempt survives it, successful or not. `stripSigningMetadata` does its own rewrite
+			// through `<partial>.tmp`, and that one leaked too (a 22-byte empty zip beside the staging tree).
+			discardStaging(partial);
+			discardStaging(Path.of(partial + ".tmp"));
+			// And the LEGACY fixed staging name, from the one intermediate build that used it. Nothing writes it
+			// any more, so anything there is a leftover from a run that died — and it is exactly the shape that
+			// killed the next subject (a non-empty directory). `discardStaging` recurses and never throws, so
+			// clearing it cannot fail a launch, which is the whole difference from the `deleteIfExists` this
+			// replaced. A concurrent process cannot lose work here: the live staging name is unique per attempt.
+			discardStaging(output.resolveSibling(output.getFileName() + ".partial"));
+			discardStaging(output.resolveSibling(output.getFileName() + ".partial.tmp"));
 		}
+	}
 
-		stripSigningMetadata(partial);
-		Files.move(partial, output, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+	/**
+	 * Best-effort removal of a staging path, whether it is a file, an empty directory, or a directory holding a
+	 * whole extracted tree. Never throws: a leftover in a cache directory is not a reason to fail a launch, and the
+	 * failure this replaces was precisely a delete that threw.
+	 */
+	private static void discardStaging(Path path) {
+		try {
+			if (!Files.exists(path)) return;
+
+			if (Files.isDirectory(path)) {
+				try (java.util.stream.Stream<Path> walk = Files.walk(path)) {
+					walk.sorted(java.util.Comparator.reverseOrder()).forEach(entry -> {
+						try {
+							Files.deleteIfExists(entry);
+						} catch (IOException ignored) {
+							// best effort
+						}
+					});
+				}
+			} else {
+				Files.deleteIfExists(path);
+			}
+		} catch (IOException ignored) {
+			// best effort
+		}
 	}
 
 	/**

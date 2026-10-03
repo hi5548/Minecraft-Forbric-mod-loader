@@ -17,6 +17,7 @@
 package net.forbric.kernel.mapping;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -66,6 +67,62 @@ class ForgeModRemapperTest {
 
 		assertEquals("Lnet/minecraft/class_100;", fieldDesc(output, "com/example/mod/ForgeThing.class", "game"),
 				"the Mojmap field type should be remapped to the intermediary runtime name");
+	}
+
+	/**
+	 * The staging leftover that killed a whole run: a NON-EMPTY directory at the staging path.
+	 *
+	 * <p>Measured 2026-10-03 on a shared remap cache: the first version of the atomic-write staging used
+	 * {@code <output>.partial}, tiny-remapper wrote a DIRECTORY of extracted entries there (it decides
+	 * archive-vs-directory from the path), and the next subject died in
+	 * {@code Files.deleteIfExists(partial)} with {@code DirectoryNotEmptyException} — one subject's leftover
+	 * failing every subject after it. This reproduces that shape directly: the stale tree and a stale 22-byte
+	 * {@code .partial.tmp} (the empty-zip stub) are both pre-created, and the remap must still succeed, produce a
+	 * readable archive, and leave neither behind.
+	 */
+	@Test
+	void survivesAndClearsAStaleNonEmptyStagingDirectory(@TempDir Path dir) throws Exception {
+		Path inter = Files.write(dir.resolve("intermediary.tiny"), INTERMEDIARY_TINY.getBytes(StandardCharsets.UTF_8));
+		Path moj = Files.write(dir.resolve("client.txt"), MOJMAP_PROGUARD.getBytes(StandardCharsets.UTF_8));
+		ForbricMappings mappings = ForbricMappings.load(inter, moj);
+
+		ClassWriter cw = new ClassWriter(0);
+		cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "com/example/mod/ForgeThing", null, "java/lang/Object", null);
+		cw.visitField(Opcodes.ACC_PUBLIC, "game", "Lcom/example/Foo;", null, null).visitEnd();
+		cw.visitEnd();
+
+		Path input = dir.resolve("mod.jar");
+
+		try (ZipOutputStream zos = new ZipOutputStream(Files.newOutputStream(input))) {
+			zos.putNextEntry(new ZipEntry("com/example/mod/ForgeThing.class"));
+			zos.write(cw.toByteArray());
+			zos.closeEntry();
+		}
+
+		Path output = dir.resolve("mod-remapped.jar");
+		// The shape that crashed it: a non-empty directory at the fixed staging name, plus the empty-zip temp.
+		Path stale = dir.resolve("mod-remapped.jar.partial");
+		Files.createDirectories(stale.resolve("net/example"));
+		Files.write(stale.resolve("net/example/Extracted.class"), new byte[] {1, 2, 3});
+		Files.write(dir.resolve("mod-remapped.jar.partial.tmp"), new byte[22]);
+
+		ForgeModRemapper.remapJar(input, output, mappings, List.of());
+
+		assertEquals("Lnet/minecraft/class_100;", fieldDesc(output, "com/example/mod/ForgeThing.class", "game"),
+				"a stale non-empty staging directory must not stop the remap");
+		assertTrue(Files.isRegularFile(output), "the output must be a jar, not the extracted tree");
+
+		try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(output.toFile())) {
+			assertTrue(zip.size() > 0, "the remapped output must actually hold entries");
+		}
+
+		try (var listing = Files.list(dir)) {
+			List<String> leftovers = listing.map(p -> p.getFileName().toString())
+					.filter(name -> name.contains(".partial"))
+					.toList();
+			assertEquals(List.of(), leftovers,
+					"neither the new staging name nor the legacy <output>.partial/.partial.tmp may survive");
+		}
 	}
 
 	private static String fieldDesc(Path jar, String entry, String fieldName) throws Exception {

@@ -240,3 +240,38 @@ net/fabricmc/fabric/mixin/event/lifecycle/client/WorldChunkMixin:onRemoveBlockEn
 才算，不再接受任何推断性标记。另外，客户端至今**没有一次读到 world**，卡点是
 `ClientShaderFix` 的着色器路径缺陷（`neoforge:neoforge:shaders/…` 的双命名空间），不是本车道。
 
+## 8. 验收读数（`b9db9617`，已量）
+
+运行由 `W7Harness` 执行、读数逐字回传，报告在 `reports/2026-10-04-client-fabricapi-spelling/`，
+本内核 sha256 `1cebf2848d57a15afd0956cc25a83ae69a51838a96cf249fcc920e584873b3a6`：
+
+```
+compatibility-report.json   confirmedRequired: 0   枚举: 0
+console  WorldChunkMixin    retargeted guest mixin net/fabricmc/fabric/mixin/event/lifecycle/client/
+                              WorldChunkMixin:onRemoveBlockEntity onto the blockEntities Map.remove
+                              at instruction 20 (factory at 72)
+console  'retarget DECLINED'           0 次（全日志）
+console  'retargeted guest mixin …'    6 行（上一轮 5 行，第 6 行是 B）
+```
+
+**验收判据的第一支因此成立：`CONFIRMED required` 集合为空**，并有一条可逐字引用的控制台行证明最后一个成员是
+被重锚掉的，而不是别的什么让它消失。B 照 §7 的预先登记只认这一行，现在这一行在。
+
+**同时把两句话分开，不合并且不夸大：**
+
+1. **"客户端 fabric-api 的 CONFIRMED required 集合为空"**——**已量**（上一段）。
+2. **"客户端在默认 `ask` 策略下能起得来"**——**未establish**：本次运行仍然停在 `TitleScreen`
+   （`world=false`，console 已 1500+ 行、`EventMux … forwarded 200 frames`，活着并在渲染，但从未进世界），
+   卡点是 `ClientShaderFix` 的着色器路径，不在本车道。所以"集合为空"与"启动能过 `ask`"是两件事，
+   前者已证，后者待着色器修复后再证。
+
+另外，验收判据的第二支（"每一条剩余项都有具名原因与记录在案的代价"）在本批里也成立，只是用于**已退出**的
+13 条：它们的代价逐条写在 `MergedBaseMixinCompat` 的注释与 §3，集合里没有剩余项。
+
+**得到这个结果的过程本身值得留在记录里**：三次测量、零个被接受的推断——`ChunkAccess` owner 假设由常量池
+证伪，描述符假设由合并基底证伪，随后是插桩把
+`@Redirect method= is [owner 限定] not [裸名]` 打出来；据此落地的修复是**接受面修补**（两种写法指向同一成员，
+描述符逐字相同），不是把谓词放宽。我自己推断出来的标记（`retargeted guest mixin fabric-item-api-v1 …`）
+在修复前后都不存在，那次"0 命中"没有任何证明力，这条也留在 §7。
+
+

@@ -9,7 +9,7 @@ merged-base read for each new cluster.
 
 | id | type | evidence | landed |
 |---|---|---|---|
-| `entity-events LivingEntityMixin#setOccupiedState` | lambda renumber **+ host refactor** | `@Redirect` on `lambda$stopSleeping$9(BlockPos)V` (merged declares `$11`/`$12`; only `$12` is referenced from `stopSleeping`'s invokedynamic) and on `Level.setBlock` in `startSleeping` (merged calls `BlockState.setBedOccupied(Level,BlockPos,LivingEntity,Z)V`) | lambda half **landed (a48ae7fb)**; `startSleeping` host anchor needs an adapter |
+| `entity-events LivingEntityMixin#setOccupiedState` | lambda renumber **+ host refactor** | `@Redirect` on `lambda$stopSleeping$9(BlockPos)V` (merged declares `$11`/`$12`; only `$12` is referenced from `stopSleeping`'s invokedynamic) and on `Level.setBlock` in `startSleeping` (merged calls `BlockState.setBedOccupied(Level,BlockPos,LivingEntity,Z)V`) | lambda half **landed (a48ae7fb)**; host half **landed (524454fc)** — `FabricEntityMixinAnchors.bedOccupation` now accepts the 1.21.1 selector spelling and bridges to `forbric$setBedOccupied`, firing `EntitySleepEvents.SetBedOccupationState` |
 | `entity-events LivingEntityMixin#modifyWakeUpPosition` | lambda renumber | `@Redirect` on `lambda$stopSleeping$9(BlockPos)V` → `$12`; `BedBlock.findStandUpPosition` present inside `$12` | **landed (a48ae7fb)** |
 | `entity-events LivingEntityMixin#onIsSleepingInBed` | lambda renumber | `@Inject` on `lambda$checkBedExists$7(BlockPos)Boolean` → `$10` (only `$10` referenced) | **landed (a48ae7fb)** |
 | `content-registries AbstractFurnaceBlockEntityMixin#canUseAsFuelRedirect` | anchor gone at the call site | merged `isFuel` calls `ForgeHooks.getBurnTime`, not `getFuel`; handler returns Map vs the call's int → not retargetable | **per-injector stand-down landed (6d316525)** |
@@ -27,7 +27,7 @@ merged-base read for each new cluster.
 | `transfer-api SimpleInventoryMixin#fabric_redirectMarkDirty` | kernel false positive | same row | **FIXED (2a5dd7a7)** |
 | `item-api AnvilScreenHandlerMixin#callAllowEnchantingEvent` | anchor gone | `@Redirect` on `Enchantment.canEnchant(ItemStack)Z` in `AnvilMenu.createResult`; merged createResult+571 calls `ItemStack.supportsEnchantment(Holder)Z` (owner + parameter differ) | **per-injector stand-down landed (this commit)** |
 | `recipe-api IngredientMixin#useCustomIngredientPacketCodec` | anchor gone | `@ModifyExpressionValue` on `StreamCodec.map(Function,Function)` in `Ingredient.<clinit>`; merged `<clinit>`+11 calls `Either.map(...)Object` (owner + return differ) | **per-injector stand-down landed (this commit)** |
-| `entity-events LivingEntityMixin#onGetSleepingDirection` | host refactor | `@WrapOperation` on `BedBlock.getBedOrientation(BlockGetter,BlockPos)Direction`; merged `getBedOrientation` calls `BlockState.getBedDirection(LevelReader,BlockPos)` | declined (ABI) |
+| `entity-events LivingEntityMixin#onGetSleepingDirection` | host refactor | `@WrapOperation` on `BedBlock.getBedOrientation(BlockGetter,BlockPos)Direction`; merged `getBedOrientation` calls `BlockState.getBedDirection(LevelReader,BlockPos)` | **landed (524454fc)** — `FabricEntityMixinAnchors.sleepDirection` bridges to `forbric$modifySleepingDirection`, firing `EntitySleepEvents.ModifySleepingDirection` |
 | `balm FabricCropBlockMixin#getGrowthSpeed` | dead-path overload | merged `CropBlock` declares both `getGrowthSpeed(BlockState,…)` and `getGrowthSpeed(Block,…)`; `randomTick+40` calls the `BlockState` overload, leaving the `Block` one (the mixin's target) uncalled | balm cluster (retarget candidate) |
 | `balm FabricCropBlockMixin#getGrowthSpeedCaptureLocals` | apply-time failure | sugar wrapper throws | balm cluster |
 | `balm PlayerMixin#getDestroySpeed` | not read this pass | balm-only; grouped with the balm cluster | open |
@@ -66,10 +66,12 @@ the recurring moves a group fix could address are: `Enchantment.canEnchant` → 
 
 ### Remaining CONFIRMED per subject (the load gate)
 
-`entity-events LivingEntityMixin` ×3: `a48ae7fb` resolves the renumbered-lambda half of `modifyWakeUpPosition`,
-`onIsSleepingInBed` and `setOccupiedState`; what remains are the **host refactors** — `setOccupiedState`'s
-`startSleeping` anchor (`Level.setBlock` → `BlockState.setBedOccupied`) and `onGetSleepingDirection`
-(`BedBlock.getBedOrientation` → `BlockState.getBedDirection`), where the new host carries the behaviour but the
-handler ABI changed, so it needs a bespoke adapter (not an annotation rewrite), with the equal-depth A/B.
-Balm's `FabricCropBlockMixin` is the separate apply-time cluster.
+The last fabric blocker was `entity-events LivingEntityMixin#setOccupiedState`, resolved in two halves: `a48ae7fb`
+moved the renumbered lambda selector to the merged body, and `524454fc` made `FabricEntityMixinAnchors.bedOccupation`
+accept the 1.21.1 selector spelling, so the adapter (which already existed, pinned to the 26.2 spelling) now bridges
+`startSleeping`'s `BlockState.setBedOccupied` to `forbric$setBedOccupied` and fires
+`EntitySleepEvents.SetBedOccupationState`; `sleepDirection` does the same for `onGetSleepingDirection` /
+`ModifySleepingDirection`. Verified on the real 1.21.1 guest + merged bytes with a throwaway: `adapt` returns 2 and
+both bridges pass `BasicVerifier`. So fabric `confirmedRequired` should reach 0 and STRICT should pass — the first
+loading fabric run — leaving balm's `FabricCropBlockMixin` apply-time cluster, which is separate.
 

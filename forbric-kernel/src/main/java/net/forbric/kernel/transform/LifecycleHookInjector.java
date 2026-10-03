@@ -263,8 +263,9 @@ public final class LifecycleHookInjector implements ClassTransformer {
 	 * what this pass put at the same instruction instead. Public so a test — or a headless probe — can assert the
 	 * row without a boot, and so the two readers and the writer share one construction.
 	 */
-	public static MergedBaseCalleeSwaps.Substitution substitutionRow(String hostClass, String hostMethod, String owner,
-			String name, String desc, Ecosystem ecosystem, String hookOwner, String hookName, String hookDesc) {
+	public static MergedBaseCalleeSwaps.Substitution substitutionRow(String hostClass, org.objectweb.asm.tree.MethodNode host,
+			String owner, String name, String desc, Ecosystem ecosystem, String hookOwner, String hookName,
+			String hookDesc) {
 		// EVERY ecosystem, deliberately — not the family whose arm fired. A carrier substitution is family-scoped
 		// because a mod compiled against another family's jar never had that call to begin with, so its anchor
 		// missing is what it would do natively. This swap is the KERNEL's: it replaced the call in the base for
@@ -273,7 +274,12 @@ public final class LifecycleHookInjector implements ClassTransformer {
 		// loader class precisely because that is what it exists to interact with — and the census kept reporting
 		// `1/2 anchors resolve, missing: @At(INVOKE) …ServerModLoader.load in Main.main` on a boot where the swap had
 		// been published. The family of the arm is still named in the text because it is the provenance of the row.
-		return new MergedBaseCalleeSwaps.Substitution(hostClass, hostMethod, "L" + owner + ";" + name + desc,
+		// host.name + host.desc, never the bare name: the lookup this row is read by keys on the method as
+		// MixinRetarget asks it — `name + descriptor` — so a bare name matches nothing and the row is silently inert.
+		// Measured on a real boot: the pass published `Main.main` and the reader asked for
+		// `main([Ljava/lang/String;)V`, so `substitution(...)` answered row=none on a NEOFORGE guest while the redirect
+		// for that very call was logged twice. Taking the node rather than two strings is what makes that impossible.
+		return new MergedBaseCalleeSwaps.Substitution(hostClass, host.name + host.desc, "L" + owner + ";" + name + desc,
 				"L" + hookOwner + ";" + hookName + hookDesc,
 				java.util.Set.of(Ecosystem.FABRIC, Ecosystem.FORGE, Ecosystem.NEOFORGE),
 				"the kernel owns the lifecycle: this pass replaced " + owner.replace('/', '.') + "." + name
@@ -324,7 +330,7 @@ public final class LifecycleHookInjector implements ClassTransformer {
 				// a call that is no longer there (Sinytra Connector's boot.ServerMainMixin#earlyInit, whose
 				// `@At(INVOKE) ServerModLoader.load in Main.main` read as missing on every subject while the console
 				// line above was naming that very call as ours).
-				MergedBaseCalleeSwaps.kernelSubstituted(substitutionRow(transformClass, transformMethod, t.owner(),
+				MergedBaseCalleeSwaps.kernelSubstituted(substitutionRow(transformClass, m, t.owner(),
 						t.name(), t.desc(), t.ecosystem(), hookOwner, call.name, call.desc));
 				ForbricLog.info("[Forbric/Lifecycle] redirected genuine loader trigger %s.%s to %s.%s from %s.%s "
 						+ "— kernel owns the lifecycle", t.owner(), t.name(), hookOwner, t.hookName(),

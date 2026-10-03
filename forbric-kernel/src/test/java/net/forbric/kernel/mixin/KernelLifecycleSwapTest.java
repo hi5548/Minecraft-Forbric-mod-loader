@@ -57,6 +57,7 @@ class KernelLifecycleSwapTest {
 
 	@AfterEach
 	void reset() {
+		MergedBaseCalleeSwaps.forgetKernelSubstitutions();
 		MixinStubRebind.forget();
 		MixinRetarget.reset();
 		MergedBaseCalleeSwaps.forgetKernelSubstitutions();
@@ -121,8 +122,25 @@ class KernelLifecycleSwapTest {
 
 	/** The row the pass publishes for the redirect it makes, built by the pass's own constructor. */
 	private static MergedBaseCalleeSwaps.Substitution row() {
-		return LifecycleHookInjector.substitutionRow(MAIN, MAIN_METHOD, TRIGGER_OWNER, "load", "()V",
+		org.objectweb.asm.tree.MethodNode host = new org.objectweb.asm.tree.MethodNode(
+				Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "main", "([Ljava/lang/String;)V", null, null);
+		return LifecycleHookInjector.substitutionRow(MAIN, host, TRIGGER_OWNER, "load", "()V",
 				Ecosystem.NEOFORGE, HOOK_OWNER, "onServerModLoadingNoArg", "()V");
+	}
+
+	/**
+	 * The row has to be keyed the way the READER asks, and the reader asks by {@code name + descriptor}
+	 * ({@code MixinRetarget} passes {@code method.name + method.desc}) while the pass knows its host method by bare
+	 * name. Publishing the bare name made the row silently inert on a real boot — the redirect was logged twice and
+	 * `substitution(...)` still answered {@code row=none} for a NEOFORGE guest — and only a boot could see it, because
+	 * every driver and test up to then had built its own row instead of exercising this builder.
+	 */
+	@Test
+	void theRowIsKeyedByTheMethodAsTheReaderAsksForIt() {
+		MergedBaseCalleeSwaps.kernelSubstituted(row());
+		assertEquals(MAIN + ".main([Ljava/lang/String;)V", row().target() + "." + row().method());
+		assertTrue(MergedBaseCalleeSwaps.substitution(MAIN, "main([Ljava/lang/String;)V", TRIGGER, Ecosystem.NEOFORGE)
+				!= null, "the reader asks with the descriptor; a row keyed by the bare name is found by nobody");
 	}
 
 	private static Function<String, byte[]> resolver(byte[] main) {

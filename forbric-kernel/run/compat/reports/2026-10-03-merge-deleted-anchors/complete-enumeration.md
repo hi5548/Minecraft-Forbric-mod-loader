@@ -9,11 +9,11 @@ merged-base read for each new cluster.
 
 | id | type | evidence | landed |
 |---|---|---|---|
-| `entity-events LivingEntityMixin#setOccupiedState` | lambda renumber **+ host refactor** | `@Redirect` on `lambda$stopSleeping$9(BlockPos)V` (merged declares `$11`/`$12`, two same-descriptor candidates ⇒ `LambdaSelectorRetarget` declines) and on `Level.setBlock` in `startSleeping` (merged calls `BlockState.setBedOccupied(Level,BlockPos,LivingEntity,Z)V`) | declined (ABI + ambiguity) |
-| `entity-events LivingEntityMixin#modifyWakeUpPosition` | lambda renumber | `@Redirect` on `lambda$stopSleeping$9(BlockPos)V`; `BedBlock.findStandUpPosition` is present inside `$11`/`$12` | declined (2 candidates) |
-| `entity-events LivingEntityMixin#onIsSleepingInBed` | lambda renumber | `@Inject` on `lambda$checkBedExists$7(BlockPos)Boolean`; merged declares `$9`/`$10` | declined (2 candidates) |
-| `content-registries AbstractFurnaceBlockEntityMixin#canUseAsFuelRedirect` | anchor gone at the call site | merged `isFuel` calls `ForgeHooks.getBurnTime`, not `getFuel` | per-injector (3/5 anchors survive) |
-| `content-registries AbstractFurnaceBlockEntityMixin#getFuelTimeRedirect` | anchor gone at the call site | merged `getBurnDuration+19` calls `ForgeHooks.getBurnTime` | per-injector |
+| `entity-events LivingEntityMixin#setOccupiedState` | lambda renumber **+ host refactor** | `@Redirect` on `lambda$stopSleeping$9(BlockPos)V` (merged declares `$11`/`$12`; only `$12` is referenced from `stopSleeping`'s invokedynamic) and on `Level.setBlock` in `startSleeping` (merged calls `BlockState.setBedOccupied(Level,BlockPos,LivingEntity,Z)V`) | lambda half **landed (a48ae7fb)**; `startSleeping` host anchor needs an adapter |
+| `entity-events LivingEntityMixin#modifyWakeUpPosition` | lambda renumber | `@Redirect` on `lambda$stopSleeping$9(BlockPos)V` → `$12`; `BedBlock.findStandUpPosition` present inside `$12` | **landed (a48ae7fb)** |
+| `entity-events LivingEntityMixin#onIsSleepingInBed` | lambda renumber | `@Inject` on `lambda$checkBedExists$7(BlockPos)Boolean` → `$10` (only `$10` referenced) | **landed (a48ae7fb)** |
+| `content-registries AbstractFurnaceBlockEntityMixin#canUseAsFuelRedirect` | anchor gone at the call site | merged `isFuel` calls `ForgeHooks.getBurnTime`, not `getFuel`; handler returns Map vs the call's int → not retargetable | **per-injector stand-down landed (6d316525)** |
+| `content-registries AbstractFurnaceBlockEntityMixin#getFuelTimeRedirect` | anchor gone at the call site | merged `getBurnDuration+19` calls `ForgeHooks.getBurnTime` | **per-injector stand-down landed (6d316525)** |
 | `balm FabricCropBlockMixin#randomTickPreGrow` | apply-time failure (whole mixin aborts) | MixinExtras sugar `getGrowthSpeedCaptureLocals` throws `InvalidInjectionException`; the mixin never applies, so every handler is unattached | balm cluster (report) |
 | `balm FabricCropBlockMixin#randomTickPostGrow` | apply-time failure (whole mixin aborts) | same | balm cluster (report) |
 
@@ -47,7 +47,29 @@ merged-base read for each new cluster.
 
 ## Totals
 
-At this depth: 21 distinct `mixin-injector` ids. Of them, 7 required-CONFIRMED, 10 required-SUSPECTED,
-3 CONFIRMED-not-required (landed losses), 1 neither. After `2a5dd7a7` (transfer ×4 false positive) and this
-commit's anvil+ingredient stand-downs, the required population is entity-events ×4, content-registries ×2, balm ×5
-— i.e. the two mechanism clusters (lambda/ABI, apply-time) and the fuel call-site swap, all already reported.
+At this depth: 21 distinct `mixin-injector` ids (7 required-CONFIRMED, 10 required-SUSPECTED, 3 landed-recorded,
+1 neither) and 26 distinct `mixin`-shape required ids (all SUSPECTED; 17 universe-wide, 9 subject singletons).
+After `2a5dd7a7` (transfer ×4 false positive), `58ff96b6` (anvil+ingredient), `6d316525` (furnace fuel) and
+`a48ae7fb` (caller-aware lambda disambiguation), the remaining required injectors are entity-events ×4 and balm ×5;
+the remaining required block that is not an injector is the `mixin`-shape long tail below.
+
+### The `mixin`-shape long tail is `required` hygiene, not the gate
+
+W7Harness measured it: `req` fell 354 → 317 → 242 across three arms while `cr` stayed 69 → 51 → 51, so these
+entries are invisible to the load criterion. 17 of the 26 appear in all 10 subjects (the fabric-api recurring
+member-moves plus the one-off relocations shared by every fabric-api closure); 9 are singletons (balm, kiwi,
+cobblemon) and cannot be group-fixed by construction. Each keeps working anchors, so none should be pinned whole;
+the recurring moves a group fix could address are: `Enchantment.canEnchant` → `ItemStack.supportsEnchantment`,
+`Item.hasCraftingRemainingItem` → `ItemStack.hasCraftingRemainingItem`, `RecordCodecBuilder.create` →
+`RecordCodecBuilder.mapCodec`, `CustomPacketPayload.codec` (moved), and the dead paths
+(`trapdoorUsableAsLadder`, `PiglinAi.isBarterCurrency`).
+
+### Remaining CONFIRMED per subject (the load gate)
+
+`entity-events LivingEntityMixin` ×3: `a48ae7fb` resolves the renumbered-lambda half of `modifyWakeUpPosition`,
+`onIsSleepingInBed` and `setOccupiedState`; what remains are the **host refactors** — `setOccupiedState`'s
+`startSleeping` anchor (`Level.setBlock` → `BlockState.setBedOccupied`) and `onGetSleepingDirection`
+(`BedBlock.getBedOrientation` → `BlockState.getBedDirection`), where the new host carries the behaviour but the
+handler ABI changed, so it needs a bespoke adapter (not an annotation rewrite), with the equal-depth A/B.
+Balm's `FabricCropBlockMixin` is the separate apply-time cluster.
+

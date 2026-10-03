@@ -139,6 +139,12 @@ are re-derived here only if they reappear on the current kernel; the current arm
 (`reports/2026-10-03-cluster1-verdicts-2`, kernel `53e0e61e`) with its type and evidence, including the clusters
 that are not on the original table.
 
+It splits the remaining work by whether it can gate a load: the `mixin-injector` CONFIRMED set is the gate (now
+`entity-events` host-refactors + the balm apply-time cluster), while the 26 `mixin`-shape required ids are
+`required` hygiene — invisible to the load criterion (`req` 354→317→242 while `cr` 69→51→51), 17 universe-wide and
+9 subject singletons, the singletons ungroupable by construction, and none pinnable whole (each keeps working
+anchors). The recurring hygiene moves are named there for whoever picks them up.
+
 ### Retargets landed this pass (kernel fix, one commit)
 
 The translation gaps are one defect with one cause, not six per-mixin patches: `MixinNames` translated an

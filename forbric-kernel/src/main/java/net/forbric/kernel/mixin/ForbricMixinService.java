@@ -515,6 +515,12 @@ public final class ForbricMixinService
 				// Remove one named mixin from the config's mixins/client/server arrays, leaving the mod's other
 				// mixins to apply. Needed for a mixin that applies cleanly but breaks at RUNTIME on the merged base.
 				String token = Pattern.quote("\"" + mixin + "\"");
+				// Report a suppression only when THIS config declared the name. The list can legitimately carry a
+				// name this module does not ship — fabric-registry-sync's class moved between fabric-api
+				// generations and the pin lists both — and a "suppressed X" line for a class that is not in the
+				// config is a true-sounding statement about something that did not happen, which is exactly the
+				// shape that misleads the next reader of a load report.
+				if (!json.contains("\"" + mixin + "\"")) continue;
 				json = json.replaceAll(",\\s*" + token, "")
 						.replaceAll(token + "\\s*,", "")
 						.replaceAll(token, "");

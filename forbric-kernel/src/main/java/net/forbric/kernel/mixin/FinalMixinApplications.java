@@ -178,7 +178,13 @@ public final class FinalMixinApplications {
     if(unattached&&superseded==null&&SupersededMixins.replacementFor(mixin)!=null)SupersededMixins.awaitProof(plan.config().name(),mixin);
     // Natively an injector below its require/defaultRequire throws InjectionError, an Error no config-level
     // `required:false` catches: the author declared that injection mandatory whatever the config says.
-    boolean required=plan.config().required()||injector.minimum()>=1;
+    // The injector's OWN effective requirement decides (minimum() already folds the config's defaultRequire and lets
+    // an explicit require=0 override it, exactly as InjectionInfo.readInjectionPoints does). The config's
+    // `required` flag stays out of it: a config-level `required:false` must not excuse an injector whose own require
+    // is met (the reason this used to OR it in), but ORing it also made a config-declared-required mixin's OPTIONAL
+    // injectors required — cobblecoop ships `"required": true` with a `require = 0` handler, and that handler's
+    // absence was counted as a loss the module had opted out of.
+    boolean required=injector.minimum()>=1;
     if(superseded!=null)CompatibilityFindings.record(new CompatibilityFinding(id,mod,
       "Mixin injection "+injector.name(),"mixin-application:"+plan.config().name(),CompatibilityFinding.Confidence.RESOLVED,
       plan.config().required()||injector.minimum()>=1,superseded,List.of("target="+binary,"handler="+injector.symbol(),superseded)));

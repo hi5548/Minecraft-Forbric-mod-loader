@@ -464,7 +464,16 @@ public final class MixinFit {
 				: hits.isEmpty() ? String.join("|", misses)
 				: String.join("|", misses) + " (" + hits.size() + "/" + selectors.size() + " selectors hit)";
 		if (hits.isEmpty()) {
-			out.add(new Anchor("@Inject target", where, false));
+			// `require = 0` is the module saying this injection may not apply — natively Mixin applies the mixin
+			// and skips it, with a warning, and nothing is lost that the author did not already allow for. Counted
+			// hard it became UNFIT, which auto-suppressed the whole mixin and reported a required loss the mod had
+			// explicitly opted out of (measured: cobblecoop's BattlePositionsCompatibilityMixin, whose
+			// `@Inject(method = "battlePositions$getSlotIndex", require = 0, remap = false)` names a member the
+			// Cobblemon version in its own closure does not have). Soft: PARTIAL with the reason, never UNFIT.
+			int required = 1;
+			Object declared = value(injector, "require");
+			if (declared instanceof Number n) required = n.intValue();
+			out.add(new Anchor("@Inject target", where, false, required == 0));
 			return;
 		}
 		// The move MixinStubRebind will make for an injector bound to a carrier stub its own platform ran as a body

@@ -48,6 +48,7 @@ import net.forbric.api.Ecosystem;
 import net.forbric.api.EventBridges;
 import net.forbric.api.ForeignType;
 import net.forbric.api.GameEventBridge;
+import net.forbric.kernel.interop.PayloadCaptureFields;
 import net.forbric.kernel.util.ForbricLog;
 
 /**
@@ -398,22 +399,74 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 	 * <p>The only shape the builder emits is a method owner. Anything else carrying the legacy prefix — a field
 	 * owner, a {@code new}, a class constant — would survive this pass and fail at link time far away from here,
 	 * so {@link #stillNamesTheOldLoader} re-reads the finished bytes and says so out loud.
+	 *
+	 * <p>The spliced body also carries the builder's CAPTURED-FIELD names, which are just as generation-specific as
+	 * the owner: a base whose provider declares {@code val$map} is read as {@code val$idToType}, killing the first
+	 * handshake packet with a {@code NoSuchFieldError}. The same permanence argument applies — the kernel owns what
+	 * its base links against — so {@link #repointTheSplicedCaptureReads} resolves those reads from the class's own
+	 * field table, from the one resolution {@link PayloadCaptureFields} also feeds the runtime read.
 	 */
 	private static boolean adoptInteropHooksTheBaseStillNamesAfterTheOldLoader(ClassNode node) {
 		boolean changed = false;
+		boolean repointedCaptures = false;
 		for (MethodNode method : node.methods) {
 			if (method.instructions == null) continue;
+			boolean callsInterop = false;
 			for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
 				if (!(insn instanceof MethodInsnNode call)) continue;
+				boolean isCodecLookup = isPayloadCodecLookup(call);
 				String adopted = LEGACY_INTEROP_OWNERS.get(call.owner);
-				if (adopted == null) continue;
-				call.owner = adopted;
-				changed = true;
+				if (adopted != null) {
+					call.owner = adopted;
+					changed = true;
+				}
+				callsInterop |= isCodecLookup;
+			}
+			if (callsInterop) {
+				boolean repointed = repointTheSplicedCaptureReads(node, method);
+				repointedCaptures |= repointed;
+				changed |= repointed;
 			}
 		}
 		if (changed) {
 			ForbricLog.warn("[Forbric/MergedBaseCompat] adopted old-loader interop hooks named by %s",
 					node.name.replace('/', '.'));
+		}
+		if (repointedCaptures) {
+			ForbricLog.warn("[Forbric/MergedBaseCompat] resolved %s's spliced codec capture read(s) against the "
+					+ "fields the class declares", node.name.replace('/', '.'));
+		}
+		return changed;
+	}
+
+	/**
+	 * Repoints the capture-field reads the builder spliced into the merged codec provider at the fields the class
+	 * actually declares.
+	 *
+	 * <p>The builder emits the captured names of ITS OWN generation — whatever the pipeline that decompiled the
+	 * NeoForge half produced. Those names are not stable: on 1.21.1 the merged provider declares its id→type map
+	 * as {@code val$map} and its fallback as {@code val$p_319839_}, while the spliced {@code findCodec} reads
+	 * {@code val$idToType} and {@code val$fallback}. The first of those is a hard {@code NoSuchFieldError} on the
+	 * first handshake packet — the world join dies before anything can negotiate. The names are not knowable here,
+	 * but the class's own field table is, so {@link PayloadCaptureFields} resolves each stale read by descriptor.
+	 *
+	 * <p>A read whose descriptor matches no single declared field is LEFT ALONE and named in the log: the pass
+	 * stands down rather than guess a name and move the failure somewhere it is harder to see.
+	 */
+	private static boolean repointTheSplicedCaptureReads(ClassNode node, MethodNode method) {
+		boolean changed = false;
+		for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+			if (!(insn instanceof FieldInsnNode field) || field.getOpcode() != Opcodes.GETFIELD) continue;
+			if (!node.name.equals(field.owner) || PayloadCaptureFields.declares(node, field.name, field.desc)) continue;
+			String resolved = PayloadCaptureFields.uniqueDeclared(node, field.desc);
+			if (resolved == null) {
+				ForbricLog.warn("[Forbric/MergedBaseCompat] %s reads %s:%s, which the class does not declare and "
+								+ "no single declared field matches — leaving it rather than guessing",
+						node.name.replace('/', '.'), field.name, field.desc);
+				continue;
+			}
+			field.name = resolved;
+			changed = true;
 		}
 		return changed;
 	}
@@ -583,6 +636,18 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 			"net/forbric/loader/impl/forge/runtime/ForbricClientShutdown", "net/forbric/kernel/interop/ClientShutdown",
 			"net/forbric/loader/impl/forge/runtime/ForbricForgeRuntimeInterop",
 			"net/forbric/kernel/interop/ForgeRuntimeInterop");
+
+	private static final String PAYLOAD_INTEROP = "net/forbric/kernel/interop/PayloadInterop";
+	private static final String PAYLOAD_INTEROP_LEGACY = "net/forbric/loader/impl/compat/ForbricCustomPayloadInterop";
+
+	/**
+	 * The one spliced hook whose body carries captured-field reads. {@link #repointTheSplicedCaptureReads} is
+	 * scoped to the method that makes this call, so the other interop hooks' callers are never scanned.
+	 */
+	private static boolean isPayloadCodecLookup(MethodInsnNode call) {
+		return "findCodec".equals(call.name)
+				&& (PAYLOAD_INTEROP.equals(call.owner) || PAYLOAD_INTEROP_LEGACY.equals(call.owner));
+	}
 
 	private static boolean repairLambdaBootstrapHandles(ClassNode node) {
 		Map<String, MethodNode> methods = new HashMap<>();

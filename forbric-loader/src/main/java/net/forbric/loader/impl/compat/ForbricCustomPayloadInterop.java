@@ -337,7 +337,13 @@ public final class ForbricCustomPayloadInterop {
 
 	private static void collectCodecRegistrations(Object codecHolder, String source, List<MirrorRegistration> out) {
 		if (codecHolder == null) return;
-		Object idToType = fieldValue(codecHolder, "val$idToType");
+		// Same rule as the kernel's PayloadCaptureFields: the captured-field names belong to the pipeline that
+		// built the base, so they are read off the class, never spelled. Hardcoding one generation's name here is
+		// the QUIET half of the NoSuchFieldError the spliced findCodec throws — the miss is reflective, so it
+		// returns null and collects nothing instead of failing, and the mirror silently loses every registration.
+		String idToTypeField = idToTypeCapture(codecHolder.getClass());
+		if (idToTypeField == null) return;
+		Object idToType = fieldValue(codecHolder, idToTypeField);
 		Object protocol = fieldValue(codecHolder, "val$protocol");
 		Object flow = fieldValue(codecHolder, "val$packetFlow");
 		if (!(idToType instanceof Map<?, ?> map) || protocol == null || flow == null) return;
@@ -348,6 +354,33 @@ public final class ForbricCustomPayloadInterop {
 			Object codec = typeAndCodecCodec(typeAndCodec);
 			if (entry.getKey() == null || type == null || codec == null) continue;
 			out.add(new MirrorRegistration(entry.getKey(), type, codec, protocol, flow, source));
+		}
+	}
+
+	/** The codec provider's sole {@code java.util.Map} capture, cached per class; null when it is not unique. */
+	private static String idToTypeCapture(Class<?> owner) {
+		String name = ID_TO_TYPE_NAMES.get(owner);
+		return name.isEmpty() ? null : name;
+	}
+
+	private static final ClassValue<String> ID_TO_TYPE_NAMES = new ClassValue<>() {
+		@Override
+		protected String computeValue(Class<?> owner) {
+			String found = null;
+			for (Field field : owner.getDeclaredFields()) {
+				if (!isTheMap(field)) continue;
+				if (found != null) return ""; // more than one candidate: stand down
+				found = field.getName();
+			}
+			return found == null ? "" : found;
+		}
+	};
+
+	private static boolean isTheMap(Field field) {
+		try {
+			return field.getType() == Map.class;
+		} catch (Throwable unloadable) {
+			return false;
 		}
 	}
 

@@ -121,6 +121,10 @@ public final class PayloadInterop {
 	/**
 	 * Called from bytecode patched into merged {@code CustomPacketPayload$1$forbricneo.findCodec(...)}.
 	 *
+	 * <p>The spliced body reads that provider's captured fields and passes them here. The names are whatever
+	 * pipeline decompiled the base, so nothing here spells them: {@link PayloadCaptureFields} resolves them from
+	 * the provider class, for this read and for the transformer's repair of the splice alike.
+	 *
 	 * @return an object implementing the live {@code net.minecraft.network.codec.StreamCodec} interface.
 	 */
 	public static Object findCodec(Map<?, ?> localCodecs, Object id, Object protocol, Object packetFlow, Object fallback) {
@@ -387,7 +391,17 @@ public final class PayloadInterop {
 
 	private static void collectCodecRegistrations(Object codecHolder, String source, List<MirrorRegistration> out) {
 		if (codecHolder == null) return;
-		Object idToType = fieldValue(codecHolder, "val$idToType");
+		// The captured-field names belong to whichever pipeline built the base, so they are read off the class
+		// rather than spelled here. Hardcoding one generation's name is the QUIET half of the same assumption the
+		// transformer's splice repair addresses: the miss is reflective, so it returns null and collects nothing
+		// instead of throwing, and the mirror silently loses every merged registration.
+		String idToTypeField = PayloadCaptureFields.idToType(codecHolder.getClass());
+		if (idToTypeField == null) {
+			probe(() -> "  merged codec " + simpleName(codecHolder) + " declares no single java.util.Map capture — "
+					+ "not collecting " + source);
+			return;
+		}
+		Object idToType = fieldValue(codecHolder, idToTypeField);
 		Object protocol = fieldValue(codecHolder, "val$protocol");
 		Object flow = fieldValue(codecHolder, "val$packetFlow");
 		if (!(idToType instanceof Map<?, ?> map) || protocol == null || flow == null) return;

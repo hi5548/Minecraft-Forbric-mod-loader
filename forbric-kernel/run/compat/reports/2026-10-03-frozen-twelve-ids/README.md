@@ -99,3 +99,52 @@ python3 w7/harness/confirmed_ids.py
 ```
 
 判据:重跑 `confirmed_ids.py` 返回零。
+
+## 第三轮:id 10 落地、id 11 的残差,以及开工前必须知道的两件事
+
+### id 10/11 —— 匿名类普查的根因不是"候选 3–5 个",而是**普查属于另一个基底**(提交 `0a31c033`)
+
+原先的记法是"漂移表点名 3–5 个候选,handler 的 `@Inject` 描述符可挑出唯一匹配者"。逐字节重核**推翻了这一点**:
+在 26.2 那份候选集 `{16,18,4,5,6}` 里**没有任何一个**声明 `encode(ByteBuf,Object)V`(那 5 个是 Integer/byte[]/Tag 编解码器),
+所以"用描述符在候选里挑"在旧表上**无解**。真相是两条独立的错:
+
+1. `MergedBaseAnonymousDrift` 是 **26.2 的普查**,被无条件用在 1.21.1 基底上。同一规则重新派生(具名 vanilla
+   `p0/mc-1.21.1/.forbric-build/client-official.jar` 对 `out/patched-mc-merged-1.21.1.jar`)得到
+   `$22 → [$24]`、`$23 → [$25]`、`$24 → [$26]`、`$25 → [$27]`,**四条都唯一**。
+2. 候选闸门用"方法集完全相等",而补丁会往 vanilla body 搬过去的类上**加**方法(1.21.1 上 NeoForge 给
+   `ByteBufCodecs$27` 加了两个 holderset 辅助方法)⇒ vanilla 的 `$25` 被判 RESHAPED,尽管 body 就在 `$27`。
+   这正是 `4e144902` 已经为"同名类"修过的形状,只是没修到候选搜索。
+
+**落地**:两份普查按基底选择(`forBase(present)`,用普查自己命名的 `ByteBufCodecs$33` 判别:26.2 有、1.21.1 止于 `$28`),
+候选闸门改为 `stillHolds`(相等在其中精选)。**26.2 那份逐字保留**并新增一条测试钉住"基底选自己的普查"。
+逐字节红→绿:Entries `$22→$24` UNFIT→**FIT**;Entry `$24→$26`、EntryList `$25→$27` 一并 FIT(题目要求的两条确认成立)。
+
+**id 11 未清零,如实记**:类号那一半已落地(`$23→$25`,不再被 auto-suppress),但该 mixin 还 `@Shadow`
+一个被合并**改名**的捕获字段 `val$registryKey`(合并基底里同类型只剩 `val$p_319942_`),`MixinFit` 对它
+仍报 PARTIAL。`MixinShadowMembers` 的改名走映射 spine(源命名空间→具名),对这个已是具名形状的 `val$` 无处可映射。
+**下一步**:候选唯一时按描述符给 `@Shadow` 补 `aliases`,并让 `MixinFit` 用同一判据判影子。
+
+### 归因注意:findings 可能属于**随包的库**,而不是已安装主体
+
+`connector` 就是例子——一个 Fabric guest 刻意锚在 NeoForge 的 loader 类上,于是它的 id 被记在**装载器/库**名下。
+这是**报告口径**问题,不是重定位缺陷:读者不得把库的 id 读成被测主体的失败。该主体的判据要按主体自己的
+mixin 配置归因后再读。
+
+### id 9(cobblecoop)的闭环口径
+
+判据在真字节上成立(`UNFIT → PARTIAL`,unresolved 仍如实列出该锚点);**boot 级确证在该主体上不可能**,
+因为它的 `registry-load` 失败先于本改动、且属主体侧。对 ≥95% 的门,该主体**在 closure-complete 集之外**——
+必须显式这么写,不能靠 `world=false` 让读者自己推。
+
+### 同一形状今天出现三次:钉住值是为另一个版本校准的
+
+registry-loader 的 pin、访问加宽器的命名空间、以及本次的匿名类普查,都是"取一个值的形状正确、基底不对"。
+移植下一个基底时,这三处应一起复核(本条为 `M7`/移植清单留档)。
+
+### 本轮未完成(如实记录,不含猜测)
+
+- **ids 2 / 6 / 4**:未动。2/6 的一轮读法结论(锚点本身被合并改写、不可表达 ⇒ 剪 + 记代价)仍待落成条目;
+  4 的"成员搬到接口"是否可由继承成员通路表达仍待一读。
+- **census 影响面**(`25a2f77f` 的 per-loader 膨胀行数):未派。方法已定(对四份 campaign 报告逐行读已存
+  `mixin-injector:` required 行 + 该主体 jar 里 handler 的 `require`,有效的 `require=0` 即为被抬高者,
+  分 loader 计数),但数字**尚未产出**,不得引用。

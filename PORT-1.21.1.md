@@ -99,14 +99,14 @@ java -jar forbric-kernel-installer-0.3.2-beta.jar --dir "$HOME/Library/Applicati
 
 | 功能 | 影响 |
 |---|---|
-| `ColorProviderRegistry`（方块/物品自定义颜色） | 注册与读取均失效；原版颜色路径不受影响 |
+| `ColorProviderRegistry`（方块/物品自定义颜色） | 注册与读取均失效；**另**：合并基底的 `BlockColors`/`ItemColors` 自身 `getColor` 查 `ForgeRegistries.*.getDelegateOrThrow` 的 Holder 键、`register` 存原始对象键、字段是 `IdentityHashMap`，三者不闭钥匙 ⇒ **原版自己的同色也在该基底上落空**（见下） |
 | `FluidRenderHandlerRegistry`（自定义流体外观：染色/贴图/覆盖层） | 不生效，改由 NeoForge 的 FluidType 路径渲染 |
 | `ParticleRenderEvents.ALLOW_BLOCK_DUST_TINT` | 不再被查询 |
-| mod 提供自定义 `AudioStream` | `FabricSoundInstance.getAudioStream` 不被 `SoundEngine.play` 查询 |
 | 客户端 `UseEntityCallback` | 不触发（同一 mixin 的其余注入器仍正常） |
-| Indigo 的 per-block 钩子（区块内自定义几何） | Fabric mod 在区块内的自定义几何可能渲染错误或不渲染 |
 
-原因分两类：合并时**字段名保住、类型变了**（`IdMapper` → `Map<…>`），或**调用点被另一家改写**（`renderBatched` 被加宽成 9 参）。两者都不是"锚点拼写"类问题，因此无法按已有机制重定位，只能按代价退出。
+原因分两类：合并时**字段名保住、类型变了**（`IdMapper` → `Map<…>`），或**调用点被另一家改写**（`renderBatched` 被加宽成 9 参）。**2026-10-04 复核**：加宽的那条（Indigo）与声音流那条已按 1.21.1 真实字节重锚并落地
+（`64ea43cc` / `53f101da`，证据 `run/compat/reports/2026-10-04-inert-apis/`），已从本表移除；颜色族给出修复形状
+（重绑 `@Shadow` 字段 + 正常化合并基底的取值键，两步一体）但未半落地；其余两条不是"锚点拼写"类问题，维持按代价退出。
 
 ### 已知限制与未覆盖
 
@@ -235,17 +235,18 @@ itself does not take effect on 1.21.1:
 
 | Feature | Effect |
 |---|---|
-| `ColorProviderRegistry` (custom block/item colours) | registration and lookup both inert; vanilla's own colour path is untouched |
+| `ColorProviderRegistry` (custom block/item colours) | registration and lookup both inert; **and**: the merged base's own `BlockColors`/`ItemColors` disagree with themselves — `getColor` keys by `ForgeRegistries.*.getDelegateOrThrow`'s Holder, `register` stores the raw object, and the field is an `IdentityHashMap` — so **vanilla's own tints miss too** (see the 2026-10-04 inert-apis report) |
 | `FluidRenderHandlerRegistry` (custom fluid appearance: tint/sprites/overlay) | inert; NeoForge's FluidType path renders instead |
 | `ParticleRenderEvents.ALLOW_BLOCK_DUST_TINT` | no longer consulted |
-| a mod-supplied `AudioStream` | `FabricSoundInstance.getAudioStream` is not consulted by `SoundEngine.play` |
 | client-side `UseEntityCallback` | does not fire (the same mixin's other injectors still bind) |
-| Indigo's per-block hook (in-chunk custom geometry) | a Fabric mod's in-chunk custom geometry may render wrong or not at all |
 
 Two causes: the merge **kept a field's name but changed its type** (`IdMapper` → `Map<…>`), or **another
-family rewrote the call site** (`renderBatched` widened to nine arguments). Neither is a selector-spelling
-problem, so neither can be retargeted with the existing machinery — they are stood down with their cost
-recorded instead.
+family rewrote the call site** (`renderBatched` widened to nine arguments). **Re-checked 2026-10-04**: the widened
+call site (Indigo) and the sound-stream anchor have been retargeted against the real 1.21.1 bytes and landed
+(`64ea43cc` / `53f101da`, evidence in `run/compat/reports/2026-10-04-inert-apis/`), so both left this table; the
+colour family has a two-step repair shape (rebind the `@Shadow` field + normalise the merged base's lookup key)
+recorded but deliberately not half-landed; the remaining two are not selector-spelling problems and stay stood
+down with their cost recorded.
 
 ### Known limits and what is not covered
 

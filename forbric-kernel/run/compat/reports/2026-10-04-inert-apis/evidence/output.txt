@@ -1,0 +1,64 @@
+== Indigo ==
+[Forbric/INFO] [Forbric/Renderer] retargeted Indigo's per-block redirect onto the LIVE merged compile body's nine-argument renderBatched (NeoForge model data + render type forwarded verbatim; the tesselateBlock fast path is byte-for-byte as compiled)
+  ok   adapt returned 2 (both paired injectors moved)
+  ok   redirect handler desc uses NEOFORGE ModelData
+  ok   @Redirect.method -> the LIVE five-argument compile
+  ok   @At.target -> nine-argument renderBatched with NeoForge ModelData
+  ok   @Inject.method -> the LIVE five-argument compile
+  ok   return handler captures the fifth argument
+  ok   guest scratch local moved off the new parameter slots
+  ok   handler arity is 10 (dispatcher + nine)
+  ok   exactly one matching call site in the LIVE body
+  ok   LIVE operand[0] frame type is net/minecraft/client/renderer/block/BlockRenderDispatcher
+  ok   LIVE operand[0] is assignable to handler param net.minecraft.client.renderer.block.BlockRenderDispatcher
+  ok   LIVE operand[1] frame type is net/minecraft/world/level/block/state/BlockState
+  ok   LIVE operand[1] is assignable to handler param net.minecraft.world.level.block.state.BlockState
+  ok   LIVE operand[2] frame type is net/minecraft/core/BlockPos
+  ok   LIVE operand[2] is assignable to handler param net.minecraft.core.BlockPos
+  ok   LIVE operand[3] frame type is net/minecraft/client/renderer/chunk/RenderChunkRegion
+  ok   LIVE operand[3] is assignable to handler param net.minecraft.world.level.BlockAndTintGetter
+  ok   LIVE operand[4] frame type is com/mojang/blaze3d/vertex/PoseStack
+  ok   LIVE operand[4] is assignable to handler param com.mojang.blaze3d.vertex.PoseStack
+  ok   LIVE operand[5] frame type is com/mojang/blaze3d/vertex/BufferBuilder
+  ok   LIVE operand[5] is assignable to handler param com.mojang.blaze3d.vertex.VertexConsumer
+  ok   LIVE operand[6] frame type is I
+  ok   LIVE operand[6] is assignable to handler param boolean
+  ok   LIVE operand[7] frame type is net/minecraft/util/RandomSource
+  ok   LIVE operand[7] is assignable to handler param net.minecraft.util.RandomSource
+  ok   LIVE operand[8] frame type is net/neoforged/neoforge/client/model/data/ModelData
+  ok   LIVE operand[8] is assignable to handler param net.neoforged.neoforge.client.model.data.ModelData
+  ok   LIVE operand[9] frame type is net/minecraft/client/renderer/RenderType
+  ok   LIVE operand[9] is assignable to handler param net.minecraft.client.renderer.RenderType
+  ok   LIVE every operand matches the handler parameters
+  ok   the dead four-argument body makes the same nine-argument call with FORGE's ModelData
+  ok   DEAD (negative control) the frame check REJECTS this binding (negative control)
+  ok   weave replaced exactly one call
+  ok   woven LIVE compile frame-verifies (the Indigo check)
+  ok   adapted handler frame-verifies
+  ok   redirector frame-verifies
+  ok   second pass is idempotent (0)
+ALL CHECKS PASSED
+== Sound ==
+[Forbric/INFO] [Forbric/Sound] retargeted Fabric's stream redirect onto the merged SoundEngine.play's SoundInstance.getStream call (1.21.1 generation); it now dispatches FabricSoundInstance.getAudioStream with the sound's own path, exactly as the guest handler did
+  ok   adapt returned 1
+  ok   handler shape is (SoundInstance, SoundBufferLibrary, Sound, boolean)
+  ok   @At.target -> interface getStream on SoundInstance
+  ok   @Redirect.method stays SoundEngine.play(SoundInstance)V
+  ok   body dispatches exactly one FabricSoundInstance.getAudioStream
+  ok   body does NOT call the merged interface getStream (no recursion)
+  ok   merged SoundEngine.play makes exactly one SoundInstance.getStream call
+  ok   the guest's original anchor is GONE from the merged play (retarget required)
+  ok   handler arity is 4 (receiver + three)
+  ok   operand[0] frame type is net/minecraft/client/resources/sounds/SoundInstance
+  ok   operand[0] is assignable to handler param net.minecraft.client.resources.sounds.SoundInstance
+  ok   operand[1] frame type is net/minecraft/client/sounds/SoundBufferLibrary
+  ok   operand[1] is assignable to handler param net.minecraft.client.sounds.SoundBufferLibrary
+  ok   operand[2] frame type is net/minecraft/client/resources/sounds/Sound
+  ok   operand[2] is assignable to handler param net.minecraft.client.resources.sounds.Sound
+  ok   operand[3] frame type is I
+  ok   operand[3] is assignable to handler param boolean
+  ok   weave replaced exactly one call
+  ok   woven SoundEngine.play frame-verifies
+  ok   adapted handler frame-verifies
+  ok   second pass is idempotent (0)
+ALL CHECKS PASSED

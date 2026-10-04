@@ -141,3 +141,28 @@ FAIL theModMenuEntryMatchesTheNameTheChainHandsOver()
 四条为准并把本项标 `world=false, blocked_by=ResourcePackLoader`)。
 
 **若隔离集合的 1/2 不出现,则本文档的判别机制被证伪**——那说明键并非根因,须重开;不得把运行读成成功。
+
+## 7. 验证运行读数(§6 登记之后的实测,`W7Harness` 拥有)
+
+Pin `6d7d32cc`(干净工作树构建的内核 sha `b30955e2…`),隔离集合,**冷缓存**(§5 的纪律),audit 开,
+`reports/2026-10-04-guest-class-delivery/`:
+
+```
+row:  run=PASS  exit=0  world=true  frames=1  stopped=true  killed=false  strict=TRUE  confirmed_required=0  seconds=320
+(a)  [Forbric/GuestInjectorPruner] pruned 1 injector(s) from com.terraformersmc.modmenu.mixin.MixinTitleScreen …      ← 在
+(b)  [Forbric/GuestInjectorPruner] AUDIT com.terraformersmc.modmenu.mixin.MixinTitleScreen: 1 prune(s), table row true, switch true, active true  ← 在
+(c)  'MixinTitleScreen applies only partially': 0     ← §6 要求缺席,缺席
+     'suppressed mixin MixinTitleScreen':        0     ← §6 要求缺席,缺席
+confirmedRequired: 0  |  the Mod Menu row: required=False  |  joined world via quick-play: 1
+```
+
+§6 的四条**全部**成立,(a)/(b) 同时出现即判别机制的正分支:点分键与链子入参同形态 → 行生效 → 审计(查同一张表)终于报出。
+
+(c) 比"finding 没了"更强:上一轮审计运行的控制台里那行 `…MixinTitleScreen applies only partially …` 现在**缺席**,
+因为该注入器是在**应用之前**被剪掉的,而不是在应用时被拒——"主动记录的一处损失"与"事后上报的一次半应用"之差,
+这次是按"要求缺席"登记的,所以量得出来。
+
+**12-mod 集合的验收运行仍在 `InertApiFix` 的那一窗之后排队**(一格一窗的纪律);按 §6 的登记,若它仍死在
+更早的 `ResourcePackLoader` 墙,该行记 `world=false, blocked_by=ResourcePackLoader`,验收以本节的隔离集合为准——
+而它已经通过。`W7Harness` 复核了两点:`MergedBaseMixinCompat` 里 `mixins.modmenu.json:MixinTitleScreen` **0 命中**
+(pin 确已撤回),`GuestInjectorPruner` 里是点分键——树与声明一致。

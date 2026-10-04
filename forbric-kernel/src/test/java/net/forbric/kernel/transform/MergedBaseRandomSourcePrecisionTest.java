@@ -140,6 +140,21 @@ class MergedBaseRandomSourcePrecisionTest {
 				.transform("net.forbric.other.RandomUnitFixture", outside, null));
 	}
 
+	/**
+	 * The 1.21.1 base is already double, so this repair finds nothing to do and a REQUIRED anchor would be an
+	 * ERROR on every launch — a false alarm that can feed the strict gate. HEDGE keeps the target so a carrier
+	 * that reintroduces the float form is still noticed.
+	 */
+	@Test
+	void theAlreadyDoubleBaseIsAHedgeNotAMiss() {
+		ClassTransformer.Claim claim = new ForbricMergedBaseCompatTransformer().claims().stream()
+				.filter(c -> c.id().endsWith("restoreDoublePrecisionToTheRandomSources")).findFirst().orElseThrow();
+		assertEquals(2, claim.anchors().anchors().size());
+		for (AnchorSet.Anchor anchor : claim.anchors().anchors()) {
+			assertEquals(AnchorSet.Severity.HEDGE, anchor.severity(), anchor.binaryName());
+		}
+	}
+
 	private static boolean scalesInFloat(ClassNode node) {
 		return carries(node, Opcodes.L2F, Opcodes.FMUL, UNIT_AS_FLOAT);
 	}

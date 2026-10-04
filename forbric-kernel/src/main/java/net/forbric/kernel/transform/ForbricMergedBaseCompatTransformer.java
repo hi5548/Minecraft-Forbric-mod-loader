@@ -137,13 +137,20 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 				"ChunkGenerator.featuresPerStep keeps MinecraftForge's descriptor — the server cannot start (NoSuchFieldError)"));
 		out.add(fixed("letDungeonsGenerateWithoutTheDataMap", MONSTER_ROOM_FEATURE,
 				"monster rooms never generate — the NeoForge data map they ask has no vanilla fallback"));
+		// PORT(1.21.1): the 1.21.1 merged base already scales its random bits in double — javap:
+		// XoroshiroRandomSource.nextDouble is l2d / ldc2_w 1.1102230246251565E-16 / dmul / dreturn, and
+		// BitRandomSource.nextDouble is the same double form — so this repair legitimately finds nothing to do and
+		// the two classes were reported as Misses (an ERROR) on every launch. HEDGE, not REQUIRED: the repair still
+		// fires the moment a carrier reintroduces the float form (it does on the 26.2 fixtures, where both are
+		// hits), and a base that is already correct must not cry wolf. The other anchors in this transformer stay
+		// REQUIRED — this is the only repair whose target the port has already fixed.
 		out.add(randomSourcePrecisionEnabled()
 				? new Claim(claimId("restoreDoublePrecisionToTheRandomSources"), AnchorSet.of(
-						new AnchorSet.Anchor(XOROSHIRO_RANDOM_SOURCE.replace('/', '.'), AnchorSet.Severity.REQUIRED,
-								"every noise octave's origin is off — the merged nextDouble() rounds through float, so no "
+						new AnchorSet.Anchor(XOROSHIRO_RANDOM_SOURCE.replace('/', '.'), AnchorSet.Severity.HEDGE,
+								"a base whose nextDouble() rounds through float: every noise octave's origin is off, so no "
 										+ "world generates the way the same seed does in vanilla"),
-						new AnchorSet.Anchor(BIT_RANDOM_SOURCE.replace('/', '.'), AnchorSet.Severity.REQUIRED,
-								"WorldgenRandom's nextDouble() rounds through float and can return exactly 1.0 — out of "
+						new AnchorSet.Anchor(BIT_RANDOM_SOURCE.replace('/', '.'), AnchorSet.Severity.HEDGE,
+								"a base whose WorldgenRandom.nextDouble() rounds through float and can return exactly 1.0 — out of "
 										+ "the [0,1) range every caller assumes")))
 				: scanned("restoreDoublePrecisionToTheRandomSources", "-D" + RANDOM_PRECISION_PROPERTY + "=off"));
 		out.add(fixed("convertRadiansWithVanillasFoldedConstant", "net/minecraft/world/entity/Entity",

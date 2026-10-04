@@ -92,7 +92,14 @@ public final class DragonPartsInjector implements ClassTransformer {
 	@Override public AnchorSet anchors() {
 		if (!enabled()) return AnchorSet.scanned("the Ender Dragon's parts explicitly left Forge-typed with -D" + PROPERTY + "=off");
 		return AnchorSet.of(
-				new AnchorSet.Anchor(PART, AnchorSet.Severity.REQUIRED, "adding an Ender Dragon to a world throws in the entity callbacks"),
+				// PORT(1.21.1): on 1.21.1 EnderDragonPart already extends NeoForge's PartEntity (javap:
+				// `extends net.neoforged.neoforge.entity.PartEntity<...enderdragon.EnderDragon>`), so rebasePart
+				// returns 0 at the NEO_PART check by design. Leaving it REQUIRED emitted a per-launch Miss; it is a
+				// HEDGE so a carrier that puts the part back under MinecraftForge's PartEntity is still noticed.
+				// The real work on this generation is neoForgeParts (DRAGON) and hitboxes (HITBOXES) — both stay
+				// REQUIRED.
+				new AnchorSet.Anchor(PART, AnchorSet.Severity.HEDGE,
+						"a base whose EnderDragonPart is Forge-typed again: adding an Ender Dragon to a world throws in the entity callbacks"),
 				new AnchorSet.Anchor(DRAGON, AnchorSet.Severity.REQUIRED, "adding an Ender Dragon to a world throws in the entity callbacks"),
 				new AnchorSet.Anchor(HITBOXES, AnchorSet.Severity.REQUIRED, "the debug hitboxes leave out the Ender Dragon's parts"));
 	}

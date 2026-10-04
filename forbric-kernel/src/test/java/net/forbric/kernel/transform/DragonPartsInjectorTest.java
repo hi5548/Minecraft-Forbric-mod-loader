@@ -112,6 +112,22 @@ class DragonPartsInjectorTest {
 		}
 	}
 
+	/**
+	 * On 1.21.1 the part already extends NeoForge's PartEntity, so {@code rebasePart} is a no-op by design and the
+	 * PART anchor must be a HEDGE (a REQUIRED Miss is the per-launch false alarm the review flagged). The anchors
+	 * for the real work on this generation stay REQUIRED.
+	 */
+	@Test void theAlreadyNeoForgePartIsAHedgeAndTheRealWorkStaysRequired() {
+		List<AnchorSet.Anchor> anchors = new DragonPartsInjector().anchors().anchors();
+		assertEquals(AnchorSet.Severity.HEDGE, anchor(anchors, DragonPartsInjector.PART).severity());
+		assertEquals(AnchorSet.Severity.REQUIRED, anchor(anchors, DragonPartsInjector.DRAGON).severity());
+		assertEquals(AnchorSet.Severity.REQUIRED, anchor(anchors, DragonPartsInjector.HITBOXES).severity());
+	}
+
+	private static AnchorSet.Anchor anchor(List<AnchorSet.Anchor> anchors, String binaryName) {
+		return anchors.stream().filter(a -> a.binaryName().equals(binaryName)).findFirst().orElseThrow(() -> new AssertionError(binaryName));
+	}
+
 	private static ClassNode node(byte[] bytes) {
 		ClassNode node = new ClassNode();
 		new ClassReader(bytes).accept(node, 0);

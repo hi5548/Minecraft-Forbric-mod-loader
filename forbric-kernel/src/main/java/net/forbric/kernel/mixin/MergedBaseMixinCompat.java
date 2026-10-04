@@ -306,7 +306,30 @@ public final class MergedBaseMixinCompat {
 			// sound playback.
 			// Cost, stated: FabricSoundInstance.getAudioStream is not consulted by SoundEngine.play -- a Fabric mod
 			// cannot supply its own AudioStream for a custom SoundInstance; NeoForge's own stream path runs.
-			"fabric-sound-api-v1.mixins.json:SoundSystemMixin");
+			"fabric-sound-api-v1.mixins.json:SoundSystemMixin",
+			// MOD MENU, and the reason this is a PIN rather than the per-injector prune that was written for it
+			// first: measured 2026-10-04, this mixin's CLASS NEVER REACHES THE TRANSFORM CHAIN. With
+			// -Dforbric.guestInjectorPrunerAudit=on the chain reported twelve classes, every one of them
+			// fabric-api's, and no line at all for com/terraformersmc/modmenu/mixin/MixinTitleScreen -- while the
+			// config IS registered, which the preflight finding proves. A per-class prune cannot act on a class it
+			// is never handed, so the narrow form was untestable rather than wrong. A pin acts earlier and on the
+			// CONFIG: ForbricMixinService drops the entry while preparing mixins.modmenu.json, before any class is
+			// read, so the finding is closed by reportNamedSuppressions with required=false on every boot
+			// regardless of whether the class ever arrives.
+			//
+			// Why the mixin is a loss at all: its @ModifyArg modifies the title screen's copyright/version line,
+			// and the merged TitleScreen.render(GuiGraphics,int,int,float) contains ZERO GuiGraphics.drawString
+			// calls -- the four in the class sit in lambda$render$13 / lambda$render$14, reached through
+			// ClientHooks.renderMainMenu and BrandingControl.forEachLine. Reaching them means naming a synthetic
+			// lambda, which is the lambda-selector retarget this repo measured and reverted.
+			// Cost, stated, and larger than the prune would have been: the WHOLE mixin goes, so Mod Menu loses both
+			// its title-line substitution AND adjustRealmsHeight (the Realms-button height fix, which only matters
+			// when the Realms notification screen is present). The Mods button, the mod-list screen and Mod Menu's
+			// other hooks live in other mixins and are unaffected. The per-injector prune entry that was written
+			// first is left in GuestInjectorPruner as the narrower form: it is dormant while this pin is in force
+			// (a pinned mixin is never read), and it is what should be restored if the chain is ever fixed to hand
+			// this class over.
+			"mixins.modmenu.json:MixinTitleScreen");
 
 	/**
 	 * A duck interface that {@code pin}, a {@link #SUPPRESSED_MIXINS} entry, implements on {@code target} (internal

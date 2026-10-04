@@ -119,5 +119,45 @@ private static void seedEmptyNeoForgeLoadingModList(ClassLoader gameLoader, Clas
 2. `world=true`；
 3. `joined world via quick-play` ≥ 1。
 
-**运行状态:已交给 `W7Harness`（请求见对话），读数待回填。** 若三者同时成立,则这面墙关；若 1 仍不成立,
-本报告的机制即被证伪,须重开（不得读成成功）。
+**运行读数(`W7Harness`,构建 `0c0a2eea`,sha `648cb6758f85f3af863bf0bde73d5e41564d7333b1c9aa09a4af337aff55670d`,
+真实 12-mod,冷 remap 缓存,JDK 21,报告 `reports/2026-10-04-rpl-init/`):**
+
+1. **成立(逐字)**。`NoClassDefFoundError … Could not initialize class …ResourcePackLoader`：**0 次**；
+   点名 `ResourcePackLoader.<clinit>` 的 `ExceptionInInitializerError`：**0 次**。该类正常初始化。
+2. **未成立** —— `world=false`。3. **未成立** —— `joined world via quick-play: 0`。
+   该行 `run=CRASH exit=255 world=false frames=0 cause=mixin-apply seconds=828`,`confirmed_required: 1`
+   （`initialization:constructor`,内核为该崩溃记的 finding）。
+
+**正面标记(运行前请求的那一行,逐字):**
+```
+[Forbric/Seed] seeded NeoForge LoadingModList with 64 mod(s) (16 Forge-family, 48 Fabric for presence)
+  — mods that resolve themselves through FMLLoader.getLoadingModList() (Iris' version pro…
+[Forbric/Seed] LoadingModList.getModFileById also answers for 47 underscored mod id(s)
+```
+空表路径的静默消失,共 13 行 `[Forbric/Seed]`。
+
+**证伪"只是巧合"的最强一条**:启动现在**跑进了 Sodium 的 mixin handler** ——
+`Minecraft.handler$cbm001$sodium$loadConfig(Minecraft.java:13517)` at `<init>:488`。该 handler 只在
+`ResourcePackLoaderMixin` 的 `<clinit>` 合并**成功**后才存在;修复前那个类被 poison,其后什么都跑不到。
+墙不是移开了,是消失了。
+
+### 5.1 因此暴露的**下一面墙**(不是本车道,也不是本次改动的产物)
+
+```
+Description: Initializing game
+java.lang.RuntimeException: Sodium's config could not be found; the game is in a broken state most likely
+  caused by an earlier error from another mod. Please check the game log (latest.log) for any errors…
+	at net.caffeinemc.mods.sodium.client.config.ConfigManager.registerConfigs(ConfigManager.java:119)
+	at net.caffeinemc.mods.sodium.client.config.ConfigManager.registerConfigsEarly(ConfigManager.java:72)
+	at net.minecraft.client.Minecraft.handler$cbm001$sodium$loadConfig(Minecraft.java:13517)
+	at net.minecraft.client.Minecraft.<init>(Minecraft.java:488)
+```
+
+判据:这条用的是 **NeoForge 的 `ModList`**（`ConfigLoaderForge.collectConfigEntryPoints` 迭代
+`ModList.get().getMods()` / `getModContainerById`),**不是** 本次播的 `LoadingModList`;本次改动只动
+`LoadingModList`,故这是**暴露**而非**引入**。`W7Harness` 另给一条线索(未作诊断):
+`[Forbric/Load] 12 mod(s) did not finish loading: fabric-content-registries-v0, fabric-events-interaction-v0,
+fabric-item-api-v1, fabric-loot-api-v3, fabric-object-b…`。归谁判、怎么修不在本报告范围。
+
+**结论(严格按本车道契约)**:`ResourcePackLoader.<clinit>` 的 NPE 已修且已被运行证伪重现;预登记第 1 条成立。
+第 2/3 条被一个**更晚、另一处**的崩溃挡住,不由本改动负责,也未被读成本字段的成功。

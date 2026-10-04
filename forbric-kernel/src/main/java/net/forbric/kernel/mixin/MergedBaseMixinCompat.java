@@ -292,21 +292,6 @@ public final class MergedBaseMixinCompat {
 			// Cost, stated: ParticleRenderEvents.ALLOW_BLOCK_DUST_TINT is not consulted on this base -- a Fabric mod
 			// cannot veto the tint of block-break dust; NeoForge's areBreakingParticlesTinted decides.
 			"fabric-particles-v1.client.mixins.json:BlockDustParticleMixin",
-			// fabric-sound-api-v1's single mixin. Its @Redirect watches the `SoundBufferLibrary.getStream(id, loop)`
-			// call inside `SoundEngine.play`, which is where a Fabric SoundInstance's own `getAudioStream` becomes
-			// the stream source. The merged `play` does not make that call: javap shows
-			// `SoundInstance.getStream(SoundBufferLibrary, Sound, boolean)` at +587 -- the interface default, whose
-			// own body is what consults the library -- so the anchor is gone. The kernel HAS the two mechanisms for
-			// this shape (FabricSoundMixinAdapter, and FabricSoundContractTransformer on the interface default), and
-			// both are 26.2-generation: they name `SoundEngineMixin`/`Identifier` and gate on instruction
-			// fingerprints compiled there, so neither matches a 0.116.17 module. Re-binding the redirect onto the
-			// interface call is a handler rewrite (the redirect's receiver+args change shape from
-			// (library, id, loop) to (sound, library, Sound, loop)) plus a FabricSoundInstance cast, and is recorded
-			// here as the follow-up rather than attempted blind -- a wrong body here is a VerifyError inside
-			// sound playback.
-			// Cost, stated: FabricSoundInstance.getAudioStream is not consulted by SoundEngine.play -- a Fabric mod
-			// cannot supply its own AudioStream for a custom SoundInstance; NeoForge's own stream path runs.
-			"fabric-sound-api-v1.mixins.json:SoundSystemMixin",
 			// MOD MENU, and the reason this is a PIN rather than the per-injector prune that was written for it
 			// first: measured 2026-10-04, this mixin's CLASS NEVER REACHES THE TRANSFORM CHAIN. With
 			// -Dforbric.guestInjectorPrunerAudit=on the chain reported twelve classes, every one of them

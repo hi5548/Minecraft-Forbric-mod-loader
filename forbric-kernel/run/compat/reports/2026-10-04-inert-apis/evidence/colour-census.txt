@@ -1,0 +1,55 @@
+# colour/particle census — measured from the staged merged base and the remapped guests
+# JAVAP: /Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home/bin/javap ; MERGED: /Users/charlescai/Desktop/dsh/实验/forbric/p0/stage-1.21.1/merged-base/patched-mc-merged-1.21.1.jar
+
+== merged BlockColors (patched-mc-merged-1.21.1.jar) ==
+  private final java.util.Map<net.minecraft.world.level.block.Block, net.minecraft.client.color.block.BlockColor> blockColors;
+  private final java.util.Map<net.minecraft.world.level.block.Block, java.util.Set<net.minecraft.world.level.block.state.properties.Property<?>>> coloringStates;
+-- <init> chooses the map:
+       5: new           #33                 // class java/util/IdentityHashMap
+      12: putfield      #36                 // Field blockColors:Ljava/util/Map;
+      16: invokestatic  #42                 // Method com/google/common/collect/Maps.newHashMap:()Ljava/util/HashMap;
+      19: putfield      #44                 // Field coloringStates:Ljava/util/Map;
+-- getColor(BlockState,Level,BlockPos): lookup key
+      11: invokeinterface #252,  2          // InterfaceMethod net/minecraftforge/registries/IForgeRegistry.getDelegateOrThrow:(Ljava/lang/Object;)Lnet/minecraft/core/Holder$Reference;
+      16: invokeinterface #258,  2          // InterfaceMethod java/util/Map.get:(Ljava/lang/Object;)Ljava/lang/Object;
+-- register: stored key
+      29: invokeinterface #294,  3          // InterfaceMethod java/util/Map.put:(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+
+== Forge's own BlockColors (patched-mc-forge) — consistent pair ==
+      11: invokeinterface #259,  2          // InterfaceMethod net/minecraftforge/registries/IForgeRegistry.getDelegateOrThrow:(Ljava/lang/Object;)Lnet/minecraft/core/Holder$Reference;
+      16: invokeinterface #265,  2          // InterfaceMethod java/util/Map.get:(Ljava/lang/Object;)Ljava/lang/Object;
+      31: invokeinterface #259,  2          // InterfaceMethod net/minecraftforge/registries/IForgeRegistry.getDelegateOrThrow:(Ljava/lang/Object;)Lnet/minecraft/core/Holder$Reference;
+      37: invokeinterface #301,  3          // InterfaceMethod java/util/Map.put:(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+== NeoForge's own BlockColors (patched-mc-neoforge) — consistent pair ==
+       8: invokeinterface #158,  2          // InterfaceMethod java/util/Map.get:(Ljava/lang/Object;)Ljava/lang/Object;
+      29: invokeinterface #179,  3          // InterfaceMethod java/util/Map.put:(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+
+== merged ItemColors ==
+  private final java.util.Map<net.minecraft.world.item.Item, net.minecraft.client.color.item.ItemColor> itemColors;
+      11: invokeinterface #243,  2          // InterfaceMethod net/minecraftforge/registries/IForgeRegistry.getDelegateOrThrow:(Ljava/lang/Object;)Lnet/minecraft/core/Holder$Reference;
+      16: invokeinterface #249,  2          // InterfaceMethod java/util/Map.get:(Ljava/lang/Object;)Ljava/lang/Object;
+      28: invokeinterface #264,  1          // InterfaceMethod net/minecraft/world/level/ItemLike.asItem:()Lnet/minecraft/world/item/Item;
+      34: invokeinterface #268,  3          // InterfaceMethod java/util/Map.put:(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+
+== merged ParticleEngine.providers ==
+  private final java.util.Map<net.minecraft.resources.ResourceLocation, net.minecraft.client.particle.ParticleProvider<?>> providers;
+
+== guests: the @Shadow fields the merge re-typed ==
+-- /tmp/rv1/net/fabricmc/fabric/mixin/client/rendering/BlockColorsMixin.class
+  private net.minecraft.core.IdMapper<net.minecraft.client.color.block.BlockColor> blockColors;
+-- /tmp/rv1/net/fabricmc/fabric/mixin/client/rendering/ItemColorsMixin.class
+  private net.minecraft.core.IdMapper<net.minecraft.client.color.item.ItemColor> itemColors;
+-- /tmp/rs/net/fabricmc/fabric/mixin/registry/sync/client/BlockColorsMixin.class
+  private net.minecraft.core.IdMapper<net.minecraft.client.color.block.BlockColor> blockColors;
+-- /tmp/rs/net/fabricmc/fabric/mixin/registry/sync/client/ItemColorsMixin.class
+  private net.minecraft.core.IdMapper<net.minecraft.client.color.item.ItemColor> itemColors;
+-- /tmp/rs/net/fabricmc/fabric/mixin/registry/sync/client/ParticleManagerMixin.class
+  private it.unimi.dsi.fastutil.ints.Int2ObjectMap<net.minecraft.client.particle.ParticleProvider<?>> providers;
+
+== rendering-v1 anchors are PRESENT (only the @Shadow field blocks) ==
+          method=["Lnet/minecraft/client/color/block/BlockColors;createDefault()Lnet/minecraft/client/color/block/BlockColors;"]
+
+== vanilla 1.21.1 (official client jar) — the fields really were IdMapper ==
+  private final net.minecraft.core.IdMapper<net.minecraft.client.color.block.BlockColor> blockColors;
+  private final java.util.Map<net.minecraft.world.level.block.Block, java.util.Set<net.minecraft.world.level.block.state.properties.Property<?>>> coloringStates;
+  private final net.minecraft.core.IdMapper<net.minecraft.client.color.item.ItemColor> itemColors;

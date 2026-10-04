@@ -168,7 +168,10 @@ tasks.register('bundleForbric') {
 			// forbric-kernel-runtime.jar could not be materialized exactly" (measured 2026-10-04 on an installed
 			// 0.3.1-beta). That is what the default `gradlew jar` produces when no staged game artifacts are
 			// present. Refuse it here rather than shipping an installer that cannot start.
-			if (coordinate.contains('forbric-kernel')) {
+			// Match the exact coordinate, not a substring: a future dependency or alias whose name merely contains
+			// `forbric-kernel` (e.g. a `forbric-kernel-compat` coordinate) must not be subjected to this jar's
+			// game-side check and fail the installer build spuriously.
+			if (coordinate.startsWith('net.forbric:forbric-kernel:')) {
 				def hasGameSide = false
 				new java.util.zip.ZipFile(src).withCloseable { zip ->
 					hasGameSide = zip.getEntry('META-INF/jars/forbric-kernel-runtime.jar') != null

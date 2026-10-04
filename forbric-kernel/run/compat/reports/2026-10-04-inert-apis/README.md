@@ -166,6 +166,32 @@ Indigo 的 retargeted 标记与**没有** decline 行。
 
 ---
 
+### 1.6 第二次世界深度读数:两条标记都出现,然后在 retargeted handler 里 NPE —— 按判据**撤回 Indigo**,只留声音
+
+`64f91eb8…`(main 7c431c58 + 编译修复)上第二次读数,逐字:
+
+```
+run=CRASH exit=255 world=true frames=0 stopped=false killed=true strict=false confirmed_required=0
+cause=mixin-apply seconds=356 java=jdk-21   joined world via quick-play: 1
+(C0) 两条 decline 行各 0 次   (C) 两条 retargeted 标记都在   (A) confirmedRequired 0,hookBuildRenderBlock 的 id 一个都没有
+java.lang.NullPointerException: Cannot invoke "…TerrainRenderContext.tessellateBlock(…)" because … is null
+  at SectionCompiler.redirect$zjm000$fabric-renderer-indigo$hookBuildRenderBlock(SectionCompiler.java:608)
+  at SectionCompiler.compile(SectionCompiler.java:90)
+  at SectionRenderDispatcher$RenderSection$RebuildTask.doTask(SectionRenderDispatcher.java:565)
+```
+
+读数把上一次的疑点消掉了:**重锚本身生效**(handler 帧在栈上,来自活着的五参 `compile`)——但它暴露了下一个、
+更深一层的问题:Indigo 快路径的**接收者** `TerrainRenderContext` 在这个基底上是 `null`。也就是说"把调用点
+搬过去"只完成了这条 API 的一半:guest 的同伴机制(创建/挂载 per-region 的 `TerrainRenderContext`)在本基底上
+没有到位,而过去 redirect 绑不上时这条路根本不会执行,所以从未暴露。
+
+按预先登记的 (D) 判据与"崩掉的 shim 比记录在案的损失更糟"这条标准:**撤回 Indigo 的重锚,把 interim 剪枝
+放回去**(`hookBuildRenderBlock` 在适配器之前被摘掉 ⇒ 适配器 decline,**但那条 decline 现在会打点**,不再沉默),
+四条表里的代价文字照旧成立。重锚代码留在适配器里、由剪枝挡住,等"per-region `TerrainRenderContext` 为什么
+是 null"这个问题有答案后再摘剪枝。
+
+---
+
 ## 2. 声音流:按 1.21.1 的形状重绑并摘掉那条 pin
 
 ### 2.1 两侧的真形状(逐条量)
@@ -320,6 +346,8 @@ Int2ObjectMapTracker.register(Registry, String, Int2ObjectMap)  # ParticleManage
 ---
 
 ## 5. 验证状态(按字面读)
+
+**世界深度(第二次,`64f91eb8…`)**:声音 ✅(标记在、无 decline、无回归);Indigo ❌(标记在、但 handler 内 NPE,已按判据撤回,见 §1.6)。
 
 **已证(离线,不启游戏 JVM)**:§1.4 / §2.3 的全部检查,含两条负对照。复现:
 ```bash

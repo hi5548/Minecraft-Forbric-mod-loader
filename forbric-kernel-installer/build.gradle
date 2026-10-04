@@ -45,14 +45,15 @@ def mergeToolsJar = file("${loaderDir}/build/libs/forbric-merge-tools-0.1.0.jar"
 tasks.register('buildForbricJars', Exec) {
 	description = "Build the kernel jar the installer bundles."
 	workingDir kernelDir
-	// Forward the staged-artifact properties when the caller supplied them. Without this the nested build takes
-	// build.gradle's defaults, and on a machine with no prepared dev root those produce a kernel jar with NO
-	// bundled game side — an installed loader then dies at startup with "bundled jar forbric-kernel-runtime.jar
-	// could not be materialized exactly" (measured 2026-10-04 on 0.3.1-beta). With them forwarded, a caller who
-	// has staged artifacts gets the game side built, and bundleForbric refuses anything that lacks it.
-	def forwarded = ['forbric.stagedRoot', 'forbric.fabricApi', 'forbric.rebornEnergy']
-			.findAll { project.hasProperty(it) }
-			.collect { "-P${it}=${project.property(it)}" }
+	// Forward EVERY forbric.* property the caller supplied, not a hand-maintained subset. The kernel reads a
+	// staged family beyond stagedRoot/fabricApi/rebornEnergy — mcVersion, fabricApiVersion, mcLibraries and
+	// requireTransfer among them — so a caller who overrode e.g. -Pforbric.mcVersion used to get a nested build
+	// pinned to the kernel's own default while the outer build targeted another version, and the game-side
+	// artifacts then failed to resolve (or the wrong Fabric API jar was used). Without the staged properties at
+	// all the nested build produces a kernel jar with NO bundled game side, and an installed loader then dies at
+	// startup with "bundled jar forbric-kernel-runtime.jar could not be materialized exactly" (2026-10-04).
+	def forwarded = project.properties.findAll { key, value -> key.toString().startsWith('forbric.') && value != null }
+			.collect { key, value -> "-P${key}=${value}" }
 	commandLine((isWindows ? ['cmd', '/c', 'gradlew.bat', 'jar'] : ['./gradlew', 'jar']) + forwarded)
 	inputs.dir("${kernelDir}/src/main")
 	inputs.file("${kernelDir}/build.gradle")

@@ -23,6 +23,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import net.forbric.kernel.util.ForbricLog;
+import net.forbric.kernel.util.IdentifierNames;
 
 /**
  * Resolves a registry alias for the registries whose lookups are traditional-Forge wrappers.
@@ -127,7 +128,9 @@ public final class KernelRegistryAliases {
 			// Re-derive if the cache was filled by a different key class — one process only ever has one
 			// ResourceKey, but a stale Method would throw on every lookup rather than simply being slower.
 			if (identifier == null || !identifier.getDeclaringClass().isInstance(key)) {
-				identifier = key.getClass().getMethod("identifier");
+				// location() on 1.21.1, identifier() on the newer generation. getMethod("identifier") threw on
+				// every call here, so ResourceKey-keyed alias resolution silently never happened.
+				identifier = IdentifierNames.idGetter(key.getClass());
 				identifierOf = identifier;
 				createKey = null;
 			}

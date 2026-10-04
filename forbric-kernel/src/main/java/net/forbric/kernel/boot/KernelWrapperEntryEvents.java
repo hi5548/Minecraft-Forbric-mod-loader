@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 import net.forbric.kernel.util.ForbricLog;
+import net.forbric.kernel.util.IdentifierNames;
 
 /**
  * The boot-side half of {@link net.forbric.kernel.transform.WrapperEntryAddedInjector}: fires fabric-registry-sync's
@@ -67,7 +68,9 @@ public final class KernelWrapperEntryEvents {
 		try {
 			Class<?> listenable = Class.forName(LISTENABLE, false, loader);
 			if (!listenable.isAssignableFrom(wrapper)) return Optional.empty();
-			Method identifier = Class.forName("net.minecraft.resources.ResourceKey", false, loader).getMethod("identifier");
+			// location() on 1.21.1, identifier() on the newer generation; the callback descriptor is built from
+			// the resolved return type, so resolving the wrong generation's name would both miss and mis-type.
+			Method identifier = IdentifierNames.idGetter(Class.forName("net.minecraft.resources.ResourceKey", false, loader));
 			return Optional.of(new Hooks(listenable.getMethod("fabric_getAddObjectEvent"),
 					Class.forName(EVENT, false, loader).getMethod("invoker"),
 					Class.forName(CALLBACK, false, loader).getMethod("onEntryAdded", int.class, identifier.getReturnType(), Object.class),

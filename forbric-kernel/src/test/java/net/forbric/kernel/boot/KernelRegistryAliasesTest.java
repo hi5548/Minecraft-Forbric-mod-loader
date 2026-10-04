@@ -88,6 +88,22 @@ class KernelRegistryAliasesTest {
 		assertEquals("minecraft:block", ((Key) resolved).registryKey);
 	}
 
+	/**
+	 * The 1.21.1 generation reads a key's id with {@code location()}, not {@code identifier()}. Resolving only the
+	 * newer name threw NoSuchMethodException on every call, so a ResourceKey-keyed alias was never honoured —
+	 * the silent half of the player log's {@code ResourceKey.identifier()} line.
+	 */
+	@Test
+	void resolvesTheResourceKeyFormWhenTheAccessorIsLocationRatherThanIdentifier() {
+		Wrapper registry = new Wrapper();
+		registry.aliases.put("waystones:waystone", "waystones:andesite_waystone");
+
+		Object resolved = KernelRegistryAliases.resolveKey(registry, new LocationKey("waystones:waystone"));
+
+		assertEquals(new LocationKey("waystones:andesite_waystone"), resolved);
+		assertEquals("minecraft:block", ((LocationKey) resolved).registryKey);
+	}
+
 	@Test
 	void aResourceKeyThatIsNotAnAliasComesBackUnchanged() {
 		Wrapper registry = new Wrapper();
@@ -132,6 +148,39 @@ class KernelRegistryAliasesTest {
 		@Override
 		public boolean equals(Object o) {
 			return o instanceof Key k && k.id.equals(id);
+		}
+
+		@Override
+		public int hashCode() {
+			return id.hashCode();
+		}
+	}
+
+	/** The 1.21.1 shape: the id accessor is {@code location()}, and there is no {@code identifier()}. */
+	static final class LocationKey {
+		final Object registryKey;
+		final Object id;
+
+		LocationKey(Object id) {
+			this("minecraft:block", id);
+		}
+
+		LocationKey(Object registryKey, Object id) {
+			this.registryKey = registryKey;
+			this.id = id;
+		}
+
+		public Object location() {
+			return id;
+		}
+
+		public static LocationKey create(Object registryKey, Object id) {
+			return new LocationKey(registryKey, id);
+		}
+
+		@Override
+		public boolean equals(Object o) {
+			return o instanceof LocationKey k && k.id.equals(id);
 		}
 
 		@Override

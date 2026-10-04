@@ -32,6 +32,7 @@ import net.forbric.api.EventBridges;
 import net.forbric.api.GameEventBridge;
 import net.forbric.api.ForeignType;
 import net.forbric.kernel.util.ForbricLog;
+import net.forbric.kernel.util.IdentifierNames;
 import net.forbric.kernel.util.Reflect;
 import net.forbric.kernel.fabric.KernelFabricLoader;
 import net.forbric.api.ModCatalog;
@@ -1982,7 +1983,9 @@ public final class KernelLifecycle {
 			Map<Object, Integer> ranked = new java.util.IdentityHashMap<>();
 			for (Object registry : registries) {
 				Object key = keyM.invoke(registry);
-				Object id = key.getClass().getMethod("identifier").invoke(key);
+				// location() on 1.21.1, identifier() on the newer generation: the hardcoded newer name threw, so
+				// registration-order ranking silently fell back to collection order.
+				Object id = IdentifierNames.idGetter(key.getClass()).invoke(key);
 				ranked.put(registry, rank.getOrDefault(String.valueOf(id), unranked));
 			}
 

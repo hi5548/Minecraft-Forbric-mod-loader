@@ -28,6 +28,7 @@ import java.util.TreeMap;
 import net.forbric.api.Ecosystem;
 import net.forbric.api.ForeignType;
 import net.forbric.kernel.util.ForbricLog;
+import net.forbric.kernel.util.IdentifierNames;
 
 /**
  * The boot-side half of {@link net.forbric.kernel.transform.RegistrySyncParityInjector}: stages the ids NeoForge's
@@ -101,7 +102,10 @@ public final class KernelForgeWrapperSync {
 		if (!ENABLED || wrapper == null || key == null) return;
 		Object name;
 		try {
-			name = key.getClass().getMethod("identifier").invoke(key);
+			// location() on 1.21.1, identifier() on the newer generation — see IdentifierNames. Hardcoding the
+			// newer name is what put NoSuchMethodException ...ResourceKey.identifier() in the player log and left
+			// these seventeen registries un-staged.
+			name = IdentifierNames.idGetter(key.getClass()).invoke(key);
 		} catch (Throwable t) {
 			ForbricLog.warn("[Forbric/RegistrySync] cannot read the id of registry key " + key, unwrap(t));
 			return;
@@ -166,7 +170,10 @@ public final class KernelForgeWrapperSync {
 	private static void apply(ClassLoader cl, Map<Object, Map<Object, Integer>> staged) throws Exception {
 		Class<?> snapshotCls = Class.forName("net.minecraftforge.registries.ForgeRegistry$Snapshot", false, cl);
 		Class<?> gameData = Class.forName(ForeignType.GAME_DATA.binary(Ecosystem.FORGE), false, cl);
-		Class<?> identifierCls = Class.forName("net.minecraft.resources.Identifier", false, cl);
+		// ResourceLocation on 1.21.1, Identifier on the newer generation: looking up the newer name only made
+		// Class.forName throw, the caller ERROR-log "could not apply the server's ids", and every wrapped registry
+		// keep its local ids (wrong blocks/items in a synced world).
+		Class<?> identifierCls = IdentifierNames.identifierClass(cl);
 		Method injectSnapshot = gameData.getMethod("injectSnapshot", Map.class, boolean.class, boolean.class);
 		// Resolved on the PUBLIC interfaces, not on the wrapper: NamespacedWrapper is package-private, and a Method
 		// looked up on a package-private class fails the access check even when the method itself is public.
@@ -362,7 +369,7 @@ public final class KernelForgeWrapperSync {
 		// Registry.key() rather than wrapper.getClass().getMethod("key"): see apply() — the wrapper is package-private.
 		Object key = Class.forName("net.minecraft.core.Registry", false, wrapper.getClass().getClassLoader())
 				.getMethod("key").invoke(wrapper);
-		return key.getClass().getMethod("identifier").invoke(key);
+		return IdentifierNames.idGetter(key.getClass()).invoke(key);
 	}
 
 	private static String describe(Object wrapper) {

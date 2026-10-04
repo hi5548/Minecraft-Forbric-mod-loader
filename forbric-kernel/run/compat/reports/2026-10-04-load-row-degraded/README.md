@@ -155,3 +155,33 @@ cd forbric-kernel && ./gradlew test \
   涉及的 6 个 mixin config(`fabric-content-registries-v0` / `fabric-events-interaction-v0` /
   `fabric-item-api-v1` / `fabric-object-builder-v1` / `fabric-recipe-api-v1` / `mixins.modmenu.json`)
   **全部 `plugin=None`**(已逐 config 核对 remap 缓存里的 jar),没有插件可问,故不会改变本行。
+
+## 8. 验证读数回填(`W7Harness`,逐字)
+
+构建 `3183f213` / 代码 `37ad693b`,sha `c1925b0ba423eecdea9e8631ef137bdb3ca67b49a43275641e90dbd3ada3378a`,
+用户真实十二,JDK 21,**热** remap 缓存(与控制同 corpus,未重 remap),`reports/2026-10-04-load-row-degraded/`:
+
+```
+row: run=PASS  exit=0  world=true  frames=1  strict=TRUE  confirmed_required=0  seconds=60  crash reports: 0
+joined world via quick-play: 1
+'[Forbric/Load] N mod(s) did not finish loading:':   0            <- 登记 #2 达成
+'[Forbric/Load] N mod(s) partly did not run:':       4 emissions (11, 11, 10, 10)   <- 登记 #1 达成
+'every mod finished loading':                        0            <- must-not-appear,如期缺席
+```
+
+* **#1 达成。** 新行出现,id 集合与顺序**逐项**与对照(`bf56012d`)相同(程序化 diff:added none /
+  removed none / order identical)。发射形状两边一致:**早 11(×2)→ 晚 10(×2)**——预登记的"10 mod(s)"
+  是**晚**形,逐字在场;早形不是新增,对照也在发。**只有那句话变了,集合没动。**
+* **#3 达成**,逐字与修前相同:`world=true`、`confirmed_required: 0`、joined quick-play。
+* **#4 达成。** 报告仍列同十条、同顺序,每条仍 `有一部分没有跑起来`,原因逐字一致,0 份崩溃报告。
+  标题的前后对照,就是本修复的一句话:
+
+```
+control (bf56012d):  这一次启动，有 10 个 mod 没有完成加载。
+new     (3183f213):  这一次启动，10 个 mod 有一部分没有跑起来。
+```
+
+> 留一条过程教训(W7Harness 主动记录,值得转抄):他用 `grep -c 有一部分没有跑起来` 数到 **11**,一度
+> 以为正文/标题不一致、差点报成"你的 bug 类复发"。没有。`grep -c` 数的是**含该短语的行**,而新的**标题**
+> 就含它——10 条正文 + 1 条标题 = 11。按结构解析才是 **10 个 owner,同十条、同序**。**判据只认结构,不认
+> 计数**——这是今天第五次栽在这个形状上,也是第二次栽在他自己手里。

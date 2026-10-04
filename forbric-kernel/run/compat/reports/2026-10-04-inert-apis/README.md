@@ -5,7 +5,7 @@
 而不是半成品;顺带把"颜色族为什么重锚不可行"这条观察**量实**(它暴露出合并基底自身的一条缺陷,且与 Fabric
 无关)。
 
-工作树:`/private/tmp/inert-apis-wt`(分支 `inert-apis`,起点 `20e423aa`,源码收尾 `53f101da`(报告提交 `5656a585` 不改源码),树干净)。
+工作树:`/private/tmp/inert-apis-wt`(分支 `inert-apis`,起点 `20e423aa`,源码收尾 `f1a11d79`(报告提交在其后,不改源码),树干净)。
 所有字节结论来自两侧实字节:**staged merged base**
 (`p0/stage-1.21.1/merged-base/patched-mc-merged-1.21.1.jar`)、**Forge/NeoForge 各自的 patched jar**、
 **官方 1.21.1 client jar**(`/private/tmp/fapin/src/client-official.jar`)、以及**remap 后的 guest**
@@ -139,6 +139,30 @@ java.lang.VerifyError: Bad type on operand stack
 负对照是这条判据可证伪的地方:把 `@Redirect.method` 换回四参(即 `55164ff3` 的状态)后,同一探针在
 `operand[8] = forge/ModelData` 处判 FAIL —— 与真实崩溃的 `Reason` 逐字同源。**形状全对、类型错**这一类错误
 因此在下一次启动之前就被挡住。
+
+### 1.5 第一次世界深度读数:Indigo 那条**未生效**,原因是一个更早的剪枝条目(已在本轮一并摘掉)
+
+`W7Harness` 在 `0a819eec…`(=当时的源码提交 `53f101da`)上跑了世界深度一次,逐字读数:
+
+```
+run=PASS exit=0 world=true frames=1 stopped=true killed=false mod=OK strict=TRUE confirmed_required=0
+seconds=261 java=jdk-21   joined world via quick-play: 1   clean disconnect observed: 1   crash-reports: 0
+```
+
+- 声音那条**控制台标记逐字出现** ⇒ 声音重绑在真启动里生效。
+- Indigo 那条标记 **0 次**,而它的 finding 仍然缺席 —— 缺席的原因是**更早的一条剪枝条目**:
+  ```
+  [Forbric/GuestInjectorPruner] pruned 1 injector(s) from net.fabricmc.fabric.mixin.client.indigo.renderer.SectionBuilderMixin
+    — the callee was WIDENED, not renamed: the merged SectionCompile…
+  ```
+  剪枝器在链上先跑,把 `hookBuildRenderBlock` 摘掉;适配器随后读到的 mixin 已经没有它,于是**静默 decline**。
+  ⇒ 本车道当时的判断("那条 CONFIRMED required 还在")在 `64ea43cc` 之前是对的,但**落地顺序**错了:剪枝条目
+  必须先摘掉,重锚才有对象。这正是"标记必须证明确实生效,而不是碰巧没出现"这条纪律的第二个实例。
+
+**本轮的处理**:删掉 `GuestInjectorPruner` 里 `INDIGO_SECTION_BUILDER_MIXIN` 的常量与六张表条目(它没有别的
+handler,剪掉它只是把 CONFIRMED 降级为带账退出),并给**两个**适配器各加一条**decline 打点**(fail-closed 时
+打印,并只在"mixin 仍带未重锚的 handler"时打印,所以不会在幂等第二次调用上误报)。下一次读数必须同时看到
+Indigo 的 retargeted 标记与**没有** decline 行。
 
 ---
 
@@ -306,13 +330,17 @@ run/compat/reports/2026-10-04-inert-apis/evidence/run-probes.sh \
 `MergedBaseMixinCompatPinnedContractsTest` 在本检出下 4/4、4/4、3/3 全部 **skip**(夹具是 26.2 的
 `fabric-api-0.155.2`,本检出没有,`assumeTrue` 跳过),无失败——本改动不破坏既有契约。
 
-**待启动证 boot(预先登记,交给 `W7Harness`)**:冻结内核 jar `/tmp/inert-apis-kernel.jar`,
-sha256 `0a819eec759853495ecbb3a7b02e4c7a921481549a7bc3aa675b9774c9418256`(=`53f101da`),JDK 21,
-客户端表面、quick-play、冷 remap 缓存。只接受:
+**已读数(第一次,`0a819eec…` = `53f101da`)**:见 §1.5 —— 声音成立;Indigo 未生效(被更早的剪枝条目挡住),
+该轮因此判 **(C) 半成立,不算验收**。
+
+**待读数(第二次,预先登记,交给 `W7Harness`)**:冻结内核 jar `/tmp/inert-apis-kernel.jar`,
+sha256 `5b38e7c736f49e25dd6d61e6c22f65af8fd76b9191a492d32a04beccf6d2a1c4`(摘掉 Indigo 剪枝条目 + 两处
+decline 打点之后),JDK 21,客户端表面、quick-play、冷 remap 缓存。只接受:
 
 - (A) **该 finding 缺席**:`compatibility-report.json confirmedRequired == 0`,且枚举里没有含
   `SectionBuilderMixin#hookBuildRenderBlock` 或 `fabric-sound-api-v1` `SoundSystemMixin` 的 id;
 - (B) `world=true`、`run=PASS`、`contended=false`、`java=jdk-21`,console 有 `ClientSmoke] joined world via quick-play`;
+- (C0) **两条 decline 行都为 0 次**(`Indigo's 1.21.1 retarget DECLINED` / `the 1.21.1 sound retarget DECLINED`);
 - (C) 两条**控制台落地点**(证明确实生效,而不是碰巧没出现):
   `[Forbric/Renderer] retargeted Indigo's per-block redirect onto the LIVE merged compile body's nine-argument renderBatched`
   `[Forbric/Sound] retargeted Fabric's stream redirect onto the merged SoundEngine.play's SoundInstance.getStream call (1.21.1 generation)`;
@@ -353,3 +381,5 @@ sha256 `0a819eec759853495ecbb3a7b02e4c7a921481549a7bc3aa675b9774c9418256`(=`53f1
 |---|---|---|
 | `64ea43cc` | Indigo per-block(1 条) | 重锚:注入器迁到活着的五参 `compile`,目标换九参 `renderBatched`(NeoForge ModelData),暂存局部让位 |
 | `53f101da` | 声音流(1 条) | 重锚:`@At` 改绑接口 `getStream`,handler 重写为派发 `getAudioStream`;摘掉 `SoundSystemMixin` 的 pin |
+| `1b0dba38` | 报告 + 证据 + PORT 表 | 六条逐条判决;颜色族两步形状与那条原版缺陷 |
+| `f1a11d79` | Indigo 的剪枝条目 + 两处 decline 打点 | 第一次读数的产物:重锚必须先摘掉那份 interim 剪枝才可及(§1.5);decline 不再沉默 |

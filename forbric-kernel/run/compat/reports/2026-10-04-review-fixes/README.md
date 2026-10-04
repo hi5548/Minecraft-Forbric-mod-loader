@@ -125,6 +125,10 @@ with `registerRenderer`, and the `Renderer.register` direct form) and broaden th
 Probe: `registersRenderer(<the user's real sodium jar>)` = true; `FrapiRendererEvidenceTest` gains
 the new cases (5 tests, 0 failed), 26.2 cases kept.
 
+Measured second effect, one wall later: with `contains_renderer` now forwarded, Sodium's NeoForge
+side reaches and satisfies `ConfigLoaderForge` — `Sodium's config could not be found`, which killed
+the same set on `main`, occurs 0 times on this batch and the boot proceeds to a world.
+
 ## P6 / P7 — the two per-launch false alarms — `fc3c1cf9`, `45590507`
 
 P6: `restoreDoublePrecisionToTheRandomSources` matches the float form of the 2⁻⁵³ scaling; the
@@ -179,4 +183,30 @@ The wall that blocked the previous run of this exact set — `Minecraft.<init>` 
 worktree carries it. That is why this run can be expected to reach a world where the last one could
 not.
 
-**Result:** _pending — filled in when `W7Harness` returns the row._
+**Result** (`W7Harness`, `reports/2026-10-04-reviewfix-usermods/`, kernel sha
+`451c6780f682df26bfc9b7fbc5eb26d17c25f7973219b2cfe3cceda945d1025f` from `e11e4fcb`, the ten rebased
+fixes on main):
+
+```
+run=PASS  exit=0  world=true  frames=1  stopped=true  killed=false  strict=TRUE
+confirmed_required=0  seconds=102  java=jdk-21  joined world via quick-play: 1
+```
+
+All four registered reads met:
+
+1. `confirmed_required: 0` — enumeration empty.
+2. `world=true` and `joined world via quick-play: 1` — the first world-depth pass of this full set
+   on any build today.
+3. Both P1 lines absent: **0** occurrences of `ResourceKey.identifier` anywhere
+   (`NoSuchMethodException` appears twice, on unrelated sites); `could not apply the server's ids`
+   **0** and `they keep their local ids` **0**.
+4. Kernel sha recorded above.
+
+The two P6/P7 HEDGEs are confirmed gone against `main`'s own row on the same set: `BitRandomSource`
+"made no edit" 1 → 0, `forbric-dragon-parts`/EnderDragonPart 1 → 0.
+
+**Second effect of P5, recorded here rather than as a separate finding:** the last run of this set on
+`main` died inside Sodium's `ConfigLoaderForge` — `Sodium's config could not be found`. On this batch
+that line occurs **0** times and the boot reaches a world: the same evidence-check fix, seen one wall
+later. The batch therefore not only passes the wall `main` fixed (ResourcePackLoader); it clears a
+wall `main` still had.

@@ -1,0 +1,15 @@
+# sun.misc.Unsafe.ensureClassInitialized: present in JDK 21, REMOVED in JDK 22+ (box default 'java' is 25)
+jdk-21: 1
+jdk-22: 0
+jdk-25: 0
+
+# who calls it in the Cobblemon closure: Cobblemon bundles truffle-api-22.3.0.jar, and truffle calls it
+   719609  01-01-1980 00:00   META-INF/jars/graal-sdk-22.3.0.jar
+ 23528385  01-01-1980 00:00   META-INF/jars/js-22.3.0.jar
+ 15129565  01-01-1980 00:00   META-INF/jars/truffle-api-22.3.0.jar
+
+# the console line from the JDK-25 run (recheck-walls, cobblecoop):
+	at java.base/jdk.internal.misc.Unsafe.ensureClassInitialized0(Native Method) [?:?]
+
+# and the loaded JVM of the boot that produced it (lsof on the sweep's child JVM):
+jdk-25.jdk/Contents/Home/bin/java   (argv[0] /usr/bin/java, JAVA_HOME/W7_JAVA unset)

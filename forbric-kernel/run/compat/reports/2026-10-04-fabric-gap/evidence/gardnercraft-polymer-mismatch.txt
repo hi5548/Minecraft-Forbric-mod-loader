@@ -1,0 +1,46 @@
+# polymer-core-0.9.19+1.21.1 (the closure's jar): NO registerOverlay on PolymerSoundEvent
+Compiled from "PolymerSoundEvent.java"
+public class eu.pb4.polymer.core.api.other.PolymerSoundEvent extends net.minecraft.class_3414 implements eu.pb4.polymer.core.api.utils.PolymerSyncedObject<net.minecraft.class_3414> {
+  protected final net.minecraft.class_3414 polymerSound;
+  protected final java.util.UUID source;
+  public static eu.pb4.polymer.core.api.other.PolymerSoundEvent of(net.minecraft.class_2960, net.minecraft.class_3414);
+  static eu.pb4.polymer.core.api.other.PolymerSoundEvent of(net.minecraft.class_2960, float, net.minecraft.class_3414);
+  public static eu.pb4.polymer.core.api.other.PolymerSoundEvent of(java.util.UUID, net.minecraft.class_2960, net.minecraft.class_3414);
+  static eu.pb4.polymer.core.api.other.PolymerSoundEvent of(java.util.UUID, net.minecraft.class_2960, float, net.minecraft.class_3414);
+  public eu.pb4.polymer.core.api.other.PolymerSoundEvent(java.util.UUID, net.minecraft.class_2960, float, boolean, net.minecraft.class_3414);
+  public net.minecraft.class_3414 getPolymerReplacement(net.minecraft.class_3222);
+  public java.lang.Object getPolymerReplacement(net.minecraft.class_3222);
+}
+
+# gardnercraft-2.0.0 fabric.mod.json depends (note polymer-core >=0.15.2+1.21.11, minecraft ~1.21)
+{
+    "schemaVersion": 1,
+    "id": "gardnercraft",
+    "version": "2.0.0",
+    "name": "Gardnercraft",
+    "description": "Adds the Gardnercraft server items and armor trim.",
+    "authors": [
+        "nateg"
+    ],
+    "license": "MIT",
+    "icon": "assets/gardnercraft/icon.png",
+    "environment": "*",
+    "entrypoints": {
+        "main": [
+            "com.gardnercraft.GardnercraftMod"
+        ]
+    },
+    "custom": {
+        "polymer:resource_pack_include": true,
+        "polymer:resource_pack_require": true
+    },
+    "depends": {
+        "fabricloader": ">=0.15.0",
+        "minecraft": "~1.21",
+        "java": ">=21",
+        "fabric-api": "*",
+        "polymer-core": ">=0.15.2+1.21.11",
+        "polymer-resource-pack": ">=0.15.2+1.21.11",
+        "packet_tweaker": ">=0.6.0"
+    }
+}

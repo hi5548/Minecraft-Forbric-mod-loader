@@ -1,0 +1,140 @@
+# cobblemon_pufferfish_api's entrypoint calls Puffish's Skills directly; its own metadata does not declare it
+public final class com.cobblemon_puffish_skills.api.CobblemonSkillsBridgeFabric implements net.fabricmc.api.ModInitializer {
+  public com.cobblemon_puffish_skills.api.CobblemonSkillsBridgeFabric();
+         0: invokestatic  #28                 // Method com/cobblemon_puffish_skills/api/reward/ModifierReward.register:()V
+         3: invokestatic  #31                 // Method com/cobblemon_puffish_skills/api/loot/FabricLootHooks.register:()V
+         6: ldc           #16                 // String cobblemon_puffish_skills_api
+        13: invokedynamic #58,  0             // InvokeDynamic #0:create:()Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;
+        18: invokestatic  #64                 // Method net/puffish/skillsmod/api/SkillsAPI.registerExperienceSource:(Lnet/minecraft/class_2960;Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;)V
+        21: ldc           #16                 // String cobblemon_puffish_skills_api
+        28: invokedynamic #71,  0             // InvokeDynamic #1:create:()Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;
+        33: invokestatic  #64                 // Method net/puffish/skillsmod/api/SkillsAPI.registerExperienceSource:(Lnet/minecraft/class_2960;Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;)V
+        36: ldc           #16                 // String cobblemon_puffish_skills_api
+        43: invokedynamic #78,  0             // InvokeDynamic #2:create:()Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;
+        48: invokestatic  #64                 // Method net/puffish/skillsmod/api/SkillsAPI.registerExperienceSource:(Lnet/minecraft/class_2960;Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;)V
+        51: ldc           #16                 // String cobblemon_puffish_skills_api
+        58: invokedynamic #85,  0             // InvokeDynamic #3:create:()Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;
+        63: invokestatic  #64                 // Method net/puffish/skillsmod/api/SkillsAPI.registerExperienceSource:(Lnet/minecraft/class_2960;Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;)V
+        66: ldc           #16                 // String cobblemon_puffish_skills_api
+        73: invokedynamic #92,  0             // InvokeDynamic #4:create:()Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;
+        78: invokestatic  #64                 // Method net/puffish/skillsmod/api/SkillsAPI.registerExperienceSource:(Lnet/minecraft/class_2960;Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;)V
+        81: ldc           #16                 // String cobblemon_puffish_skills_api
+        88: invokedynamic #99,  0             // InvokeDynamic #5:create:()Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;
+        93: invokestatic  #64                 // Method net/puffish/skillsmod/api/SkillsAPI.registerExperienceSource:(Lnet/minecraft/class_2960;Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;)V
+        96: ldc           #16                 // String cobblemon_puffish_skills_api
+       103: invokedynamic #106,  0            // InvokeDynamic #6:create:()Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;
+       108: invokestatic  #64                 // Method net/puffish/skillsmod/api/SkillsAPI.registerExperienceSource:(Lnet/minecraft/class_2960;Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;)V
+       111: ldc           #16                 // String cobblemon_puffish_skills_api
+       118: invokedynamic #113,  0            // InvokeDynamic #7:create:()Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;
+       123: invokestatic  #64                 // Method net/puffish/skillsmod/api/SkillsAPI.registerExperienceSource:(Lnet/minecraft/class_2960;Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;)V
+       126: ldc           #16                 // String cobblemon_puffish_skills_api
+       133: invokedynamic #120,  0            // InvokeDynamic #8:create:()Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;
+       138: invokestatic  #64                 // Method net/puffish/skillsmod/api/SkillsAPI.registerExperienceSource:(Lnet/minecraft/class_2960;Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;)V
+       141: ldc           #16                 // String cobblemon_puffish_skills_api
+       148: invokedynamic #127,  0            // InvokeDynamic #9:create:()Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;
+       153: invokestatic  #64                 // Method net/puffish/skillsmod/api/SkillsAPI.registerExperienceSource:(Lnet/minecraft/class_2960;Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;)V
+       156: ldc           #16                 // String cobblemon_puffish_skills_api
+       163: invokedynamic #134,  0            // InvokeDynamic #10:create:()Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;
+       168: invokestatic  #64                 // Method net/puffish/skillsmod/api/SkillsAPI.registerExperienceSource:(Lnet/minecraft/class_2960;Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;)V
+       171: ldc           #16                 // String cobblemon_puffish_skills_api
+       178: invokedynamic #141,  0            // InvokeDynamic #11:create:()Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;
+       183: invokestatic  #64                 // Method net/puffish/skillsmod/api/SkillsAPI.registerExperienceSource:(Lnet/minecraft/class_2960;Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;)V
+       186: ldc           #16                 // String cobblemon_puffish_skills_api
+       193: invokedynamic #148,  0            // InvokeDynamic #12:create:()Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;
+       198: invokestatic  #64                 // Method net/puffish/skillsmod/api/SkillsAPI.registerExperienceSource:(Lnet/minecraft/class_2960;Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;)V
+       201: ldc           #16                 // String cobblemon_puffish_skills_api
+       208: invokedynamic #155,  0            // InvokeDynamic #13:create:()Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;
+       213: invokestatic  #64                 // Method net/puffish/skillsmod/api/SkillsAPI.registerExperienceSource:(Lnet/minecraft/class_2960;Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;)V
+       216: ldc           #16                 // String cobblemon_puffish_skills_api
+       223: invokedynamic #162,  0            // InvokeDynamic #14:create:()Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;
+       228: invokestatic  #64                 // Method net/puffish/skillsmod/api/SkillsAPI.registerExperienceSource:(Lnet/minecraft/class_2960;Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;)V
+       231: ldc           #16                 // String cobblemon_puffish_skills_api
+       238: invokedynamic #169,  0            // InvokeDynamic #15:create:()Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;
+       243: invokestatic  #64                 // Method net/puffish/skillsmod/api/SkillsAPI.registerExperienceSource:(Lnet/minecraft/class_2960;Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;)V
+       246: ldc           #16                 // String cobblemon_puffish_skills_api
+       253: invokedynamic #176,  0            // InvokeDynamic #16:create:()Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;
+       258: invokestatic  #64                 // Method net/puffish/skillsmod/api/SkillsAPI.registerExperienceSource:(Lnet/minecraft/class_2960;Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;)V
+       261: ldc           #16                 // String cobblemon_puffish_skills_api
+       268: invokedynamic #183,  0            // InvokeDynamic #17:create:()Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;
+       273: invokestatic  #64                 // Method net/puffish/skillsmod/api/SkillsAPI.registerExperienceSource:(Lnet/minecraft/class_2960;Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;)V
+       276: ldc           #16                 // String cobblemon_puffish_skills_api
+       283: invokedynamic #190,  0            // InvokeDynamic #18:create:()Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;
+       288: invokestatic  #64                 // Method net/puffish/skillsmod/api/SkillsAPI.registerExperienceSource:(Lnet/minecraft/class_2960;Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;)V
+       291: ldc           #16                 // String cobblemon_puffish_skills_api
+       298: invokedynamic #197,  0            // InvokeDynamic #19:create:()Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;
+       303: invokestatic  #64                 // Method net/puffish/skillsmod/api/SkillsAPI.registerExperienceSource:(Lnet/minecraft/class_2960;Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;)V
+       306: ldc           #16                 // String cobblemon_puffish_skills_api
+       313: invokedynamic #204,  0            // InvokeDynamic #20:create:()Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;
+       318: invokestatic  #64                 // Method net/puffish/skillsmod/api/SkillsAPI.registerExperienceSource:(Lnet/minecraft/class_2960;Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;)V
+       321: ldc           #16                 // String cobblemon_puffish_skills_api
+       328: invokedynamic #211,  0            // InvokeDynamic #21:create:()Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;
+       333: invokestatic  #64                 // Method net/puffish/skillsmod/api/SkillsAPI.registerExperienceSource:(Lnet/minecraft/class_2960;Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;)V
+       336: ldc           #16                 // String cobblemon_puffish_skills_api
+       343: invokedynamic #218,  0            // InvokeDynamic #22:create:()Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;
+       348: invokestatic  #64                 // Method net/puffish/skillsmod/api/SkillsAPI.registerExperienceSource:(Lnet/minecraft/class_2960;Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;)V
+       351: ldc           #16                 // String cobblemon_puffish_skills_api
+       358: invokedynamic #225,  0            // InvokeDynamic #23:create:()Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;
+       363: invokestatic  #64                 // Method net/puffish/skillsmod/api/SkillsAPI.registerExperienceSource:(Lnet/minecraft/class_2960;Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;)V
+       366: ldc           #16                 // String cobblemon_puffish_skills_api
+       373: invokedynamic #232,  0            // InvokeDynamic #24:create:()Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;
+       378: invokestatic  #64                 // Method net/puffish/skillsmod/api/SkillsAPI.registerExperienceSource:(Lnet/minecraft/class_2960;Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;)V
+       381: ldc           #16                 // String cobblemon_puffish_skills_api
+       388: invokedynamic #239,  0            // InvokeDynamic #25:create:()Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;
+       393: invokestatic  #64                 // Method net/puffish/skillsmod/api/SkillsAPI.registerExperienceSource:(Lnet/minecraft/class_2960;Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;)V
+       396: ldc           #16                 // String cobblemon_puffish_skills_api
+       403: invokedynamic #246,  0            // InvokeDynamic #26:create:()Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;
+       408: invokestatic  #64                 // Method net/puffish/skillsmod/api/SkillsAPI.registerExperienceSource:(Lnet/minecraft/class_2960;Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;)V
+       411: ldc           #16                 // String cobblemon_puffish_skills_api
+       418: invokedynamic #253,  0            // InvokeDynamic #27:create:()Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;
+       423: invokestatic  #64                 // Method net/puffish/skillsmod/api/SkillsAPI.registerExperienceSource:(Lnet/minecraft/class_2960;Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;)V
+       426: ldc           #16                 // String cobblemon_puffish_skills_api
+       433: invokedynamic #260,  0            // InvokeDynamic #28:create:()Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;
+       438: invokestatic  #64                 // Method net/puffish/skillsmod/api/SkillsAPI.registerExperienceSource:(Lnet/minecraft/class_2960;Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;)V
+       441: ldc           #16                 // String cobblemon_puffish_skills_api
+       449: invokedynamic #267,  0            // InvokeDynamic #29:create:()Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;
+       454: invokestatic  #64                 // Method net/puffish/skillsmod/api/SkillsAPI.registerExperienceSource:(Lnet/minecraft/class_2960;Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;)V
+       457: ldc           #16                 // String cobblemon_puffish_skills_api
+       465: invokedynamic #274,  0            // InvokeDynamic #30:create:()Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;
+       470: invokestatic  #64                 // Method net/puffish/skillsmod/api/SkillsAPI.registerExperienceSource:(Lnet/minecraft/class_2960;Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;)V
+       473: ldc           #16                 // String cobblemon_puffish_skills_api
+       481: invokedynamic #281,  0            // InvokeDynamic #31:create:()Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;
+       486: invokestatic  #64                 // Method net/puffish/skillsmod/api/SkillsAPI.registerExperienceSource:(Lnet/minecraft/class_2960;Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;)V
+       489: ldc           #16                 // String cobblemon_puffish_skills_api
+       497: invokedynamic #288,  0            // InvokeDynamic #32:create:()Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;
+       502: invokestatic  #64                 // Method net/puffish/skillsmod/api/SkillsAPI.registerExperienceSource:(Lnet/minecraft/class_2960;Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;)V
+       505: ldc           #16                 // String cobblemon_puffish_skills_api
+       513: invokedynamic #295,  0            // InvokeDynamic #33:create:()Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;
+       518: invokestatic  #64                 // Method net/puffish/skillsmod/api/SkillsAPI.registerExperienceSource:(Lnet/minecraft/class_2960;Lnet/puffish/skillsmod/api/experience/source/ExperienceSourceFactory;)V
+       521: invokestatic  #298                // Method com/cobblemon_puffish_skills/api/listener/ServerLifecycleBootstrapFabric.register:()V
+       524: invokestatic  #301                // Method com/cobblemon_puffish_skills/api/listener/ObjectiveBootstrapFabric.register:()V
+       527: invokestatic  #304                // Method com/cobblemon_puffish_skills/api/listener/FishingBaitPowerInfluenceBootstrapFabric.register:()V
+       530: invokestatic  #307                // Method com/cobblemon_puffish_skills/api/listener/PokemonCapturedEventListener.register:()V
+       533: invokestatic  #310                // Method com/cobblemon_puffish_skills/api/listener/PokemonFaintedEventListener.register:()V
+       536: invokestatic  #313                // Method com/cobblemon_puffish_skills/api/listener/BattleVictoryEventListener.register:()V
+       539: invokestatic  #316                // Method com/cobblemon_puffish_skills/api/listener/PokemonEvolvedEventListener.register:()V
+       542: invokestatic  #319                // Method com/cobblemon_puffish_skills/api/listener/TradeCompletedEventListener.register:()V
+       545: invokestatic  #322                // Method com/cobblemon_puffish_skills/api/listener/PokedexEntryUnlockedEventListener.register:()V
+       548: invokestatic  #325                // Method com/cobblemon_puffish_skills/api/listener/ApricornHarvestEventListener.register:()V
+       551: invokestatic  #328                // Method com/cobblemon_puffish_skills/api/listener/BerryHarvestEventListener.register:()V
+       554: invokestatic  #331                // Method com/cobblemon_puffish_skills/api/listener/FossilRevivedEventListener.register:()V
+       557: invokestatic  #334                // Method com/cobblemon_puffish_skills/api/listener/HatchEggEventListener.register:()V
+       560: invokestatic  #337                // Method com/cobblemon_puffish_skills/api/listener/StarterChosenEventListener.register:()V
+       563: invokestatic  #340                // Method com/cobblemon_puffish_skills/api/listener/ExperienceCandyUseEventListener.register:()V
+       566: invokestatic  #343                // Method com/cobblemon_puffish_skills/api/listener/PokemonHealedEventListener.register:()V
+       569: invokestatic  #346                // Method com/cobblemon_puffish_skills/api/listener/PokemonCatchRateModifierListener.register:()V
+       572: invokestatic  #349                // Method com/cobblemon_puffish_skills/api/listener/PokeBallCaptureCalculatedModifierListener.register:()V
+       575: invokestatic  #352                // Method com/cobblemon_puffish_skills/api/listener/ShinyChanceModifierListener.register:()V
+       578: invokestatic  #355                // Method com/cobblemon_puffish_skills/api/listener/MountStaminaModifierListener.register:()V
+       581: invokestatic  #358                // Method com/cobblemon_puffish_skills/api/listener/BattleExperienceModifierListener.register:()V
+       584: invokestatic  #361                // Method com/cobblemon_puffish_skills/api/listener/EvGainModifierListener.register:()V
+       587: invokestatic  #364                // Method com/cobblemon_puffish_skills/api/listener/IvCaptureModifierListener.register:()V
+       590: invokestatic  #367                // Method com/cobblemon_puffish_skills/api/listener/IvHatchModifierListener.register:()V
+       593: invokestatic  #370                // Method com/cobblemon_puffish_skills/api/listener/IvHyperTrainingModifierListener.register:()V
+       596: invokestatic  #373                // Method com/cobblemon_puffish_skills/api/listener/SpawnRarityInfluenceListener.register:()V
+       599: invokestatic  #376                // Method com/cobblemon_puffish_skills/api/listener/SpawnWeightsInfluenceListener.register:()V
+       602: invokestatic  #379                // Method com/cobblemon_puffish_skills/api/listener/FishingBaitPowerListener.register:()V
+       605: invokestatic  #382                // Method com/cobblemon_puffish_skills/api/listener/BerryYieldModifierListener.register:()V
+       608: invokestatic  #385                // Method com/cobblemon_puffish_skills/api/listener/ApricornYieldModifierListener.register:()V
+       611: invokestatic  #388                // Method com/cobblemon_puffish_skills/api/listener/EnergyRootShearYieldListener.register:()V
+
+{'fabricloader': '>=0.18.4', 'minecraft': '1.21.1', 'fabric': '*'}

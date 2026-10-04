@@ -1,0 +1,4 @@
+# LuckPerms-Fabric-5.4.140.jar: the legacy loader reference (javap -c on the real class)
+# owner=net/fabricmc/loader/launch/common/FabricLauncherBase.getLauncher  ->  FabricLauncher.propose(URL)
+11:         0: invokestatic  #24                 // Method net/fabricmc/loader/launch/common/FabricLauncherBase.getLauncher:()Lnet/fabricmc/loader/launch/common/FabricLauncher;
+15:        12: invokeinterface #42,  2           // InterfaceMethod net/fabricmc/loader/launch/common/FabricLauncher.propose:(Ljava/net/URL;)V

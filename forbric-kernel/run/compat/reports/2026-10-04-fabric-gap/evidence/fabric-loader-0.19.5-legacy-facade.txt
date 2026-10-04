@@ -1,0 +1,32 @@
+# real fabric-loader 0.19.5 (/tmp/w7-fabric-ref/libraries/.../fabric-loader-0.19.5.jar) ships the legacy facade
+        0  02-01-1980 00:00   net/fabricmc/loader/launch/common/
+      762  02-01-1980 00:00   net/fabricmc/loader/launch/common/FabricLauncher.class
+     3560  02-01-1980 00:00   net/fabricmc/loader/launch/common/FabricLauncherBase.class
+
+# javap of the real class the kernel's shim must match
+Compiled from "FabricLauncherBase.java"
+public class net.fabricmc.loader.launch.common.FabricLauncherBase implements net.fabricmc.loader.launch.common.FabricLauncher {
+  private final net.fabricmc.loader.impl.launch.FabricLauncher parent;
+  public net.fabricmc.loader.launch.common.FabricLauncherBase();
+  public static java.lang.Class<?> getClass(java.lang.String) throws java.lang.ClassNotFoundException;
+  public static net.fabricmc.loader.launch.common.FabricLauncher getLauncher();
+  public void propose(java.net.URL);
+  public net.fabricmc.api.EnvType getEnvironmentType();
+  public boolean isClassLoaded(java.lang.String);
+  public java.io.InputStream getResourceAsStream(java.lang.String);
+  public java.lang.ClassLoader getTargetClassLoader();
+  public byte[] getClassByteArray(java.lang.String, boolean) throws java.io.IOException;
+  public boolean isDevelopment();
+  public java.util.Collection<java.net.URL> getLoadTimeDependencies();
+}
+Compiled from "FabricLauncher.java"
+public interface net.fabricmc.loader.launch.common.FabricLauncher {
+  public abstract void propose(java.net.URL);
+  public abstract net.fabricmc.api.EnvType getEnvironmentType();
+  public abstract boolean isClassLoaded(java.lang.String);
+  public abstract java.io.InputStream getResourceAsStream(java.lang.String);
+  public abstract java.lang.ClassLoader getTargetClassLoader();
+  public abstract byte[] getClassByteArray(java.lang.String, boolean) throws java.io.IOException;
+  public abstract boolean isDevelopment();
+  public abstract java.util.Collection<java.net.URL> getLoadTimeDependencies();
+}

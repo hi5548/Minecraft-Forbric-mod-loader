@@ -1,0 +1,31 @@
+# ShadowGuard proof boot on the fixed kernel (harness/sweep.py, JDK 21, cold remap cache)
+# kernel jar sha256 e61560cfe979a29233f2982b1842d255bd8cbd23ef35bfc0b2fddbe7818bf279 (commit 7d21924f)
+# full console + row kept on the external volume:
+#   w7/reports/2026-10-04-fabric-gap-shadowguard/per-mod/run/000-shadowguard__fabric/console.log
+#   w7/reports/2026-10-04-fabric-gap-shadowguard/per-mod/results.jsonl
+
+## results.jsonl row (verbatim fields)
+subject: ShadowGuard-0.0.1.jar
+run: PASS
+exit: 0
+stopped: True
+world: True
+mod: OK
+status_source: console:constructed-or-entrypoint
+dep_status: {'LuckPerms-Fabric-5.4.140.jar': 'OK', 'fabric-api-0.116.17+1.21.1.jar': 'OK', 'fabric-language-kotlin-1.14.1+kotlin.2.4.20.jar': 'OK'}
+confirmed_required: 0
+findings_required: 14
+strict: True
+na: False
+seconds: 246
+cause: None
+kernel_sha256: e61560cfe979a29233f2982b1842d255bd8cbd23ef35bfc0b2fddbe7818bf279
+
+## console landmarks
+grep -c NoClassDefFoundError      -> 0
+grep -c 'launch/common'           -> 0
+grep -c 'luckperms-worker'        -> 9
+Done line:
+[08:30:04] [Server thread/INFO]: Done (8.360s)! For help, type "help"
+LuckPerms enable line:
+[08:26:23] [main/INFO]: [Forbric/Mapping] remapped LuckPerms-Fabric-5.4.140.jar → LuckPerms-Fabric-5.4.140-11d4bd19ce4e07cf.jar (intermediary → named, mixin annotations included)

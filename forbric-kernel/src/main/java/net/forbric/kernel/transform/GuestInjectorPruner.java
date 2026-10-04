@@ -214,6 +214,8 @@ public final class GuestInjectorPruner implements ClassTransformer {
 			"net.fabricmc.fabric.mixin.event.interaction.client.MinecraftClientMixin";
 	static final String INDIGO_SECTION_BUILDER_MIXIN =
 			"net.fabricmc.fabric.mixin.client.indigo.renderer.SectionBuilderMixin";
+	static final String MODMENU_TITLE_MIXIN = "com/terraformersmc/modmenu/mixin/MixinTitleScreen";
+	static final String MODMENU_TITLE_HANDLER = "(Ljava/lang/String;)Ljava/lang/String;";
 	static final String INDIGO_RENDER_BLOCK_HANDLER =
 			"(Lnet/minecraft/client/renderer/block/BlockRenderDispatcher;"
 					+ "Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/core/BlockPos;"
@@ -384,7 +386,8 @@ public final class GuestInjectorPruner implements ClassTransformer {
 							+ "Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/phys/EntityHitResult;"
 							+ "Lnet/minecraft/world/entity/Entity;)V",
 					"Lnet/minecraft/client/Minecraft;startUseItem"))),
-			Map.entry(INDIGO_SECTION_BUILDER_MIXIN, List.of(new Prune("hookBuildRenderBlock", INDIGO_RENDER_BLOCK_HANDLER, "Lnet/minecraft/client/renderer/chunk/SectionCompiler;compile"))));
+			Map.entry(INDIGO_SECTION_BUILDER_MIXIN, List.of(new Prune("hookBuildRenderBlock", INDIGO_RENDER_BLOCK_HANDLER, "Lnet/minecraft/client/renderer/chunk/SectionCompiler;compile"))),
+			Map.entry(MODMENU_TITLE_MIXIN, List.of(new Prune("onRender", MODMENU_TITLE_HANDLER, "Lnet/minecraft/client/gui/screens/TitleScreen;render"))));
 
 	static final Map<String, List<Prune>> TABLE = with(Map.of(MODEL_MANAGER_MIXIN, List.of(
 			new Prune("cancelVanillaDeserialize",
@@ -462,7 +465,8 @@ public final class GuestInjectorPruner implements ClassTransformer {
 			Map.entry(OPAC_XP_ORB_MIXIN, "openpartiesandclaims.forge.mixins.json"),
 			Map.entry(BONFIRES_ITEM_STACK_MIXIN, "bonfires.mixins.json"),
 			Map.entry(MINECRAFT_CLIENT_MIXIN, "fabric-events-interaction-v0.client.mixins.json"),
-			Map.entry(INDIGO_SECTION_BUILDER_MIXIN, "fabric-renderer-indigo.mixins.json"));
+			Map.entry(INDIGO_SECTION_BUILDER_MIXIN, "fabric-renderer-indigo.mixins.json"),
+			Map.entry(MODMENU_TITLE_MIXIN, "mixins.modmenu.json"));
 
 	/** The mixin config each entry is declared in, which names the owning mod on the finding. */
 	static final Map<String, String> CONFIGS = with(Map.of(MODEL_MANAGER_MIXIN, "fabric-model-loading-api-v1.mixins.json",
@@ -487,7 +491,8 @@ public final class GuestInjectorPruner implements ClassTransformer {
 			Map.entry(OPAC_XP_ORB_MIXIN, () -> true),
 			Map.entry(BONFIRES_ITEM_STACK_MIXIN, () -> true),
 			Map.entry(MINECRAFT_CLIENT_MIXIN, () -> true),
-			Map.entry(INDIGO_SECTION_BUILDER_MIXIN, () -> true));
+			Map.entry(INDIGO_SECTION_BUILDER_MIXIN, () -> true),
+			Map.entry(MODMENU_TITLE_MIXIN, () -> true));
 
 	static final Map<String, BooleanSupplier> ACTIVE = with(Map.of(MODEL_MANAGER_MIXIN, () -> true,
 			ITEM_STACK_MIXIN, GuestInjectorPruner::fabricTooltipBridgeOn,
@@ -548,7 +553,12 @@ public final class GuestInjectorPruner implements ClassTransformer {
 					+ "SectionCompiler.compile calls a nine-argument renderBatched, not the seven-argument one this "
 					+ "@At names) and is reported as a required CONFIRMED loss, so a STRICT launch halts on it; the "
 					+ "Indigo path is gone either way, since a redirect cannot follow a call the merged body no "
-					+ "longer makes"));
+					+ "longer makes"),
+			Map.entry(MODMENU_TITLE_MIXIN, "the @ModifyArg stays in the mixin, cannot attach (the merged "
+					+ "TitleScreen.render makes NO GuiGraphics.drawString call at all) and is reported as a required "
+					+ "CONFIRMED loss, so a STRICT launch halts on it -- with 12 ordinary mods installed this one row "
+					+ "is the whole gate; the title-line substitution is gone either way, since the call it was written "
+					+ "against is not in that method any more"));
 
 	static final Map<String, String> COSTS = with(Map.of(MODEL_MANAGER_MIXIN,
 			"the whole mixin stays pinned, so every Fabric ModelLoadingPlugin -- block-state resolvers, extra "
@@ -634,7 +644,19 @@ public final class GuestInjectorPruner implements ClassTransformer {
 					+ "net/neoforged/neoforge/client/model/data/ModelData, and a CHECKCAST to that class would have "
 					+ "verified and then thrown ClassCastException at the first block render -- a hard crash traded "
 					+ "for a silent corruption. The shim's parameter types must be read from the FRAME of that exact "
-					+ "overload, never from a descriptor that merely exists somewhere in the class"));
+					+ "overload, never from a descriptor that merely exists somewhere in the class"),
+			Map.entry(MODMENU_TITLE_MIXIN, "the merge did not rename the call, it MOVED it out of the mixin's "
+					+ "target: javap of the merged TitleScreen counts 0 GuiGraphics.drawString invocations in "
+					+ "render(GuiGraphics,int,int,float), and the four that exist in the class sit in "
+					+ "lambda$render$13 / lambda$render$14 -- the branding callbacks reached through "
+					+ "ClientHooks.renderMainMenu and BrandingControl.forEachLine, which render now delegates to. A "
+					+ "@Mixin(TitleScreen) injector names a method OF ITS TARGET, and the target method no longer "
+					+ "contains the call; reaching it means naming a synthetic lambda instead, which is exactly the "
+					+ "lambda-selector retarget this table's class docs record as measured and REVERTED (it cleared one "
+					+ "finding and exposed eleven others plus a balm InvalidInjectionException, i.e. it changed the "
+					+ "pipeline rather than the anchor), so it is not repeated blind -- and there are two lambda families "
+					+ "with different descriptors here, which is the same whole-class-match trap that made the Indigo "
+					+ "retarget bind to the wrong overload"));
 
 	static final Map<String, String> REASONS = with(Map.of(MODEL_MANAGER_MIXIN,
 			"NeoForge replaced CuboidModel.fromStream with UnbakedModelParser.parse at that site, so fabric's @Redirect "
@@ -687,7 +709,10 @@ public final class GuestInjectorPruner implements ClassTransformer {
 			Map.entry(MINECRAFT_CLIENT_MIXIN, "the injection is skipped with Mixin's own warning, exactly as it did "
 					+ "before this entry, and the mixin's other six injectors keep binding"),
 			Map.entry(INDIGO_SECTION_BUILDER_MIXIN, "the redirect soft-skips with Mixin's own warning, exactly as it "
-					+ "did before this entry; this mixin's other handlers still bind"));
+					+ "did before this entry; this mixin's other handlers still bind"),
+			Map.entry(MODMENU_TITLE_MIXIN, "the @ModifyArg soft-skips with Mixin's own warning, exactly as it did "
+					+ "before this entry; the mixin's other injector (adjustRealmsHeight) and everything else Mod Menu "
+					+ "does still work"));
 
 	static final Map<String, String> DRIFT = with(Map.of(MODEL_MANAGER_MIXIN, "it will read PARTIAL and apply half — the state that made every block "
 					+ "model missingno",
@@ -748,7 +773,11 @@ public final class GuestInjectorPruner implements ClassTransformer {
 					+ "not attach, so a block whose model is not vanilla-adapted is not routed to "
 					+ "TerrainRenderContext.tessellateBlock and goes to the merged renderBatched path instead -- a "
 					+ "Fabric mod's in-chunk custom block geometry may render wrongly or not at all; the mixin's "
-					+ "loop-setup and return handlers still bind"));
+					+ "loop-setup and return handlers still bind"),
+			Map.entry(MODMENU_TITLE_MIXIN, "the kernel removed this injector: Mod Menu's title-screen line no longer "
+					+ "names the mod count -- on this base the copyright/version line is drawn by NeoForge's branding "
+					+ "path inside a render lambda, so the substitution has no argument to modify; the Mods button, the "
+					+ "mod list screen and Mod Menu's other hooks are unaffected"));
 
 	static final Map<String, String> LOSSES = with(Map.of(MODEL_MANAGER_MIXIN,
 			"the kernel removed this injector: NeoForge's UnbakedModelParser now reads block models at its call site, so "

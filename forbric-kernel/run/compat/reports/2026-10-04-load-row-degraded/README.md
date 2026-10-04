@@ -6,7 +6,7 @@
 DEGRADED 上。没有一个是模块自己的契约失败(没有构造器/入口点抛错;那些 `required=true` 的 finding 全是
 SUSPECTED,按设计不 mark)。**加载路径真正欠的,是措辞**:三个聚合面把 `ModCatalog.Status.FAILED` 专属的
 "did not finish loading"套在一个**零 FAILED**的集合上,而同一个文件/同一个界面的逐行叙述用的是
-"partly did not run"。修的就是这三处聚合面;抑制决定本身一个没动。提交 `<待填>`。
+"partly did not run"。修的就是这三处聚合面;抑制决定本身一个没动。提交 `37ad693b`。
 
 ---
 

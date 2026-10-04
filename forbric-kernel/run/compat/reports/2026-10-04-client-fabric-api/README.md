@@ -447,3 +447,37 @@ harness 现在能区分"跑完"与"停到被回收"，这正是测量与一团�
 
 
 
+
+## 12. Mod Menu 那一行：真实 12-mod 集合下未验证，而且暴露了一条深度规则
+
+`W7Harness` 用**用户自己的 12 个 jar**（modmenu 作主体，其余十一个从其实例取作闭包）跑到
+`3cced286`（内核 sha `359c9426…`，`reports/2026-10-04-client-modmenu-usermods/`）：
+
+```
+run=CRASH exit=255 world=false frames=0 stopped=false killed=true seconds=181 contended=false
+confirmedRequired: 1      Mod Menu 那条仍是 required=TRUE
+pruned 1 injector(s) from …terraformersmc.modmenu.mixin.MixinTitleScreen: 0
+```
+
+崩溃是**另一个更早的墙、且不属于本车道**：
+`NoClassDefFoundError: Could not initialize class net.neoforged.neoforge.resource.ResourcePackLoader`
+（`PackRepository.rebuildSelected ← reload ← Minecraft.<init>`），即游戏初始化阶段就死，早于任何世界工作。
+它只有在**真实 mod 集合**下才出现——fabric-api-only 的十余次运行都到不了这里，所以是真实集合一直在掩盖的墙。
+
+**我的那一行为什么没生效——这是深度问题，不是匹配问题。** `GuestInjectorPruner` 是一个按**类读取**起作用的
+`ClassTransformer`：它在某个 mixin 类第一次被读取（即将被应用时）改写它的字节，并把那条 finding 记成
+`required=false`。而报告里的 `required=TRUE` 行来自**配置预检**（`KernelGuestMixinAdapter` 在准备混入配置时写），
+早于任何类加载。所以：**启动在 `Minecraft.<init>` 就死 ⇒ `TitleScreen` 从未被加载 ⇒ MixinTitleScreen 从未被
+读取 ⇒ 剪枝从未发生 ⇒ 预检那条 required 原样留在报告里。**
+
+这给出一条新的深度规则，和"没有世界就没有世界之后的 finding"同族但更严格：
+**"带账退出"这类判决要生效，启动必须至少走到该 mixin 的*目标类被加载*那一步。**
+`MixinTitleScreen` 的目标是 `TitleScreen`，它要等资源加载之后才被加载——所以这一行比"到世界"更早、
+但比"到 `Minecraft.<init>`"更晚。我在预先登记里没有写这条，是我漏的：我当时把"剪枝会生效"当成了与深度无关，
+而它与深度一样敏感。
+
+**结论**：Mod Menu 那一行在 fabric-api-only 语料上**测不到**（那里没有 Mod Menu），在真实集合上也**测不到**
+（死在更早的墙上）；它需要一次**隔离运行**：主体 `modmenu-11.0.5.jar`，闭包取它自己声明的那几个
+（`fabric-api`、`cloth-config`、`placeholder-api`），不带 NeoForge 系 mod——这样既避开
+`ResourcePackLoader` 那面墙，又能走到 `TitleScreen`。预先登记读数随之改成：剪枝行在、该 id 记为
+`required=false`（或缺席）、`confirmed_required: 0`、`world=true`。

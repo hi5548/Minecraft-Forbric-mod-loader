@@ -12,8 +12,14 @@ public final class FabricClientMixinAnchors {
  private FabricClientMixinAnchors(){}
  public static int adapt(ClassNode mixin,Function<String,ClassNode> targets){
   if("off".equalsIgnoreCase(System.getProperty(PROPERTY,"on")))return 0;
+  // Two generations of the same class name: fabric-api 0.154-era shipped LevelChunkMixin, 0.116.17 ships
+  // WorldChunkMixin (javap of the remapped module). Both are the same mixin against LevelChunk, so the handler
+  // and the retarget below are shared; only the name differs. Keeping both means a module of either generation
+  // needs no edit.
   if(mixin.name.equals("net/fabricmc/fabric/mixin/event/lifecycle/client/LevelChunkMixin")
-    ||mixin.name.equals("net/fabricmc/fabric/mixin/event/lifecycle/server/LevelChunkMixin"))return removal(mixin,targets);
+    ||mixin.name.equals("net/fabricmc/fabric/mixin/event/lifecycle/server/LevelChunkMixin")
+    ||mixin.name.equals("net/fabricmc/fabric/mixin/event/lifecycle/client/WorldChunkMixin")
+    ||mixin.name.equals("net/fabricmc/fabric/mixin/event/lifecycle/server/WorldChunkMixin"))return removal(mixin,targets);
   if(mixin.name.equals("net/fabricmc/fabric/mixin/client/renderer/block/render/LevelRendererMixin"))return render(mixin,targets);
   if(mixin.name.equals("net/fabricmc/fabric/mixin/screen/GuiMixin"))return screenExtract(mixin,targets);
   return 0;

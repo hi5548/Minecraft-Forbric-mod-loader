@@ -291,7 +291,7 @@ public final class MergedBaseMixinCompat {
 			// call on the ORIGINAL state.
 			// Cost, stated: ParticleRenderEvents.ALLOW_BLOCK_DUST_TINT is not consulted on this base -- a Fabric mod
 			// cannot veto the tint of block-break dust; NeoForge's areBreakingParticlesTinted decides.
-			"fabric-particles-v1.client.mixins.json:BlockDustParticleMixin",
+			"fabric-particles-v1.client.mixins.json:BlockDustParticleMixin"
 			// MOD MENU is deliberately NOT pinned here. Its title-line substitution is a loss on the merged base
 			// (TitleScreen.render makes no GuiGraphics.drawString call; the four in the class sit in
 			// lambda$render$13/$14 behind ClientHooks.renderMainMenu and BrandingControl.forEachLine), but the

@@ -1,7 +1,7 @@
 # Review fixes — the ten findings of `agent://ClientReview` (2026-10-04)
 
 Scope: the ten findings of the independent correctness review, fixed in priority order on branch
-`review-fixes` off `20e423aa`, one commit per decision. P1–P3 player-visible first; P4/P5 the
+`review-fixes` off `0c0a2eea`, one commit per decision. P1–P3 player-visible first; P4/P5 the
 remaining two review findings; P6/P7 the per-launch false alarms; P8–P10 hygiene. Then the client
 run with the user's real 12-mod set, reading registered before the run.
 
@@ -13,20 +13,20 @@ real guest jars, and each fix was run over those real bytes offline before landi
 
 | # | Finding | Verdict | Commit |
 |---|---|---|---|
-| P1 | reflective id lookups ask only the newer generation's names | fixed (two-generation adapter) | `0cc17e22` |
-| P2 | overlay-condition veto anchored on a method absent on 1.21.1 | fixed (re-anchor, generation-probed claim) | `79bf0b03` |
-| P3 | `FlowerPotRepairInjector` fully inert | fixed (all three sub-edits re-derived) | `e754f6c2` |
-| P4 | `RegistryAliasParityInjector` keys on the newer `Identifier` | fixed (`ResourceLocation` + newer) | `b7eb327e` |
-| P5 | FRAPI evidence check misses Sodium's real entry point | fixed (entry point recognised) | `dbc4d3de` |
-| P6 | `restoreDoublePrecisionToTheRandomSources` false-positive anchors | fixed (HEDGE) | `34b1f5ad` |
-| P7 | `forbric-dragon-parts` EnderDragonPart false-positive anchor | fixed (HEDGE) | `8d3a90eb` |
-| P8 | stale `--mc 26.2` and other current-version docs | fixed (doc sweep, selective) | `7a5b7c7f` |
-| P9 | `buildForbricJars` forwards only 3 staged properties | fixed (whole `forbric.*` family) | `5cafcec3` |
-| P10 | `bundleForbric` guard matches by substring | fixed (exact coordinate) | `fdf44c57` |
+| P1 | reflective id lookups ask only the newer generation's names | fixed (two-generation adapter) | `9a829fa1` |
+| P2 | overlay-condition veto anchored on a method absent on 1.21.1 | fixed (re-anchor, generation-probed claim) | `524b7cab` |
+| P3 | `FlowerPotRepairInjector` fully inert | fixed (all three sub-edits re-derived) | `9aa7f16f` |
+| P4 | `RegistryAliasParityInjector` keys on the newer `Identifier` | fixed (`ResourceLocation` + newer) | `9ab4602f` |
+| P5 | FRAPI evidence check misses Sodium's real entry point | fixed (entry point recognised) | `7d922d74` |
+| P6 | `restoreDoublePrecisionToTheRandomSources` false-positive anchors | fixed (HEDGE) | `fc3c1cf9` |
+| P7 | `forbric-dragon-parts` EnderDragonPart false-positive anchor | fixed (HEDGE) | `45590507` |
+| P8 | stale `--mc 26.2` and other current-version docs | fixed (doc sweep, selective) | `33ece56e` |
+| P9 | `buildForbricJars` forwards only 3 staged properties | fixed (whole `forbric.*` family) | `950d264b` |
+| P10 | `bundleForbric` guard matches by substring | fixed (exact coordinate) | `0ddf6a91` |
 
 ---
 
-## P1 — the player log's `NoSuchMethodException: …ResourceKey.identifier()` — `0cc17e22`
+## P1 — the player log's `NoSuchMethodException: …ResourceKey.identifier()` — `9a829fa1`
 
 `javap -p patched-mc-merged-1.21.1.jar`:
 
@@ -51,7 +51,7 @@ documented with what its failure cost. Tests: `KernelRegistryAliasesTest` gains 
 accessor is `location()` (red on the old `getMethod("identifier")`, green now) and a new
 `IdentifierNamesTest` over both names and their preference.
 
-## P2 — re-anchor the overlay-condition veto — `79bf0b03`
+## P2 — re-anchor the overlay-condition veto — `524b7cab`
 
 `javap -p 'OverlayMetadataSection$OverlayEntry'` lists only `isApplicable`, the record accessors and
 `lambda$static$0` — no `listCodecForPackType`. The funnel moved to the section:
@@ -69,7 +69,7 @@ see (`ByteScan` for `listCodecForPackType` in `OverlayEntry`): the running base'
 REQUIRED and the other generation is not a Miss. Test: a synthetic 1.21.1 section (a `<clinit>` that
 feeds the conditional decoder once) — red before, green now, idempotent.
 
-## P3 — the flower-pot repair was inert on 1.21.1 — `e754f6c2`
+## P3 — the flower-pot repair was inert on 1.21.1 — `9aa7f16f`
 
 ```
 useItemOn(…) -> returns ItemInteractionResult          (injector asked for InteractionResult)
@@ -87,7 +87,7 @@ probe on the real class: changed; the injected store's predecessor is `ALOAD 1`;
 `KernelFlowerPots.fullPotFor`; `BasicVerifier` passes; idempotent. New
 `FlowerPotRepairInjectorTest` reproduces the 1.21.1 shape synthetically (red before, green now).
 
-## P4 — alias parity keys on the wrong id type — `b7eb327e`
+## P4 — alias parity keys on the wrong id type — `9ab4602f`
 
 `javap -p forge-runtime-interop.jar`: `NamespacedWrapper`
 `get/getOptional/containsKey/getHolder(ResourceLocation)`; `NamespacedDefaultedWrapper` a single
@@ -98,7 +98,7 @@ argument type. Probe over the real classes: `NamespacedWrapper` hooks 4 → 8;
 `NamespacedDefaultedWrapper` hooks 0 → 1. Test fixture corrected to the real `ResourceLocation`
 name (red before, green now), with the newer `Identifier` spelling still covered.
 
-## P5 — the `contains_renderer` false negative — `dbc4d3de`
+## P5 — the `contains_renderer` false negative — `7d922d74`
 
 The user's 12-mod console:
 
@@ -125,7 +125,7 @@ with `registerRenderer`, and the `Renderer.register` direct form) and broaden th
 Probe: `registersRenderer(<the user's real sodium jar>)` = true; `FrapiRendererEvidenceTest` gains
 the new cases (5 tests, 0 failed), 26.2 cases kept.
 
-## P6 / P7 — the two per-launch false alarms — `34b1f5ad`, `8d3a90eb`
+## P6 / P7 — the two per-launch false alarms — `fc3c1cf9`, `45590507`
 
 P6: `restoreDoublePrecisionToTheRandomSources` matches the float form of the 2⁻⁵³ scaling; the
 1.21.1 base is already double (`XoroshiroRandomSource.nextDouble` = `l2d/ldc2_w/dmul/dreturn`,
@@ -137,7 +137,7 @@ Both target anchors become HEDGE, documented; the repair still fires the moment 
 reintroduces the shape (P6 fires on the 26.2 fixtures, where both are hits). No other anchor changes
 severity. Tests pin the severities: P6 both HEDGE; P7 PART HEDGE and DRAGON/HITBOXES REQUIRED.
 
-## P8 / P9 / P10 — hygiene — `7a5b7c7f`, `5cafcec3`, `fdf44c57`
+## P8 / P9 / P10 — hygiene — `33ece56e`, `950d264b`, `0ddf6a91`
 
 P8: `Main`'s usage javadoc said `--mc 26.2 (default 26.2)` while the code reads and prints
 `Pins.MINECRAFT` (1.21.1); same stale current-version examples in `Installer`/`ForgeArtifacts`, and
@@ -157,26 +157,26 @@ P10: `bundleForbric`'s guard was `coordinate.contains('forbric-kernel')`; now th
 ## Verification
 
 - Kernel compile clean; installer compiles and its Gradle tasks parse.
-- Full kernel suite on the branch: **2942 tests, 982 skipped, 30 failed** — and the same 30 failures
-  (11 classes, all staged-fixture-absent NPEs/`assume`-mismatches) reproduce on the untouched
-  baseline `20e423aa` (**2930 tests, 982 skipped, 30 failed**). The branch adds 12 new tests, all
+- Full kernel suite on the rebased branch: **2945 tests, 983 skipped, 31 failed** — and the exact
+  same 31 failures (12 classes, all staged-fixture-absent NPEs / `assume`-mismatches) reproduce on
+  `main` `58c2e0e6` itself (**2933 tests, 983 skipped, 31 failed**). The branch adds 12 tests, all
   passing; no regression.
 - Per-fix red→green tests as listed above; a throwaway offline probe ran every transform over the
   real 1.21.1 bytes (removed after use).
 
 ## Client run — handed to `W7Harness`, reading registered before the run
 
-Request: build from `/tmp/w7-reviewfix-wt/forbric-kernel` (HEAD `fdf44c57`) and run the user's real
-12-mod set (Mod Menu subject, the other eleven closure). Pre-committed reading, registered before
-the run: `confirmed_required: 0`; `world=true` and `joined world via quick-play: 1`; the P1 console
-lines absent (`NoSuchMethodException` with `ResourceKey.identifier()`; `could not apply the server's
-ids` / `they keep their local ids`); plus the two P6/P7 `[Forbric/Anchor] … made no edit` lines
-absent.
+Request: build from `/tmp/w7-reviewfix-wt/forbric-kernel` (HEAD `e11e4fcb`, the rebased batch on
+top of main) and run the user's real 12-mod set (Mod Menu subject, the other eleven closure).
+Pre-committed reading, registered before the run: `confirmed_required: 0`; `world=true` and
+`joined world via quick-play: 1`; the P1 console lines absent (`NoSuchMethodException` with
+`ResourceKey.identifier()`; `could not apply the server's ids` / `they keep their local ids`); plus
+the two P6/P7 `[Forbric/Anchor] … made no edit` lines absent.
 
-Known unrelated blocker, flagged rather than hidden: the previous run of this exact set died in
-`Minecraft.<init>` on
+The wall that blocked the previous run of this exact set — `Minecraft.<init>` dying on
 `NoClassDefFoundError: Could not initialize class net.neoforged.neoforge.resource.ResourcePackLoader`
-(owned by the `ResourcePackLoaderFix` lane). If that wall still stands, the reading is unmet for a
-reason outside these ten fixes and is recorded as such.
+— is fixed on `main` (`0c0a2eea`, tip `58c2e0e6`), and the batch was rebased onto main so the run's
+worktree carries it. That is why this run can be expected to reach a world where the last one could
+not.
 
 **Result:** _pending — filled in when `W7Harness` returns the row._

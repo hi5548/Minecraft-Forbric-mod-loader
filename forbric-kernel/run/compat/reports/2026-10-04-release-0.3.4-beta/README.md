@@ -23,6 +23,15 @@ joined world via quick-play: 1
 
 **安装**:下载 `forbric-kernel-installer-0.3.4-beta.zip`,解压,双击 `Forbric-Installer.command`(macOS 首次右键→打开)/ `Forbric-Installer.bat`;确认 **Game directory** → **Install** → 启动器里选 **`1.21.1-forbric`**。不需要任何 JVM 参数。
 
+**发布结果**:
+- tag `v0.3.4-beta-1.21.1`(轻量 tag,指向发布提交 `18c5e77a`;同一提交已快进 `fork/1.21.1-port`)
+- Release `https://github.com/hi5548/Minecraft-Forbric-mod-loader/releases/tag/v0.3.4-beta-1.21.1`,附件:
+  - `forbric-kernel-installer-0.3.4-beta.jar` sha256 `f4d934fc688e78db8238f53f95894d0cc6263ec33da92b2e45f5eb608c8de4ed`
+  - `forbric-kernel-installer-0.3.4-beta.zip` sha256 `b7381edc53f6632ac178b3b83c6bf4329cc77b050026f9796a80bc0abdda8331`
+- 本地构建产物:`/tmp/w7-rel034-wt/forbric-kernel-installer/build/{libs,dist}/`,副本 `/tmp/w7-rel034-artifacts/`
+- 安装器内嵌的内核经逐字节校验 = 本次 gate 的 `bf56012d…`(`forbric/libs/net/forbric/forbric-kernel/0.3.4-beta/forbric-kernel-0.3.4-beta.jar`)
+- `v0.3.3-beta-1.21.1` 已按惯例标注"已被取代"并撤下附件
+
 ---
 
 ## 一档 · 实测通过(在真客户端、世界深度跑过)

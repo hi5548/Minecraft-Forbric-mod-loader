@@ -45,7 +45,15 @@ def mergeToolsJar = file("${loaderDir}/build/libs/forbric-merge-tools-0.1.0.jar"
 tasks.register('buildForbricJars', Exec) {
 	description = "Build the kernel jar the installer bundles."
 	workingDir kernelDir
-	commandLine(isWindows ? ['cmd', '/c', 'gradlew.bat', 'jar'] : ['./gradlew', 'jar'])
+	// Forward the staged-artifact properties when the caller supplied them. Without this the nested build takes
+	// build.gradle's defaults, and on a machine with no prepared dev root those produce a kernel jar with NO
+	// bundled game side — an installed loader then dies at startup with "bundled jar forbric-kernel-runtime.jar
+	// could not be materialized exactly" (measured 2026-10-04 on 0.3.1-beta). With them forwarded, a caller who
+	// has staged artifacts gets the game side built, and bundleForbric refuses anything that lacks it.
+	def forwarded = ['forbric.stagedRoot', 'forbric.fabricApi', 'forbric.rebornEnergy']
+			.findAll { project.hasProperty(it) }
+			.collect { "-P${it}=${project.property(it)}" }
+	commandLine((isWindows ? ['cmd', '/c', 'gradlew.bat', 'jar'] : ['./gradlew', 'jar']) + forwarded)
 	inputs.dir("${kernelDir}/src/main")
 	inputs.file("${kernelDir}/build.gradle")
 	outputs.dir("${kernelDir}/build/libs")
@@ -155,6 +163,20 @@ tasks.register('bundleForbric') {
 		def entries = []
 		def add = { String coordinate, File src ->
 			if (!src.isFile()) throw new GradleException("missing ${src} — build it first")
+			// A kernel jar without its bundled game side boots straight into "bundled jar
+			// forbric-kernel-runtime.jar could not be materialized exactly" (measured 2026-10-04 on an installed
+			// 0.3.1-beta). That is what the default `gradlew jar` produces when no staged game artifacts are
+			// present. Refuse it here rather than shipping an installer that cannot start.
+			if (coordinate.contains('forbric-kernel')) {
+				def hasGameSide = false
+				new java.util.zip.ZipFile(src).withCloseable { zip ->
+					hasGameSide = zip.getEntry('META-INF/jars/forbric-kernel-runtime.jar') != null
+				}
+				if (!hasGameSide) throw new GradleException(src.name + ' carries no bundled game side '
+						+ '(META-INF/jars/forbric-kernel-runtime.jar) — it was built without staged game artifacts. '
+						+ 'Build it with -Pforbric.stagedRoot=<stage> (w7/harness/build-kernel.sh does that and checks '
+						+ 'it), then re-run bundleForbric.')
+			}
 			def parts = coordinate.split(':')
 			def rel = "${parts[0].replace('.', '/')}/${parts[1]}/${parts[2]}/${parts[1]}-${parts[2]}.jar"
 			def dest = new File(libsRoot, rel)

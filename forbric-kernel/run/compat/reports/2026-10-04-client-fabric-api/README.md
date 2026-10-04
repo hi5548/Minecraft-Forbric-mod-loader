@@ -481,3 +481,43 @@ pruned 1 injector(s) from …terraformersmc.modmenu.mixin.MixinTitleScreen: 0
 （`fabric-api`、`cloth-config`、`placeholder-api`），不带 NeoForge 系 mod——这样既避开
 `ResourcePackLoader` 那面墙，又能走到 `TitleScreen`。预先登记读数随之改成：剪枝行在、该 id 记为
 `required=false`（或缺席）、`confirmed_required: 0`、`world=true`。
+
+## 13. Mod Menu 结案：机制换成 pin 后 strict=true，以及一条关于"预先登记字符串"的教训
+
+`716caa2a`（内核 sha `869ae4671bb0fb5f703abe66d120d2e9cece5f85ba69403bd458b2d010a2cda8`），隔离集合
+（modmenu + fabric-api + cloth-config + placeholder-api），`reports/2026-10-04-client-modmenu-pin/`：
+
+```
+run=PASS exit=0 world=true frames=1 stopped=true killed=false mod=OK
+strict=TRUE  confirmed_required=0  seconds=32  crash reports: 0
+joined world via quick-play: 1
+```
+
+四条读数：①pin 标记在（措辞更正见下）；②类级行 `mixin:mixins.modmenu.json:…MixinTitleScreen` 记为
+`required=False`，注入器行**完全缺席**（§12 的登记允许"或缺席"）；③`confirmedRequired: 0`、枚举 0；
+④`world=true` 且 `joined world via quick-play: 1`。
+
+**设计点是被量到的、不是被论证的**：pin 在一次**该类从未被递进变换链**的启动上就关掉了那条 finding——
+这正是按类剪枝欠缺的性质，也是机制从"剪枝"换成"pin"的原因。剪枝行保留为更窄的形式（Mod Menu 可保住
+`adjustRealmsHeight`），等链子开始把该类递进来时再由它接管。pin 的代价是整支 mixin（含
+`adjustRealmsHeight`）——这就是"不依赖一个永远不到来的类"的价格。
+
+### 13.1 我预先登记的标记是错的，而它错的方式值得记下来
+
+我登记的是 `suppressed mixin MixinTitleScreen from mixins.modmenu.json`，grep **0 命中**；内核实际发的是
+
+```
+[Forbric/Mixin] suppressed mixin MixinTitleScreen from modmenu (mixins.modmenu.json)
+```
+
+即 `from <mod> (<config>)` 而不是 `from <config>`。机制完全按预期工作（标记出现、且**不需要该类被读取**），
+错的是我那条字符串：**它是照"机制应该怎么说"写出来的，不是从发出它的那行源码里抄下来的。**
+
+这与今天更早那次（`retargeted guest mixin fabric-item-api-v1 …`，一个我在内核里根本不存在的标记）同族，
+而且是同一个错误更隐蔽的版本：那次的字符串是凭空推断的，这次的字符串**方向对、细节错**——一次照字面
+执行的 grep 会把成功读成我自己写下的证伪分支。结论写在这里：**预先登记的标记必须从发射它的那行代码里逐字
+抄出来；由意图拼出来的字符串，即使机制是对的，也会把读数读反。**
+
+另：`W7Harness` 的纪律是"每条读数都构建自**该提交的干净工作树**"，所以同树里别的车道未提交的改动
+（`FabricSectionCompilerMixinAdapter.java` 当前处于修改态，不是我的）不会渗进任何 pin 的 `kernel_sha256`
+——上面这个 sha 只属于 `716caa2a`。

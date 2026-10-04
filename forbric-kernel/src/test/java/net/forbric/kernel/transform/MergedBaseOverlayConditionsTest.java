@@ -31,6 +31,8 @@ import java.util.zip.ZipFile;
 
 import org.junit.jupiter.api.Test;
 import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
@@ -95,6 +97,51 @@ class MergedBaseOverlayConditionsTest {
 		assertTrue(funnel, "codecForPackType calls OverlayEntry.listCodecForPackType");
 		assertTrue(vanilla && neo, "both section accessors exist");
 		assertEquals(2, callers, "the vanilla and the NeoForge section type both build on codecForPackType");
+	}
+
+	/**
+	 * The 1.21.1 shape: {@code OverlayEntry} has no {@code listCodecForPackType}; the section builds {@code CODEC}
+	 * in a lambda {@code <clinit>} calls. The repair must wrap the section's single conditional decoder there — the
+	 * re-anchor the review asked for. Synthetic bytes, so it runs without any staged base.
+	 */
+	@Test
+	void wrapsTheSectionGenerationWhereTheEntryHasNoFunnel() {
+		byte[] section = sectionWithConditionalDecoder();
+		byte[] out = new ForbricMergedBaseCompatTransformer().transform(SECTION.replace('/', '.'), section, null);
+		assertNotSame(section, out, "the 1.21.1 shape must be edited");
+		ClassNode node = parse(out);
+		int wraps = 0;
+		for (MethodNode m : node.methods) {
+			for (AbstractInsnNode insn = m.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+				if (!(insn instanceof MethodInsnNode call) || !ForbricMergedBaseCompatTransformer.KERNEL_NEO_CONDITIONS_CLASS.equals(call.owner)) continue;
+				wraps++;
+				assertEquals("forOverlayEntries", call.name);
+				assertEquals(ForbricMergedBaseCompatTransformer.CODEC_TO_CODEC, call.desc);
+				AbstractInsnNode prev = call.getPrevious();
+				while (prev != null && prev.getOpcode() < 0) prev = prev.getPrevious();
+				assertTrue(prev instanceof MethodInsnNode neo && ForbricMergedBaseCompatTransformer.CONDITIONAL_OPS_NEO.equals(neo.owner)
+						&& ForbricMergedBaseCompatTransformer.DECODE_LIST_WITH_CONDITIONS.equals(neo.name), "wrapped right after the conditional decoder");
+			}
+		}
+		assertEquals(1, wraps, "exactly one wrap");
+		assertSame(out, new ForbricMergedBaseCompatTransformer().transform(SECTION.replace('/', '.'), out, null), "a second pass changes nothing further");
+	}
+
+	/** A synthetic {@code OverlayMetadataSection} whose {@code <clinit>} feeds the conditional decoder once. */
+	private static byte[] sectionWithConditionalDecoder() {
+		ClassWriter cw = new ClassWriter(0);
+		cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, SECTION, null, "java/lang/Object", null);
+		MethodVisitor clinit = cw.visitMethod(Opcodes.ACC_STATIC, "<clinit>", "()V", null, null);
+		clinit.visitCode();
+		clinit.visitInsn(Opcodes.ACONST_NULL); // the entries' CODEC, in the real class
+		clinit.visitMethodInsn(Opcodes.INVOKESTATIC, ForbricMergedBaseCompatTransformer.CONDITIONAL_OPS_NEO,
+				ForbricMergedBaseCompatTransformer.DECODE_LIST_WITH_CONDITIONS, ForbricMergedBaseCompatTransformer.CODEC_TO_CODEC, false);
+		clinit.visitInsn(Opcodes.POP);
+		clinit.visitInsn(Opcodes.RETURN);
+		clinit.visitMaxs(1, 0);
+		clinit.visitEnd();
+		cw.visitEnd();
+		return cw.toByteArray();
 	}
 
 	private static MethodNode find(ClassNode node, String name, String desc) {

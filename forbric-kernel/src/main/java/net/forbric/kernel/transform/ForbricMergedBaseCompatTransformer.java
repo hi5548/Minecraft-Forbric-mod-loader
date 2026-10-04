@@ -222,7 +222,10 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 		out.add(scanned("dropStubsThatBypassARealSuperclassMethod", "any class carrying a measured merge stub that shadows a real superclass method"));
 		out.add(fixed("inlineTheSwitchMapTheMergeLost", LOST_SWITCH_MAPS.get(0).user(),
 				"AbstractFurnaceBlockEntity's Direction switch NoSuchFieldErrors on the $SwitchMap the merge lost — furnaces cannot be interacted with"));
-		out.add(fixed("vetoUnjudgeableOverlayConditions", OVERLAY_ENTRY,
+		// PORT(1.21.1): the carrier moved — see vetoUnjudgeableOverlayConditions. The claim names whichever class
+		// the running base carries the funnel in, so the repair is audited where it actually lands and the other
+		// generation's missing method is not a Miss on every launch.
+		out.add(fixed("vetoUnjudgeableOverlayConditions", overlayEntryCarriesTheFunnel() ? OVERLAY_ENTRY : OVERLAY_SECTION,
 				"a pack.mcmeta overlay gated by a condition no evaluator here can judge is mounted anyway"));
 		// PORT(1.21.1): only MinecraftForge's manager needs this. NeoForge 21.1's LootModifierManager carries its own
 		// prepare that reads loot_modifiers/global_loot_modifiers.json natively, so the synthesized-prepare half has
@@ -3956,6 +3959,8 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 	// ---------------------------------------------------------------------------------------------------------------
 
 	static final String OVERLAY_ENTRY = "net/minecraft/server/packs/OverlayMetadataSection$OverlayEntry";
+	/** 26.2 built the section's list codec on the entry; 1.21.1 has no such method and builds it in the section. */
+	static final String OVERLAY_SECTION = "net/minecraft/server/packs/OverlayMetadataSection";
 	static final String LIST_CODEC_FOR_PACK_TYPE = "listCodecForPackType";
 	static final String LIST_CODEC_DESC = "(Lnet/minecraft/server/packs/PackType;)Lcom/mojang/serialization/Codec;";
 	static final String CONDITIONAL_OPS_NEO = "net/neoforged/neoforge/common/conditions/ConditionalOps";
@@ -3969,42 +3974,77 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 	 * directory. Measured on Terralith with {@code vanilla_stone_gen=false}: six placed-feature overrides under
 	 * {@code enable.vanilla_stone_gen} went into the world anyway.
 	 *
-	 * <p>One stack-neutral insertion after {@code ConditionalOps.decodeListWithElementConditions} in
-	 * {@code OverlayEntry.listCodecForPackType} — the funnel both the vanilla {@code overlays} and the
-	 * {@code neoforge:overlays} section read through — wraps the list codec with
-	 * {@code KernelNeoConditions.forOverlayEntries}, which makes the leniency answer a foreign type with a VETO for
-	 * the duration of that decode. NeoForge's own decoder then drops the entry.
+	 * <p>One stack-neutral insertion after {@code ConditionalOps.decodeListWithElementConditions} — the funnel both
+	 * the vanilla {@code overlays} and the {@code neoforge:overlays} section read through — wraps the list codec
+	 * with {@code KernelNeoConditions.forOverlayEntries}, which makes the leniency answer a foreign type with a VETO
+	 * for the duration of that decode. NeoForge's own decoder then drops the entry.
+	 *
+	 * <p>PORT(1.21.1): the funnel moved, so this is a two-generation re-anchor. 26.2 carries it in
+	 * {@code OverlayEntry.listCodecForPackType}; on 1.21.1 that method does not exist (javap of the merged base lists
+	 * only {@code isApplicable}, the record accessors and {@code lambda$static$0}) and the section builds its
+	 * {@code CODEC} itself — {@code OverlayMetadataSection.lambda$static$0}, run from {@code <clinit>}, calls
+	 * {@code ConditionalOps.decodeListWithElementConditions(OverlayEntry.CODEC)} (javap -c: offset 4). The
+	 * conditional funnel is live either way, so the repair wraps the single site in whichever class carries it and
+	 * stands down only when neither shape is present.
 	 */
 	private static boolean vetoUnjudgeableOverlayConditions(ClassNode node) {
-		if (!OVERLAY_ENTRY.equals(node.name)) return false;
-		MethodNode method = findMethod(node, LIST_CODEC_FOR_PACK_TYPE, LIST_CODEC_DESC);
-		if (method == null) return false;
+		boolean entry = OVERLAY_ENTRY.equals(node.name);
+		boolean section = OVERLAY_SECTION.equals(node.name);
+		if (!entry && !section) return false;
+		// The entry generation scopes the search to the one method the entry funnel lives in; the section
+		// generation searches the whole class (the call is in the lambda <clinit> builds its CODEC with).
+		MethodNode scoped = entry ? findMethod(node, LIST_CODEC_FOR_PACK_TYPE, LIST_CODEC_DESC) : null;
+		if (entry && scoped == null) return false;
+		Iterable<MethodNode> methods = entry ? java.util.List.of(scoped) : node.methods;
+
+		MethodNode owner = null;
 		MethodInsnNode site = null;
 		int sites = 0;
-		for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
-			if (insn instanceof MethodInsnNode call && call.getOpcode() == Opcodes.INVOKESTATIC
-					&& CONDITIONAL_OPS_NEO.equals(call.owner) && DECODE_LIST_WITH_CONDITIONS.equals(call.name)
-					&& CODEC_TO_CODEC.equals(call.desc)) {
-				sites++;
-				site = call;
+		for (MethodNode method : methods) {
+			for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+				if (insn instanceof MethodInsnNode call && call.getOpcode() == Opcodes.INVOKESTATIC
+						&& CONDITIONAL_OPS_NEO.equals(call.owner) && DECODE_LIST_WITH_CONDITIONS.equals(call.name)
+						&& CODEC_TO_CODEC.equals(call.desc)) {
+					sites++;
+					site = call;
+					owner = method;
+				}
 			}
 		}
 		if (sites != 1) {
 			if (sites > 1) {
-				ForbricLog.warn("[Forbric/MergedBaseCompat] %s.%s reads its overlay list through %d conditional codecs, "
-						+ "not one — not wrapped", OVERLAY_ENTRY, LIST_CODEC_FOR_PACK_TYPE, sites);
+				ForbricLog.warn("[Forbric/MergedBaseCompat] %s carries %d conditional overlay-list decoder(s), "
+						+ "not one — not wrapped", node.name.replace('/', '.'), sites);
 			}
 			return false;
 		}
 		if (nextReal(site) instanceof MethodInsnNode already && KERNEL_NEO_CONDITIONS_CLASS.equals(already.owner)) {
 			return false;    // already wrapped: idempotent
 		}
-		method.instructions.insert(site, new MethodInsnNode(Opcodes.INVOKESTATIC, KERNEL_NEO_CONDITIONS_CLASS,
+		owner.instructions.insert(site, new MethodInsnNode(Opcodes.INVOKESTATIC, KERNEL_NEO_CONDITIONS_CLASS,
 				"forOverlayEntries", CODEC_TO_CODEC, false));
 		ForbricLog.info("[Forbric/MergedBaseCompat] pack.mcmeta overlay entries gated by a condition no evaluator here can "
-				+ "judge are now VETOED through NeoForge's own drop path (applied at 1 site) — ignoring the condition used "
-				+ "to mount content a mod's own config had turned off");
+				+ "judge are now VETOED through NeoForge's own drop path (%s.%s, applied at 1 site) — ignoring the condition "
+				+ "used to mount content a mod's own config had turned off",
+				node.name.replace('/', '.'), owner.name);
 		return true;
+	}
+
+	/**
+	 * Whether the running base still carries the 26.2 funnel in {@code OverlayEntry.listCodecForPackType}, from the
+	 * same bytes the repair will be handed. The claim has to name the class the repair actually edits, or the other
+	 * generation's absence of it is reported as a Miss on every launch. No resolver or unreadable bytes fall back to
+	 * the historical anchor, so this never invents a finding.
+	 */
+	private boolean overlayEntryCarriesTheFunnel() {
+		if (classBytes == null) return true;
+		byte[] entry;
+		try {
+			entry = classBytes.apply(OVERLAY_ENTRY.replace('.', '/') + ".class");
+		} catch (RuntimeException unreadable) {
+			return true;
+		}
+		return entry == null || net.forbric.kernel.util.ByteScan.contains(entry, net.forbric.kernel.util.ByteScan.needle(LIST_CODEC_FOR_PACK_TYPE));
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------

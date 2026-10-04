@@ -521,3 +521,32 @@ joined world via quick-play: 1
 另：`W7Harness` 的纪律是"每条读数都构建自**该提交的干净工作树**"，所以同树里别的车道未提交的改动
 （`FabricSectionCompilerMixinAdapter.java` 当前处于修改态，不是我的）不会渗进任何 pin 的 `kernel_sha256`
 ——上面这个 sha 只属于 `716caa2a`。
+
+## 14. 我的 A/B 前提落后一个提交：pin 早已被退役，prune 已在生效（两臂都是既有读数）
+
+我向 `W7Harness` 提了一个 pin-vs-prune 的 A/B，前提是"当前树 = pin 生效(arm A)"。**这个前提是错的**：
+`GuestClassDelivery` 车道早已用 `397013bd` 退掉了 pin（prune 是更窄的损失，保住 `adjustRealmsHeight`），
+并用 `0d9f15c8` 的 dotted-key 修复让按类剪枝真的够得到那个类；当前树就是我的 arm B。
+所以**没有花掉任何窗口**——两臂都是今天早些时候冻结的读数。
+
+**Arm A（pin 生效，`716caa2a`，`reports/2026-10-04-client-modmenu-pin/`）**：
+`PASS / world=true / strict=TRUE / confirmed_required 0`；`AUDIT` 行 0 条（pin 在类被读取前就把条目丢掉，
+所以链子看不到它——与我预测一致）；`suppressed mixin MixinTitleScreen from modmenu (mixins.modmenu.json)` ×1；
+`MixinTitleScreen applies only partially` ×1。
+
+**Arm B（pin 解除、prune 生效，`6d7d32cc`，`reports/2026-10-04-guest-class-delivery/`）**：
+同一行读数（`PASS / world=true / strict=TRUE / confirmed_required 0`），外加
+`pruned 1 injector(s) from com.terraformersmc.modmenu.mixin.MixinTitleScreen`，
+以及判别行 `AUDIT com.terraformersmc.modmenu.mixin.MixinTitleScreen: 1 prune(s), table row true, switch true, active true`；
+Mod Menu 那行为 `required=False`，而 arm A 里的 `applies only partially` 变成 **0**。
+
+**判别读数成立**：arm B 出现 AUDIT 行 ⇒ prune 可行、投递已修、pin 应当永久解除——而它**已经被解除**。
+arm A 里那条 `applies only partially` 在 arm B 消失，正是"用被剪除的注入器换整支 mixin"的可见形态。
+
+**未证、明确留白**：两臂都没有证明 `adjustRealmsHeight` **在运行期真的绑定**（它没有自己的日志行）。
+判别器是 AUDIT 行，不需要为此再花一次启动，所以我不花；这一项就作为本行唯一的未证项留在这里，
+而不是被写成"已恢复"。
+
+**教训（与"标记要抄源码"不同的一条）**：设计 A/B 之前先确认**当前树的实际状态**——
+我是在给一个已经被别人解掉的机制设计实验。这与"预先登记的标记要逐字抄自发射它的代码"同族：
+都是**先看现场、再写断言**；一个错在标记，一个错在前提。

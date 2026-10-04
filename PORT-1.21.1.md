@@ -57,8 +57,8 @@ Forbric 原本针对 **Minecraft 26.2** 编写。本文档说明本分支把整�
 `forbric-kernel-installer-*.zip`。命令行等价形式：
 
 ```bash
-java -jar forbric-kernel-installer-0.3.1-beta.jar --doctor      # 只体检，不写文件
-java -jar forbric-kernel-installer-0.3.1-beta.jar --dir "$HOME/Library/Application Support/minecraft"
+java -jar forbric-kernel-installer-0.3.2-beta.jar --doctor      # 只体检，不写文件
+java -jar forbric-kernel-installer-0.3.2-beta.jar --dir "$HOME/Library/Application Support/minecraft"
 ```
 
 三种加载器的 mod 都放进同一个 `mods` 文件夹；**卸载 = 删掉 `versions/1.21.1-forbric/`**。
@@ -169,8 +169,8 @@ See the *Install* section of the [README](README.md), or download
 `forbric-kernel-installer-*.zip` from this repository's Releases. Headless equivalent:
 
 ```bash
-java -jar forbric-kernel-installer-0.3.1-beta.jar --doctor      # check only, writes nothing
-java -jar forbric-kernel-installer-0.3.1-beta.jar --dir "$HOME/Library/Application Support/minecraft"
+java -jar forbric-kernel-installer-0.3.2-beta.jar --doctor      # check only, writes nothing
+java -jar forbric-kernel-installer-0.3.2-beta.jar --dir "$HOME/Library/Application Support/minecraft"
 ```
 
 Mods of all three ecosystems go into the same `mods` folder; **uninstall by deleting `versions/1.21.1-forbric/`**.

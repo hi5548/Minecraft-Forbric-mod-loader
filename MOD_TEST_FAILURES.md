@@ -103,7 +103,7 @@
 ### 方法
 
 - 从 Modrinth 抽了 **3 批互不相同的随机 mod**。每批 30 个热门（下载量前 200 名里随机抽）+ 50 个随机（全部 26.2 mod 里随机抽），加载器随机，再加上依赖，分别是 110 / 97 / 104 个 jar。3 批之间不重复，也不和下面旧测试的那批重复。
-- 每批分别用两个版本各测一轮：main `11ca1ffa`（装在官方目录）和 [release v0.2.0](https://github.com/Ray-T-r/Minecraft-Forbric-mod-loader/releases/tag/v0.2.0)（用它自己的安装器装在单独的目录里）。
+- 每批分别用两个版本各测一轮：main `11ca1ffa`（装在官方目录）和 [上游 release v0.2.0](https://github.com/Ray-T-r/Minecraft-Forbric-mod-loader/releases/tag/v0.2.0)（用它自己的安装器装在单独的目录里）。
 - 测法和下面旧测试一样：每个 jar 单独加载，只带它必需的依赖，进同一个原版世界，截图后退出。
 - v0.2.0 没有逐 mod 的加载报告，所以两个版本统一用同一个口径判定"加载成功"：进了世界、画面画出来、正常退出，**并且**日志里没有这个 mod 的入口失败、`@Mod` 构造失败或 mixin 应用失败（两个版本打的是同样的日志行）。
 - 有少数 mod 缺的依赖在 Modrinth 上按 mod id 找不到，这些 mod 在两个版本里都是缺依赖状态测的。

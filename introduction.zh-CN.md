@@ -1,11 +1,12 @@
 # Forbric —— 架构与内部实现
 
 [English](introduction.md) | 简体中文
-> **本分支的目标版本是 Minecraft 1.21.1。** 下面的正文描述的是最初的 26.2 设计，保留是为了说明来路；
-> 两者冲突之处（尤其是命名空间/重映射那部分——1.21.1 是混淆的，26.2 原生就是 Mojmap），以 1.21.1 构建为准。
-> 版本 pin 见 `forbric-kernel-installer/src/main/java/net/forbric/installer/kernel/Pins.java`
+> **本分支的目标版本是 Minecraft 1.21.1。** 版本 pin 见
+> `forbric-kernel-installer/src/main/java/net/forbric/installer/kernel/Pins.java`
 > （`MINECRAFT = "1.21.1"`、`FORGE = "1.21.1-52.1.16"`、`NEOFORGE = 21.1.252`），安装后的 profile 是
-> `versions/1.21.1-forbric/`。
+> `versions/1.21.1-forbric/`，合并基底是 `patched-mc-merged-1.21.1.jar`。文中凡仍写着 26.2 的句子，指的是这套
+> 代码最初面向的那一代（原生 Mojmap），并已如此标注；命名空间一节则实质上不同，因为 1.21.1 是混淆的，每个
+> Fabric 第三方都要经过重映射（§1）。
 
 
 
@@ -19,7 +20,7 @@
 | --- | --- |
 | **生态（ecosystem）** | Fabric、传统 MinecraftForge、NeoForge，对应 `net.forbric.api.Ecosystem.FABRIC` / `FORGE` / `NEOFORGE` |
 | **Forge 系（Forge family）** | MinecraftForge 与 NeoForge 的合称。两套运行时、两种清单（`META-INF/mods.toml`、`META-INF/neoforge.mods.toml`）、两条事件总线 |
-| **合并基底（merged base）** | `patched-mc-merged-26.2.jar`：带有两个 Forge 系补丁的 Minecraft 26.2，按字节合并成一个 jar |
+| **合并基底（merged base）** | `patched-mc-merged-1.21.1.jar`：带有两个 Forge 系补丁的 Minecraft 1.21.1，按字节合并成一个 jar |
 | **载体（carrier）** | 某一个 Forge 系的运行时 jar（`neoforge-runtime.jar`、`forge-runtime-interop.jar`），作为被动的 ABI 提供者加载：它的类存在，但它的加载器生命周期从不运行 |
 | **引导侧 / 游戏侧（boot side / game side）** | 前者指由系统类加载器加载的代码，后者指由 `ForbricClassLoader` 定义的代码 |
 | **第三方（guest）** | 凡是属于第三方 mod 的东西（第三方 mixin、第三方 jar） |
@@ -36,7 +37,7 @@
 4. **可见性。** 每个加载器都维护自己的 mod 列表。一个 mod 问自己的加载器“装了 Sodium 吗？”或“我在哪个平台上？”，得到的答案在单加载器实例里成立，放到这里就错了。
 5. **为另一个游戏写的第三方字节码。** Fabric mixin 是对着原版字节码写的；MinecraftForge mod 是对着 MinecraftForge 打过补丁的游戏写的。到了合并基底上，锚点挪了位置，方法被拆开，字段改了类型，lambda 重新编号，父类也换了。
 
-在 26.2 上，命名空间*不在*上面这几条之列：游戏发布时用的就是 Mojmap 名称，26.2 的 Forge 系 mod 按 Mojmap 编译，Fabric 的 mod 也一样（`KernelMappingResolver` 的 javadoc 记录了一次对 fabric-api 和 Jade 的常量池扫描，没有发现任何 intermediary 符号）。内核采用恒等映射：`TransformContext(…, "named")`，`KernelMappingResolver` 对每次查询都原样返回输入。
+在 1.21.1 上，命名空间是第六条，而且是内核在定义任何第三方类之前就处理掉的那一条。游戏是混淆发布的，三个生态对名字也并不一致：对每个加载器各取 50 个 Modrinth jar 做的常量池普查显示，Fabric 以 **intermediary** 为主（49/50），而 MinecraftForge、NeoForge 以 **Mojmap**（`named`）为主（48/50、46/50），SRG 只剩零星几个 mixin 目标。所以这是二分而不是三分：合并基底、两个 Forge 系的 mod 以及两个载体都跑在 `named` 上，只有 Fabric 第三方需要改名。`FabricGuestRemapper` 会在 jar 进入托管类路径之前完成改名——它用 tiny-remapper（`ForgeModRemapper`）把加载器将要定义的每一个 jar（包括解出来的 JiJ 子 jar）从 intermediary 重映射到 `named`，产物按内容缓存在 `.forbric-kernel/remap`。映射主干是 `ForbricMappings`，由安装器暂存、并在 `--mappings` 参数里点名的两份文件拼成（Fabric 的 intermediary 映射与 Mojang 的客户端映射，接在混淆列上）；`KernelMappingResolver` 通过它回答 mod 的 `MappingResolver` 查询。只有在没有暂存映射数据时内核才走恒等映射（26.2 那条路径，或者一个没有任何 Fabric mod 的包）：那时 `TransformContext(…, "named")` 就是全部答案，每次查询都原样返回输入。
 
 mod API 同样不在其列。Forbric 不重新实现 Fabric API、MinecraftForge API 或 NeoForge API：mod 调用的是装进来的那个真正的 Fabric API mod，以及载体里真正的 MinecraftForge/NeoForge 类。内核掌管的是原本由加载器掌管的部分：类加载、发现、生命周期、注册窗口，以及 Fabric Loader 自己的 API（§5.1）；此外还有合并带来的、不得不做的修复。其中有两类修复是复现原有行为，而不是调用它：一是 NeoForge 的 coremod 改写，由内核自己执行（§5.2）；二是钩子在合并中落败的事件，由内核重新发出（§8）。
 
@@ -54,7 +55,7 @@ system class loader  (BOOT side)
      ▼
 ForbricClassLoader  (GAME side — the only loader that defines game/ecosystem classes)
  owned jars, in this order (KernelOwnedClasspath.compose):
-   1. patched-mc-merged-26.2.jar           --gameJar
+   1. patched-mc-merged-1.21.1.jar         --gameJar
    2. forge-runtime-interop.jar,            --runtimeJar   (the two carriers)
       neoforge-runtime.jar
    3. Minecraft's own libraries             --libraryPath  (owned: mods mixin into DataFixerUpper & co.)
@@ -91,7 +92,7 @@ ForbricClassLoader  (GAME side — the only loader that defines game/ecosystem c
 
 | 产物 | 说明 |
 | --- | --- |
-| `patched-mc-merged-26.2.jar` | 原版 26.2 + 打过 MinecraftForge 补丁的 26.2 + 打过 NeoForge 补丁的 26.2，由 `net.forbric.tools.MergedBaseBuilder` 按字节合并。以 NeoForge 的类为基础，再把 Forge 的类拼接进来；已提交的报告 `forbric-loader/run/merged-base/merge-conflicts.txt` 记录的类数为 `forge=193 neo=10163 MERGED=612`，冲突为 `CONFLICTS: methods=1000 fields=8 STRUCTURAL(superclass/field)=15` |
+| `patched-mc-merged-1.21.1.jar` | 原版 1.21.1 + 打过 MinecraftForge 补丁的 1.21.1 + 打过 NeoForge 补丁的 1.21.1，由 `net.forbric.tools.MergedBaseBuilder` 按字节合并。以 NeoForge 的类为基础，再把 Forge 的类拼接进来；1.21.1 上的报告记录的类数为 `forge=136 neo=7575 MERGED=572`，冲突为 `CONFLICTS: methods=901 fields=2 STRUCTURAL(superclass/field)=12`。（提交进仓库的 `forbric-loader/run/merged-base/merge-conflicts.txt` 是上一代（26.2）的报告：`forge=193 neo=10163 MERGED=612`、`methods=1000 fields=8 STRUCTURAL=15`。） |
 | `neoforge-runtime.jar` | NeoForge 的 `-universal` jar 加上它的 userdev 配置声明的库，合并成一个 jar（`NeoForgeRuntimeBuilder`） |
 | `forge-runtime-interop.jar` | MinecraftForge 的 `-universal` jar 加上它的运行时库（`ForgeRuntimeBuilder`），再由 `net.forbric.tools.RuntimeInteropPatcher` 打补丁：合并时替 NeoForge 加宽了一些接口，而 Forge 自己编译好的实现已经满足不了它们。以坐标 `net.forbric:forge-runtime` 暂存 |
 
@@ -108,7 +109,7 @@ int code = CompatibilityLaunchBoundary.run(() -> KernelBoot.launch(KernelBoot.Si
 if (code != 0) System.exit(code);
 ```
 
-兼容性拒绝只会在 `CompatibilityLaunchBoundary` 这一处变成进程退出（退出码 `78`，§12.4），安装损坏而被拒绝的启动也只在这里退出（退出码 `2`，§3.2 第 0 步）。其他任何离开引导过程的异常都会先在这里写进 `latest.log`（消息和堆栈），然后原样重新抛出，因为启动器展示的是这个文件，而不是 stderr。`KernelBoot.launch` 自己处理 `--gameJar`、`--runtimeJar`（可重复，一个值里也可以用路径分隔符连接多个 jar —— PCL2 这类启动器遇到重复的参数只保留最后一个）和 `--libraryPath`；其余参数，以及 `--` 之后的全部内容，都转给游戏的 `Main.main`。专用服务器不接受 `--gameDir`，所以 `KernelBoot` 在服务端会把它去掉。游戏版本从基底 jar 的 `version.json` 读取（读不到时回退为 `26.2`）。
+兼容性拒绝只会在 `CompatibilityLaunchBoundary` 这一处变成进程退出（退出码 `78`，§12.4），安装损坏而被拒绝的启动也只在这里退出（退出码 `2`，§3.2 第 0 步）。其他任何离开引导过程的异常都会先在这里写进 `latest.log`（消息和堆栈），然后原样重新抛出，因为启动器展示的是这个文件，而不是 stderr。`KernelBoot.launch` 自己处理 `--gameJar`、`--runtimeJar`（可重复，一个值里也可以用路径分隔符连接多个 jar —— PCL2 这类启动器遇到重复的参数只保留最后一个）和 `--libraryPath`；其余参数，以及 `--` 之后的全部内容，都转给游戏的 `Main.main`。专用服务器不接受 `--gameDir`，所以 `KernelBoot` 在服务端会把它去掉。游戏版本从基底 jar 的 `version.json` 读取；代码里的回退常量 `KernelBoot.FALLBACK_GAME_VERSION` 仍写着 `26.2`，早于本次移植。
 
 ### 3.2 `KernelBoot.launch` 的执行顺序
 
@@ -246,7 +247,7 @@ Fabric 和 NeoForge 在构造函数里需要的状态正好相反，所以内核
 
 ## 6. 转换流水线
 
-`transform.TransformPhase` 规定了顺序：`RAW_PATCH`、`DEOBF_REMAP`、`ENV_STRIP`、`ACCESS`、`COREMOD`、`FABRIC_BUILTIN`、`MIXIN`。`TransformChain` 运行链上的阶段（`RAW_PATCH` … `FABRIC_BUILTIN`）；同一阶段内，先按 `predepends` 做拓扑排序，再按 `sortIndex`，最后按注册顺序。`MIXIN` 是终结阶段，不能注册进链里。在 26.2 上，`RAW_PATCH` 和 `DEOBF_REMAP` 里什么都没注册。
+`transform.TransformPhase` 规定了顺序：`RAW_PATCH`、`DEOBF_REMAP`、`ENV_STRIP`、`ACCESS`、`COREMOD`、`FABRIC_BUILTIN`、`MIXIN`。`TransformChain` 运行链上的阶段（`RAW_PATCH` … `FABRIC_BUILTIN`）；同一阶段内，先按 `predepends` 做拓扑排序，再按 `sortIndex`，最后按注册顺序。`MIXIN` 是终结阶段，不能注册进链里。没有任何转换器注册进 `RAW_PATCH` 或 `DEOBF_REMAP`：第三方重映射是整 jar 完成的（`FabricGuestRemapper`），发生在转换链之前，而不是逐类的阶段。
 
 `KernelBoot` 注册了什么（91 个调用点，部分有条件）：
 
@@ -409,7 +410,7 @@ NeoForge 的 `mod_resources` 来源在合并基底上是孤立的。`ClientPackH
 ```
 java -jar forbric-kernel-installer.jar                     # window (InstallerGui)
 java -jar forbric-kernel-installer.jar --dir DIR [options] # headless install
-    --mc 26.2  --artifacts DIR  --jdk PATH  --remote  --release TAG  --mirror PREFIX  --offline
+    --mc 1.21.1  --artifacts DIR  --jdk PATH  --remote  --release TAG  --mirror PREFIX  --offline
 java -jar forbric-kernel-installer.jar --doctor [--dir DIR] [--jdk PATH]
 ```
 
@@ -422,26 +423,26 @@ forge userdev ─┬→ forge-runtime ──────────────
                └───────────────────────────────┘                    ├→ patched-mc-merged
 neoforge userdev ─┬→ neoforge-runtime ──────────────────────────────┤
                   └→ NFRT → patched-mc-neoforge ────────────────────┘
-vanilla 26.2.jar ───────────────────────────────────────────────────┘
+vanilla 1.21.1.jar ───────────────────────────────────────────────────┘
 forge-runtime ────────────────────────────────→ forge-runtime-interop   (what is staged)
 ```
 
-- `ForgeRuntimeBuilder`、`PatchedMcBuilder`（Forge 的 `installertools`/`mergetool`/`binarypatcher` 作为子 JVM 运行，Forge 的 `AccessTransformerEngine` 在进程内运行）、`NeoForgeRuntimeBuilder`、`NfrtRunner`（NeoFormRuntime，取的结果是 `gameJarNoRecomp`：只打二进制补丁，不用反编译器，也不用 `javac`）。
+- `ForgeRuntimeBuilder`、`PatchedMcBuilder`（混淆版本走官方安装管线：installertools 的 `DOWNLOAD_MOJMAPS` 与 ForgeAutoRenamingTool 先把两边改名到 Mojmap，再应用安装器自带的逐端 binpatch，最后由 Forge 的 `mergetool` 合并；userdev `joined.lzma` 那条路径用于原生 Mojmap 的游戏——Forge 的 `AccessTransformerEngine` 在进程内运行）、`NeoForgeRuntimeBuilder`、`NfrtRunner`（NeoFormRuntime，取的结果是 `gameJarNoRecomp`：只打二进制补丁，不用反编译器，也不用 `javac`）。
 - `MergedBaseTool` 从安装器的资源里解出 `forbric-merge-tools.jar`，依次运行 `net.forbric.tools.MergedBaseBuilder`（`-Xmx4g`）、`RuntimeInteropPatcher`，然后对照打包在安装器里的已审核基线运行 `MergedLinkChecker`。**只要链接检查报告的不是 `new 0`，安装就会失败。**
-- `--artifacts DIR`（窗口里的 “Built artifacts (leave empty)”）只供开发者使用，用来跳过构建。`GameArtifacts` 只从这一个目录取这三个 jar，并在下载或写入任何东西之前逐个打开检查：合并基底必须是 Minecraft 26.2，且它 `net/minecraft/` 下的类同时引用 `net/minecraftforge/` 和 `net/neoforged/`；每个运行时都必须带着本生态的核心类和它的 mod 加载器（`FMLLoader`、`IModInfo`），并且清单主段的 `Implementation-Version` 必须是锁定的版本（`Pins.NEOFORGE`；MinecraftForge 则是 `Pins.FORGE` 的 FML 部分，即 `65.0.1`）；MinecraftForge 运行时还必须是打过互操作补丁的那个，即其中的 `NamespacedWrapper$3` 声明了 `contents()`。这之后才做链接检查——单靠链接检查，任何不引用自身以外任何东西的 jar 都能通过（issue #13）；提供的一组文件没通过链接检查时，报告为这些文件彼此对不上，并给出同样的出路。
-- `Pins`：`MINECRAFT = "26.2"`（唯一支持的版本）、`FORGE = "26.2-65.0.1"`、`NEOFORGE = "26.2.0.88"`、`NFRT = "2.0.18"`、`NFRT_RESULT = "gameJarNoRecomp"`，每一项的理由都写在源码里。`BuildStamp` 让每个缓存产物都以整组锁定版本为键，所以锁定版本一升级，就不可能沿用缓存里的旧产物。
-- `JdkLocator` 要求构建工具用 Java ≥ 21（NeoFormRuntime 的 class 文件版本是 65）；它依次尝试当前运行的 JVM、启动器的运行时、系统里的 Java，从不下载 JDK。游戏本身需要 Java 25。
+- `--artifacts DIR`（窗口里的 “Built artifacts (leave empty)”）只供开发者使用，用来跳过构建。`GameArtifacts` 只从这一个目录取这三个 jar，并在下载或写入任何东西之前逐个打开检查：合并基底必须是 Minecraft 1.21.1，且它 `net/minecraft/` 下的类同时引用 `net/minecraftforge/` 和 `net/neoforged/`；每个运行时都必须带着本生态的核心类和它的 mod 加载器（`FMLLoader`、`IModInfo`），并且清单主段的 `Implementation-Version` 必须是锁定的版本（`Pins.NEOFORGE`；MinecraftForge 则是 `Pins.FORGE` 的 FML 部分，即 `52.1.16`）；MinecraftForge 运行时还必须是打过互操作补丁的那个，即其中的 `NamespacedWrapper$3` 声明了 `contents()`。这之后才做链接检查——单靠链接检查，任何不引用自身以外任何东西的 jar 都能通过（issue #13）；提供的一组文件没通过链接检查时，报告为这些文件彼此对不上，并给出同样的出路。
+- `Pins`：`MINECRAFT = "1.21.1"`（唯一支持的版本）、`FORGE = "1.21.1-52.1.16"`、`NEOFORGE = "21.1.252"`、`NFRT = "2.0.18"`、`NFRT_RESULT = "gameJarNoRecomp"`，再加上官方管线的两个工具 `INSTALLERTOOLS = net.minecraftforge:installertools:1.4.3:fatjar` 与 `FART = net.minecraftforge:ForgeAutoRenamingTool:1.0.6:all`，每一项的理由都写在源码里。`BuildStamp` 让每个缓存产物都以整组锁定版本为键，所以锁定版本一升级，就不可能沿用缓存里的旧产物。
+- `JdkLocator` 要求构建工具用 Java ≥ 21（NeoFormRuntime 的 class 文件版本是 65）；它依次尝试当前运行的 JVM、启动器的运行时、系统里的 Java，从不下载 JDK。游戏本身需要 Java 21。
 
 ### 13.2 版本配置
 
-`Installer` 写出 `versions/26.2-forbric/26.2-forbric.json`：
+`Installer` 写出 `versions/1.21.1-forbric/1.21.1-forbric.json`：
 
-- `inheritsFrom: "26.2"`，`mainClass: net.forbric.kernel.boot.KernelClientLaunch`，没有 JVM 参数；
-- 游戏参数 `--gameJar <merged>`、`--runtimeJar <forge-runtime><sep><neoforge-runtime>`（两者合在一个参数里）、`--libraryPath <every vanilla library for this platform>`；
+- `inheritsFrom: "1.21.1"`，`mainClass: net.forbric.kernel.boot.KernelClientLaunch`，没有 JVM 参数；
+- 游戏参数 `--gameJar <merged>`、`--runtimeJar <forge-runtime><sep><neoforge-runtime>`（两者合在一个参数里）、`--libraryPath <every vanilla library for this platform>`，以及 `--mappings <intermediary-mappings><sep><client-mappings>`（一个参数，绝对路径：内核用来重映射 Fabric 第三方的那两份文件，§1）；
 - `libraries`：自带的 Forbric jar 和内核的第三方依赖（取自内核自己的 `printBootClasspath`），再加上三个游戏产物，分别暂存为 `net.forbric:patched-mc-merged`、`net.forbric:forge-runtime`、`net.forbric:neoforge-runtime`；
 - 一个 `forbric` 块，只是元数据，声明了 `net.fabricmc:fabric-loader:0.19.3`。有些启动器靠搜索 JSON 文本来识别加载器，这样它们就会把这个实例当作装了 mod 的实例（并给它单独的 mods 文件夹）。
 
-三个生态的 mod 都放进 `<mcDir>/mods`（启动器开了版本隔离的话，则放进 `versions/26.2-forbric/mods`）。
+三个生态的 mod 都放进 `<mcDir>/mods`（启动器开了版本隔离的话，则放进 `versions/1.21.1-forbric/mods`）。
 
 ### 13.3 Forbric 自己的 jar 从哪里来
 
@@ -509,7 +510,7 @@ cd forbric-kernel
 java -cp <boot-cp> net.forbric.kernel.boot.Main --scan --mods <dir> --report out.json
 ```
 
-- **暂存产物。** 游戏侧编译时依赖 `forbric-loader/run/merged-base/patched-mc-merged-26.2.jar`、`…/forge-runtime/forge-runtime.jar`、`…/neoforge-runtime/neoforge-runtime.jar`，外加取自本地 Minecraft 安装的 brigadier、datafixerupper 和 gson，传输模块要用的一个 fabric-api jar（`-Pforbric.fabricApi`），以及按 SHA-256 锁定的 Team Reborn Energy 5.0.0（`run/energy-api/energy-5.0.0.jar` 或 `-Pforbric.rebornEnergy`）。没有暂存的 jar 时，`compileRuntimeJava` 会被跳过，`jar` 产出一个没有游戏侧的引导 jar——CI 构建的就是这种 jar。启动时负责发现这种 jar 的是 `KernelRuntimeClasses.verify`。
+- **暂存产物。** 游戏侧编译时依赖 `forbric-loader/run/merged-base/patched-mc-merged-1.21.1.jar`、`…/forge-runtime/forge-runtime.jar`、`…/neoforge-runtime/neoforge-runtime.jar`，外加取自本地 Minecraft 安装的 brigadier、datafixerupper 和 gson，传输模块要用的一个 fabric-api jar（`-Pforbric.fabricApi`），以及按 SHA-256 锁定的 Team Reborn Energy 5.0.0（`run/energy-api/energy-5.0.0.jar` 或 `-Pforbric.rebornEnergy`）。没有暂存的 jar 时，`compileRuntimeJava` 会被跳过，`jar` 产出一个没有游戏侧的引导 jar——CI 构建的就是这种 jar。启动时负责发现这种 jar 的是 `KernelRuntimeClasses.verify`。
 - **单元测试。** 这些数字是数源码得到的，不是跑出来的：`src/test` 的 438 个 `*Test.java` 文件里有 2 624 个 `@Test` 方法和 2 个 `@ParameterizedTest` 方法（各有两个用例）；`src/transferTest` 的 4 个文件里有 61 个 `@Test` 方法（只数位于行首的注解，用 `grep` 扫已跟踪的文件）。很多测试会读取暂存的 jar；gate-m0 只要遇到*任何*一个被跳过的测试就失败，因为在那里跳过意味着测试没有看过真正的基底。
 - **闸门。** 共 54 个脚本（`forbric-kernel/run/gate-m*.sh`），每个都对真实实例的真实日志和文件做断言，大多带有指名的负控制（一个 `-D…=off`，或移除某项输入，必须恰好让指名的那几项检查变红）。`run/compat/gates-all.sh` 按 glob 发现它们；`gates-parallel.py` 依据每个闸门里的 `# GATE-PARALLEL: rundirs=… mem=…` 行让它们重叠运行（54 个里有 51 个带这一行；没有的闸门单独运行），并给每个槽位分配独立的端口段。
 
@@ -608,11 +609,11 @@ java -cp <boot-cp> net.forbric.kernel.boot.Main --scan --mods <dir> --report out
 
 ## 19. 现状与已知边界
 
-- **仅支持 Minecraft 26.2**，以 Mojmap 为恒等命名空间。没有重映射步骤：针对其他命名空间编译的 jar 不做转换（`kernel/mapping/` 是从焊接方案沿用过来的，不在启动路径上）。
-- **合并基底是 NeoForge 的游戏，再拼进 MinecraftForge。** 两边都打过补丁的方法只保留了一个方法体（已提交的报告里有 1000 处方法冲突）；落败一方的 mod 因此丢掉的东西逐个修复 —— 转换器、适配器、桥 —— 没修复的由 `DeadEventAudit`、`HookCallSiteCensus`、`FieldDriftAudit`、`AbiLinkAudit`、`CapabilityUseAudit` 报告。结构性冲突（`Entity` 有两个真正的父类）在字节码层面无解；MinecraftForge 的 capability 由转换器重新组合进来。
+- **仅支持 Minecraft 1.21.1**，而且游戏是混淆的：运行时命名空间是 Mojmap（`named`），Fabric 第三方在加载前先由 intermediary 重映射到 `named`（§1），`kernel/mapping/`（`FabricGuestRemapper`、`ForgeModRemapper`、`ForbricMappings`、`KernelMappingResolver`）在启动路径上，而不是从焊接方案沿用过来的。
+- **合并基底是 NeoForge 的游戏，再拼进 MinecraftForge。** 两边都打过补丁的方法只保留了一个方法体（1.21.1 基底上有 901 处方法冲突；仍在仓库里的 26.2 报告是 1000 处）；落败一方的 mod 因此丢掉的东西逐个修复 —— 转换器、适配器、桥 —— 没修复的由 `DeadEventAudit`、`HookCallSiteCensus`、`FieldDriftAudit`、`AbiLinkAudit`、`CapabilityUseAudit` 报告。结构性冲突（`Entity` 有两个真正的父类）在字节码层面无解；MinecraftForge 的 capability 由转换器重新组合进来。
 - **`PARTIAL` 的 mixin 默认应用** —— 宁可保留只应用了一半的结果（并让它可见），也不丢掉还能工作的钩子。
 - **一个类，一份副本。** 同一个 mod 的两个生态构建相互竞争时，只有一个胜出；落败的生态看到的是在场别名，而不是该 mod 自己的平台胶水代码。
-- **靠实测，不靠承诺。** `MOD_TEST_FAILURES.md` 记录了针对当前 `main` 代码的逐 mod 测试（每个 jar 只带上它必需的依赖单独运行，进入世界、截图、退出），用的是三组全新随机抽取的 Modrinth mod：平均 89.0% 加载时没有失败行（91.8% 进入了世界；79.1% 在加载报告里没有任何一项被标为 DEGRADED），而同一批 jar 在发布版 v0.2.0 上是 80.5%。
+- **靠实测，不靠承诺。** `MOD_TEST_FAILURES.md` 记录了针对 26.2 那一代的逐 mod 测试（每个 jar 只带上它必需的依赖单独运行，进入世界、截图、退出），用的是三组全新随机抽取的 Modrinth mod：平均 89.0% 加载时没有失败行（91.8% 进入了世界；79.1% 在加载报告里没有任何一项被标为 DEGRADED），而同一批 jar 在发布版 v0.2.0 上是 80.5%。
 - **版本。** `forbric-kernel/build.gradle` 写的是 `0.1.0-SNAPSHOT`；安装器是 `0.3.1-beta`。`net.forbric.api` 是内部 API，随时可能变动，不另行通知。
 
 ## 20. 延伸阅读

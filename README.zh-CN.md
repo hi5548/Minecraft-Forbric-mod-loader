@@ -32,7 +32,7 @@ Connector 已经很成熟，Forbric 还不是，所以如果 Connector 已经能
 
 ### 安装
 
-1. 打开[最新发布版](https://github.com/Ray-T-r/Minecraft-Forbric-mod-loader/releases/latest)。
+1. 打开[最新发布版](https://github.com/hi5548/Minecraft-Forbric-mod-loader/releases/latest)。
 
 2. 把**两个**文件下载到**同一个文件夹**：
 
@@ -101,7 +101,7 @@ Fabric mod 把自己的设置界面交给 Mod Menu 管理，所以只有同时�
 | **Continuity 加载了，但玻璃方块之间仍然有边框** | 在 **选项 → 资源包** 中启用 **Default Connected Textures**（Continuity 自带）。它内置的资源包是可选的，光装上 mod 并不会自动启用。在 0.3.0 上，即使这样做了，Fabric 版的 Continuity 仍可能留下边框。这是 Forbric 的 bug。0.3.1 beta 已经修复（Releases 页面上的预发布版），但还没有进入正式版。另一个选择是使用为你的 Minecraft 版本制作的 NeoForge 版 Continuity。 |
 | **安装好像卡住了** | 通常是你和 Mojang 服务器之间有代理或 VPN。运行*安装*一节末尾的 `--doctor` 检查，然后关掉代理或 VPN 再试一次。 |
 
-遇到其他问题？可以在[这里](https://github.com/Ray-T-r/Minecraft-Forbric-mod-loader/issues/new?template=bug_report.yml)反馈。
+遇到其他问题？可以在[这里](https://github.com/hi5548/Minecraft-Forbric-mod-loader/issues/new?template=bug_report.yml)反馈。
 
 ### 更新与卸载
 
@@ -175,7 +175,7 @@ Forbric 与 Mojang、FabricMC、MinecraftForge 或 NeoForged 均无关联。
 要从源码构建内核，你需要 `git` 和 JDK 21 或更新版本。内核有自己的 Gradle 构建；引导侧的编译不需要 Fabric 底座：
 
 ```bash
-git clone https://github.com/Ray-T-r/Minecraft-Forbric-mod-loader.git
+git clone https://github.com/hi5548/Minecraft-Forbric-mod-loader.git
 cd Minecraft-Forbric-mod-loader
 cd forbric-kernel && ./gradlew build
 ```

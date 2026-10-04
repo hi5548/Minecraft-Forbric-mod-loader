@@ -1,12 +1,12 @@
 # Forbric — architecture and internals
 
 English | [简体中文](introduction.zh-CN.md)
-> **This branch targets Minecraft 1.21.1.** The body below describes the original 26.2 design and is kept for
-> that reason. Where the two differ — above all the namespace/remapping story, because 1.21.1 ships obfuscated
-> while 26.2 is Mojmap-native — the 1.21.1 build is authoritative. The version pins live in
+> **This branch targets Minecraft 1.21.1.** The version pins live in
 > `forbric-kernel-installer/src/main/java/net/forbric/installer/kernel/Pins.java`
-> (`MINECRAFT = "1.21.1"`, `FORGE = "1.21.1-52.1.16"`, `NEOFORGE = 21.1.252`), and the installed profile is
-> `versions/1.21.1-forbric/`.
+> (`MINECRAFT = "1.21.1"`, `FORGE = "1.21.1-52.1.16"`, `NEOFORGE = 21.1.252`), the installed profile is
+> `versions/1.21.1-forbric/`, and the merged base is `patched-mc-merged-1.21.1.jar`. A sentence that still names
+> 26.2 is the Mojmap-native generation this code was first written for and is marked as such; the namespace story
+> is different in substance, because 1.21.1 ships obfuscated and every Fabric guest is remapped (§1).
 
 
 
@@ -26,7 +26,7 @@ Terminology:
 | --- | --- |
 | **ecosystem** | Fabric, traditional MinecraftForge, NeoForge — `net.forbric.api.Ecosystem.FABRIC` / `FORGE` / `NEOFORGE` |
 | **Forge family** | MinecraftForge and NeoForge jointly. Two runtimes, two manifests (`META-INF/mods.toml`, `META-INF/neoforge.mods.toml`), two event buses |
-| **merged base** | `patched-mc-merged-26.2.jar`: Minecraft 26.2 carrying both Forge families' patches, byte-merged into one jar |
+| **merged base** | `patched-mc-merged-1.21.1.jar`: Minecraft 1.21.1 carrying both Forge families' patches, byte-merged into one jar |
 | **carrier** | one Forge family's runtime jar (`neoforge-runtime.jar`, `forge-runtime-interop.jar`), loaded as a passive ABI provider — its classes exist, its loader lifecycle never runs |
 | **boot side / game side** | code loaded by the system class loader vs. code defined by `ForbricClassLoader` |
 | **guest** | anything belonging to a third-party mod (guest mixin, guest jar) |
@@ -51,10 +51,19 @@ every part of the kernel answers one of them.
    MinecraftForge mod against MinecraftForge's patched game. On the merged base, anchors have moved, methods have
    been split, fields re-typed, lambdas renumbered, superclasses swapped.
 
-Namespace is *not* on this list for 26.2: the game ships Mojmap names, Forge-family 26.2 mods are Mojmap-compiled,
-and so are Fabric's (`KernelMappingResolver`'s javadoc records a constant-pool scan of fabric-api and Jade finding
-no intermediary symbols). The kernel runs identity mapping: `TransformContext(…, "named")`, and
-`KernelMappingResolver` answers every lookup with its input.
+Namespace is a sixth concern on 1.21.1, and the one the kernel settles before a guest class is defined.
+The game ships obfuscated, and the ecosystems do not agree on names: a constant-pool census of 50 Modrinth jars
+per loader measured Fabric as **intermediary** (49/50) but MinecraftForge and NeoForge as **Mojmap** `named`
+(48/50 and 46/50), with SRG surviving only in a few mixin targets. So the split is two-way, not three: the merged
+base, both Forge families' mods and both carriers all run as `named`, and only a Fabric guest has to be renamed.
+`FabricGuestRemapper` does that before the jar joins the owned classpath — it drives tiny-remapper
+(`ForgeModRemapper`) from intermediary to `named` over every jar the loader will define, the extracted JiJ children
+included, caching the output by content under `.forbric-kernel/remap`. The spine is `ForbricMappings`, built by
+joining the two files the installer stages and names on the `--mappings` argument (Fabric's intermediary mappings
+and Mojang's client mappings, joined on the obfuscated column), and `KernelMappingResolver` answers a mod's
+`MappingResolver` queries through it. The kernel runs identity mapping only when no data is staged (the 26.2 path, or
+a pack with no Fabric mods): then `TransformContext(…, "named")` is the whole answer and every lookup returns its
+input.
 
 Nor are mod APIs. Forbric does not re-implement the Fabric API, MinecraftForge or NeoForge APIs: a mod calls the
 genuine Fabric API mod it installed, and the genuine MinecraftForge/NeoForge classes from the carriers. What the
@@ -78,7 +87,7 @@ system class loader  (BOOT side)
      ▼
 ForbricClassLoader  (GAME side — the only loader that defines game/ecosystem classes)
  owned jars, in this order (KernelOwnedClasspath.compose):
-   1. patched-mc-merged-26.2.jar           --gameJar
+   1. patched-mc-merged-1.21.1.jar         --gameJar
    2. forge-runtime-interop.jar,            --runtimeJar   (the two carriers)
       neoforge-runtime.jar
    3. Minecraft's own libraries             --libraryPath  (owned: mods mixin into DataFixerUpper & co.)
@@ -142,7 +151,7 @@ code. They are built on the machine that runs them — by the installer for play
 
 | Artifact | What it is |
 | --- | --- |
-| `patched-mc-merged-26.2.jar` | vanilla 26.2 + MinecraftForge-patched 26.2 + NeoForge-patched 26.2, byte-merged by `net.forbric.tools.MergedBaseBuilder`. NeoForge's classes are the base and Forge's are spliced in; the committed report `forbric-loader/run/merged-base/merge-conflicts.txt` reads `forge=193 neo=10163 MERGED=612` classes and `CONFLICTS: methods=1000 fields=8 STRUCTURAL(superclass/field)=15` |
+| `patched-mc-merged-1.21.1.jar` | vanilla 1.21.1 + MinecraftForge-patched 1.21.1 + NeoForge-patched 1.21.1, byte-merged by `net.forbric.tools.MergedBaseBuilder`. NeoForge's classes are the base and Forge's are spliced in; on 1.21.1 its report reads `forge=136 neo=7575 MERGED=572` classes and `CONFLICTS: methods=901 fields=2 STRUCTURAL(superclass/field)=12`. (The copy committed at `forbric-loader/run/merged-base/merge-conflicts.txt` is the previous 26.2 generation's: `forge=193 neo=10163 MERGED=612`, `methods=1000 fields=8 STRUCTURAL=15`.) |
 | `neoforge-runtime.jar` | NeoForge's `-universal` jar plus the libraries its userdev config declares, merged into one jar (`NeoForgeRuntimeBuilder`) |
 | `forge-runtime-interop.jar` | MinecraftForge's `-universal` jar plus its runtime libraries (`ForgeRuntimeBuilder`), then patched by `net.forbric.tools.RuntimeInteropPatcher` for interfaces the merge widened on NeoForge's behalf that Forge's own compiled implementations no longer satisfy. Staged under the coordinate `net.forbric:forge-runtime` |
 
@@ -168,7 +177,8 @@ not stderr. `KernelBoot.launch` consumes `--gameJar`, `--runtimeJar` (repeatable
 joined by the path separator — launchers such as PCL2 keep only the last occurrence of a repeated flag) and
 `--libraryPath`; everything else, and everything after `--`, is forwarded to the game's `Main.main`. The dedicated
 server rejects `--gameDir`, so `KernelBoot` strips it on that side. The game version is read from the base jar's
-`version.json` (fallback `26.2`).
+`version.json`; the code's fallback constant, `KernelBoot.FALLBACK_GAME_VERSION`, still reads `26.2` and predates
+this port.
 
 ### 3.2 `KernelBoot.launch`, in order
 
@@ -459,7 +469,8 @@ classpath (first-URL-wins would otherwise let it shadow the winner and contribut
 `transform.TransformPhase` fixes the order: `RAW_PATCH`, `DEOBF_REMAP`, `ENV_STRIP`, `ACCESS`, `COREMOD`,
 `FABRIC_BUILTIN`, `MIXIN`. `TransformChain` runs the chain phases (`RAW_PATCH` … `FABRIC_BUILTIN`); within a phase,
 `predepends` topologically, then `sortIndex`, then registration order. `MIXIN` is terminal and cannot be registered
-into the chain. On 26.2 nothing is registered in `RAW_PATCH` or `DEOBF_REMAP`.
+into the chain. No transformer registers into `RAW_PATCH` or `DEOBF_REMAP`: the guest remap is whole-jar
+(`FabricGuestRemapper`) and runs before the chain, not as a per-class phase.
 
 What `KernelBoot` registers (91 call sites; some conditional):
 
@@ -744,7 +755,7 @@ Pure JDK, no dependencies, bytecode release 17, version `0.3.1-beta`.
 ```
 java -jar forbric-kernel-installer.jar                     # window (InstallerGui)
 java -jar forbric-kernel-installer.jar --dir DIR [options] # headless install
-    --mc 26.2  --artifacts DIR  --jdk PATH  --remote  --release TAG  --mirror PREFIX  --offline
+    --mc 1.21.1  --artifacts DIR  --jdk PATH  --remote  --release TAG  --mirror PREFIX  --offline
 java -jar forbric-kernel-installer.jar --doctor [--dir DIR] [--jdk PATH]
 ```
 
@@ -757,45 +768,50 @@ forge userdev ─┬→ forge-runtime ──────────────
                └───────────────────────────────┘                    ├→ patched-mc-merged
 neoforge userdev ─┬→ neoforge-runtime ──────────────────────────────┤
                   └→ NFRT → patched-mc-neoforge ────────────────────┘
-vanilla 26.2.jar ───────────────────────────────────────────────────┘
+vanilla 1.21.1.jar ───────────────────────────────────────────────────┘
 forge-runtime ────────────────────────────────→ forge-runtime-interop   (what is staged)
 ```
 
-- `ForgeRuntimeBuilder`, `PatchedMcBuilder` (Forge's `installertools`/`mergetool`/`binarypatcher` as child JVMs,
-  Forge's `AccessTransformerEngine` in-process), `NeoForgeRuntimeBuilder`, `NfrtRunner` (NeoFormRuntime, result
+- `ForgeRuntimeBuilder`, `PatchedMcBuilder` (for an obfuscated game the official install pipeline: installertools
+  `DOWNLOAD_MOJMAPS` and ForgeAutoRenamingTool rename each side to Mojmap, the installer's per-side binpatches are
+  applied, then Forge's `mergetool`; the userdev `joined.lzma` path is for a Mojmap-native game — with Forge's
+  `AccessTransformerEngine` in-process), `NeoForgeRuntimeBuilder`, `NfrtRunner` (NeoFormRuntime, result
   `gameJarNoRecomp` — binary patches, no decompiler, no `javac`).
 - `MergedBaseTool` unpacks `forbric-merge-tools.jar` from the installer's resources and runs
   `net.forbric.tools.MergedBaseBuilder` (`-Xmx4g`), `RuntimeInteropPatcher`, then `MergedLinkChecker` against the
   packaged reviewed baseline. **An install fails unless the link check reports `new 0`.**
 - `--artifacts DIR` ("Built artifacts (leave empty)" in the window) is for developers only and skips the build.
   `GameArtifacts` takes the three jars from that directory alone and opens each before anything is downloaded or
-  written: the merged base must be Minecraft 26.2 whose `net/minecraft/` classes refer to both
+  written: the merged base must be Minecraft 1.21.1 whose `net/minecraft/` classes refer to both
   `net/minecraftforge/` and `net/neoforged/`; each runtime must hold its family's core class and its mod loader
   (`FMLLoader`, `IModInfo`), and name the pinned version as its manifest's main `Implementation-Version`
-  (`Pins.NEOFORGE`; for MinecraftForge the FML half of `Pins.FORGE`, `65.0.1`); and the MinecraftForge runtime
+  (`Pins.NEOFORGE`; for MinecraftForge the FML half of `Pins.FORGE`, `52.1.16`); and the MinecraftForge runtime
   must be the interop-patched one, whose `NamespacedWrapper$3` declares `contents()`. Only then the link check,
   which on its own passes any jar that refers to nothing outside itself (issue #13); a supplied set that fails it
   is reported as files that do not fit together, with the same way out.
-- `Pins`: `MINECRAFT = "26.2"` (the only supported version), `FORGE = "26.2-65.0.1"`, `NEOFORGE = "26.2.0.88"`,
-  `NFRT = "2.0.18"`, `NFRT_RESULT = "gameJarNoRecomp"`, each with its reason in the source. `BuildStamp` keys every
-  cached artifact to the pin set, so a pin bump cannot be served from cache.
+- `Pins`: `MINECRAFT = "1.21.1"` (the only supported version), `FORGE = "1.21.1-52.1.16"`,
+  `NEOFORGE = "21.1.252"`, `NFRT = "2.0.18"`, `NFRT_RESULT = "gameJarNoRecomp"`, plus the two official-pipeline
+  tools `INSTALLERTOOLS = net.minecraftforge:installertools:1.4.3:fatjar` and
+  `FART = net.minecraftforge:ForgeAutoRenamingTool:1.0.6:all`, each with its reason in the source. `BuildStamp` keys
+  every cached artifact to the pin set, so a pin bump cannot be served from cache.
 - `JdkLocator` needs Java ≥ 21 for the build tools (NeoFormRuntime is class-file 65); it tries the running JVM,
-  then the launcher's runtimes, then the system, and never downloads a JDK. The game itself needs Java 25.
+  then the launcher's runtimes, then the system, and never downloads a JDK. The game itself needs Java 21.
 
 ### 13.2 The profile
 
-`Installer` writes `versions/26.2-forbric/26.2-forbric.json`:
+`Installer` writes `versions/1.21.1-forbric/1.21.1-forbric.json`:
 
-- `inheritsFrom: "26.2"`, `mainClass: net.forbric.kernel.boot.KernelClientLaunch`, no JVM arguments;
+- `inheritsFrom: "1.21.1"`, `mainClass: net.forbric.kernel.boot.KernelClientLaunch`, no JVM arguments;
 - game arguments `--gameJar <merged>`, `--runtimeJar <forge-runtime><sep><neoforge-runtime>` (one flag),
-  `--libraryPath <every vanilla library for this platform>`;
+  `--libraryPath <every vanilla library for this platform>`, and `--mappings <intermediary-mappings><sep><client-mappings>`
+  (one flag, absolute paths: the two files the kernel remaps Fabric guests with, §1);
 - `libraries`: the bundled Forbric jars and the kernel's third-party dependencies (from the kernel's own
   `printBootClasspath`), plus the three game artifacts staged as `net.forbric:patched-mc-merged`,
   `net.forbric:forge-runtime`, `net.forbric:neoforge-runtime`;
 - a `forbric` block, metadata only, declaring `net.fabricmc:fabric-loader:0.19.3` so launchers that detect a
   loader by searching the JSON's text treat the instance as modded (and give it its own mods folder).
 
-Mods for all three ecosystems go in `<mcDir>/mods` (or `versions/26.2-forbric/mods` under an isolating launcher).
+Mods for all three ecosystems go in `<mcDir>/mods` (or `versions/1.21.1-forbric/mods` under an isolating launcher).
 
 ### 13.3 Where Forbric's own jars come from
 
@@ -891,7 +907,7 @@ cd forbric-kernel
 java -cp <boot-cp> net.forbric.kernel.boot.Main --scan --mods <dir> --report out.json
 ```
 
-- **Staged artifacts.** The game side compiles against `forbric-loader/run/merged-base/patched-mc-merged-26.2.jar`,
+- **Staged artifacts.** The game side compiles against `forbric-loader/run/merged-base/patched-mc-merged-1.21.1.jar`,
   `…/forge-runtime/forge-runtime.jar`, `…/neoforge-runtime/neoforge-runtime.jar`, plus brigadier, datafixerupper
   and gson from a local Minecraft install, a fabric-api jar for the transfer modules (`-Pforbric.fabricApi`), and
   Team Reborn Energy 5.0.0 pinned by SHA-256 (`run/energy-api/energy-5.0.0.jar` or `-Pforbric.rebornEnergy`).
@@ -1021,10 +1037,11 @@ Break one and the failure usually surfaces far from the cause.
 
 ## 19. Current state and known boundaries
 
-- **Minecraft 26.2 only**, Mojmap identity namespace. There is no remapping step: a jar compiled against another
-  namespace is not translated (`kernel/mapping/` is carried over from the weld and is not on the boot path).
+- **Minecraft 1.21.1**, and obfuscated: the runtime namespace is Mojmap (`named`), a Fabric guest is remapped
+  intermediary → `named` before it loads (§1), and `kernel/mapping/` (`FabricGuestRemapper`, `ForgeModRemapper`,
+  `ForbricMappings`, `KernelMappingResolver`) is on the boot path rather than carried over from the weld.
 - **The merged base is NeoForge's game with MinecraftForge spliced in.** Where both patched a method, one body
-  survived (1 000 method conflicts in the committed report); what the loser's mods lose is repaired case by case —
+  survived (901 method conflicts on the 1.21.1 base; the committed 26.2 report reads 1 000); what the loser's mods lose is repaired case by case —
   transformers, adapters, bridges — and what is not repaired is reported by `DeadEventAudit`,
   `HookCallSiteCensus`, `FieldDriftAudit`, `AbiLinkAudit`, `CapabilityUseAudit`. Structural conflicts (two real
   superclasses for `Entity`) have no bytecode-level resolution; MinecraftForge capabilities are composed back in by
@@ -1034,8 +1051,8 @@ Break one and the failure usually surfaces far from the cause.
 - **One class, one copy.** When two ecosystems' builds of a mod compete, one wins; the losing ecosystem sees a
   presence alias, not the mod's own platform glue.
 - **Measured, not promised.** `MOD_TEST_FAILURES.md` records a per-mod test (each jar alone with its required
-  dependencies, into a world, screenshot, exit) on three fresh random Modrinth sets against the current `main`
-  code: 89.0 % loaded without failure lines on average (91.8 % reached the world; 79.1 % with nothing reported
+  dependencies, into a world, screenshot, exit) on three fresh random Modrinth sets on the 26.2 generation: 89.0 %
+  loaded without failure lines on average (91.8 % reached the world; 79.1 % with nothing reported
   DEGRADED in the load report), against 80.5 % for release v0.2.0 on the same jars.
 - **Versions.** `forbric-kernel/build.gradle` says `0.1.0-SNAPSHOT`; the installer is `0.3.1-beta`. `net.forbric.api`
   is internal and changes without notice.

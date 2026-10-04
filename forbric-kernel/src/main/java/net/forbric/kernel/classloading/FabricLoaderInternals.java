@@ -35,9 +35,10 @@ import java.util.Set;
  *
  * <p><b>Withheld by {@code -Dforbric.fabricImpl=off}.</b> The class loader then answers
  * {@code ClassNotFoundException} for every name in {@link #SWITCHED}, and the kernel stops reading the entrypoint
- * storage back — exactly the behaviour from before these classes existed. {@code Hooks} is not in that set: the game's
- * own entry points call it, and it has its own switch ({@code -Dforbric.fabricHooks=off}) that stops the calls
- * being emitted in the first place.
+ * storage back — exactly the behaviour from before these classes existed. {@link #ALWAYS} is not in that set: the
+ * game's own entry points call {@code Hooks}, which has its own switch ({@code -Dforbric.fabricHooks=off}) that stops
+ * the calls being emitted in the first place, and the pre-0.15 launcher facade is a static the kernel fills at boot
+ * and never empties.
  */
 public final class FabricLoaderInternals {
 	/** {@code -Dforbric.fabricImpl=off}: mods see none of {@link #SWITCHED}, and the storage is not read back. */
@@ -56,8 +57,16 @@ public final class FabricLoaderInternals {
 			"net.fabricmc.loader.impl.util.StringUtil",
 			"net.fabricmc.loader.impl.util.version.StringVersion");
 
-	/** Shipped internals the game itself calls; pinned, never withheld. */
-	static final Set<String> ALWAYS = Set.of("net.fabricmc.loader.impl.game.minecraft.Hooks");
+	/** Shipped internals pinned but never withheld: the game's own hook, and the launcher facade the kernel fills. */
+	static final Set<String> ALWAYS = Set.of(
+			"net.fabricmc.loader.impl.game.minecraft.Hooks",
+			// The pre-0.15 launcher facade. The kernel installs its launcher view into this static at boot and never
+			// takes it away, so it is pinned like the rest and — unlike {@code Hooks} — never withheld either: the
+			// impl-package facade beside it is not the switch's business, and neither is this one. Pinned because a
+			// mod that shaded it would otherwise win child-first with a second, empty static: {@code getLauncher()}
+			// would then answer null to the very call the kernel had just installed.
+			"net.fabricmc.loader.launch.common.FabricLauncher",
+			"net.fabricmc.loader.launch.common.FabricLauncherBase");
 
 	private FabricLoaderInternals() {
 	}

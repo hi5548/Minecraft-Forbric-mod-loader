@@ -16,6 +16,8 @@
 
 package net.forbric.kernel.fabric;
 
+import java.net.URISyntaxException;
+import java.net.URL;
 import java.nio.file.Path;
 
 import net.fabricmc.api.EnvType;
@@ -40,8 +42,13 @@ import net.forbric.kernel.util.ForbricLog;
  * <p>The jar is recorded as Fabric's for environment stripping: Knot strips what it loads from it like any other
  * Fabric class, and a client-only member left in it on a server fails the class the way CreativeCore's did.
  * {@code -Dforbric.envStrip.runtimeJars=off} leaves such a jar unstripped, as before.
+ *
+ * <p>It answers the pre-0.15 facade too ({@code net.fabricmc.loader.launch.common}), which loader 0.19.5 still
+ * ships: a mod compiled before the package moved reaches {@code FabricLauncherBase.getLauncher()}. Both bases are
+ * installed with this one instance, so the two packages give the same launcher.
  */
-public final class KernelFabricLauncher implements FabricLauncher {
+public final class KernelFabricLauncher
+		implements FabricLauncher, net.fabricmc.loader.launch.common.FabricLauncher {
 	/** {@code -Dforbric.envStrip.runtimeJars=off}: a jar added here is not recorded as Fabric's for the strip. */
 	public static final String RUNTIME_JARS_SWITCH = "forbric.envStrip.runtimeJars";
 
@@ -55,7 +62,9 @@ public final class KernelFabricLauncher implements FabricLauncher {
 
 	/** Builds the launcher view and publishes it. Call once, before any mod class loads. */
 	public static void install(ForbricClassLoader loader, EnvType envType) {
-		FabricLauncherBase.setLauncher(new KernelFabricLauncher(loader, envType));
+		KernelFabricLauncher view = new KernelFabricLauncher(loader, envType);
+		FabricLauncherBase.setLauncher(view);
+		net.fabricmc.loader.launch.common.FabricLauncherBase.setLauncher(view);
 	}
 
 	@Override
@@ -74,6 +83,20 @@ public final class KernelFabricLauncher implements FabricLauncher {
 	@Override
 	public ClassLoader getTargetClassLoader() {
 		return loader;
+	}
+
+	/**
+	 * The pre-0.15 facade's classpath append: {@code FabricLauncherBase.getLauncher().propose(jar)}, as LuckPerms
+	 * 5.4.140 does. The modern call is {@link #addToClassPath(Path, String...)}, so this converts and delegates
+	 * rather than reimplementing the family record and the log line.
+	 */
+	@Override
+	public void propose(URL url) {
+		try {
+			addToClassPath(Path.of(url.toURI()));
+		} catch (URISyntaxException | IllegalArgumentException e) {
+			throw new RuntimeException("could not add " + url + " to the classpath", e);
+		}
 	}
 
 	@Override

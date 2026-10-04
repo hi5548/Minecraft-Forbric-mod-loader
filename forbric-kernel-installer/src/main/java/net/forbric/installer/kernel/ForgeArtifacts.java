@@ -36,7 +36,7 @@ final class ForgeArtifacts {
 	/** Forbric coordinate group for the built (never-redistributed) artifacts staged into {@code libraries/}. */
 	static final String OUT_GROUP = "net.forbric";
 
-	final String mcVersion;     // "26.2"
+	final String mcVersion;     // e.g. "1.21.1" (Pins.MINECRAFT)
 	final String forgeVersion;  // "26.2-65.0.1"
 	final String fmlVersion;    // "65.0.1"  (the part after '-' — the FML/language-provider version domain)
 

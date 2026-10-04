@@ -45,7 +45,8 @@ import javax.swing.WindowConstants;
 
 /** The window: pick a game version, a loader version and a directory, then press Install. */
 final class InstallerGui {
-	static final String DEFAULT_VERSION = "26.2";
+	/** The pin is the single source of truth: the combo box and the headless default both read it. */
+	static final String DEFAULT_VERSION = Pins.MINECRAFT;
 
 	private final JFrame frame = new JFrame("Forbric Installer");
 	private final JComboBox<String> gameVersion = new JComboBox<>(new String[] {DEFAULT_VERSION});

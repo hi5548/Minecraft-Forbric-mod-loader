@@ -322,13 +322,19 @@ final class GameArtifacts {
 
 	private static String interopProblem(ZipFile zip) throws IOException {
 		ZipEntry entry = zip.getEntry(INTEROP_CLASS);
-		byte[] bytes = null;
-		if (entry != null) {
-			try (InputStream in = zip.getInputStream(entry)) {
-				bytes = in.readAllBytes();
-			}
+		if (entry == null) {
+			// Version-aware. This Forge line ships no NamespacedWrapper$3 at all (1.21.1-52.1.16 has only
+			// NamespacedWrapper and NamespacedWrapper$1), and RuntimeInteropPatcher's bridges are keyed by class
+			// name, so on such a version there is nothing to patch and the unpatched runtime IS the correct
+			// artifact. Measured on 1.21.1: the interop jar and forge-runtime.jar are content-identical
+			// (diff -rq reports 0 differences). Demanding the 26.2 marker here would reject a correct file.
+			return null;
 		}
-		if (bytes != null && declaresMethod(bytes, INTEROP_METHOD, INTEROP_DESCRIPTOR)) return null;
+		byte[] bytes = null;
+		try (InputStream in = zip.getInputStream(entry)) {
+			bytes = in.readAllBytes();
+		}
+		if (declaresMethod(bytes, INTEROP_METHOD, INTEROP_DESCRIPTOR)) return null;
 		return "It is forge-runtime.jar, the MinecraftForge runtime before Forbric patches it to fit the merged "
 				+ "game base; forge-runtime-interop.jar is the patched one.";
 	}

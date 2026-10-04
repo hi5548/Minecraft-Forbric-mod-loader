@@ -856,6 +856,14 @@ public final class GuestInjectorPruner implements ClassTransformer {
 		return !"off".equalsIgnoreCase(System.getProperty(PROPERTY, "on"));
 	}
 
+	/** {@code -Dforbric.guestInjectorPrunerAudit=on} prints, per class the chain hands over, why a row did or did
+	 * not act. Off by default: it is a diagnostic, not a per-boot report. */
+	public static final String AUDIT_PROPERTY = "forbric.guestInjectorPrunerAudit";
+
+	static boolean audit() {
+		return "on".equalsIgnoreCase(System.getProperty(AUDIT_PROPERTY, "off"));
+	}
+
 	@Override
 	public String name() {
 		return "forbric:guest-injector-pruner";
@@ -923,6 +931,18 @@ public final class GuestInjectorPruner implements ClassTransformer {
 	public byte[] transform(String className, byte[] classBytes, TransformContext context) {
 		if (classBytes == null || classBytes.length == 0) return classBytes;
 		List<Prune> prunes = TABLE.get(className);
+		// An audit that distinguishes the FOUR ways this can end in silence, because "the prune did not fire" is
+		// not a diagnosis: (1) the chain never calls this class at all — then no AUDIT line appears for it and the
+		// gap is upstream; (2) the class IS known (it has a CONFIGS row) but has no TABLE row — the key does not
+		// match, and this prints the name the chain actually handed over; (3) a row exists but the switch is off;
+		// (4) a row exists and is active but the handler name/desc/selector inside it does not match, which the
+		// existing drift line already reports. Measured need: Mod Menu's MixinTitleScreen reached a world with its
+		// row in force and left no trace anywhere, which (1) or (2) explains and nothing else does.
+		if (audit() && (prunes != null || CONFIGS.containsKey(className)))
+			ForbricLog.info("[Forbric/GuestInjectorPruner] AUDIT %s: %s, table row %s, switch %s, active %s",
+					className, prunes == null ? "no TABLE row" : prunes.size() + " prune(s)",
+					prunes != null, enabled(),
+					prunes == null ? "n/a" : String.valueOf(ACTIVE.get(className).getAsBoolean()));
 		if (prunes == null || !enabled() || !ACTIVE.get(className).getAsBoolean()) return classBytes;
 
 		ClassNode node = new ClassNode();

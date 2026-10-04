@@ -5,14 +5,15 @@ applicable 36,strict 28 —— 差 **8** 个非 strict 主体。本报告把八�
 逐条给字节级证据;把唯一的新内核修复落地(真字节红→绿);其余的内核侧行经复核确认由**中间落地的提交**
 修好、只差一次带正确 JDK 的重测。所有重测的证 bootstrap 交 `W7Harness`,预先登记读数写在第 §5 节。
 
-判据来源(当时,用于确定"八个"是哪八个):`python3 harness/bucket_table.py --extra
-2026-10-03-recheck-frozen,2026-10-03-cobblemon-ref,2026-10-03-gunpowder-dump,2026-10-04-recheck-walls`
-(fabric 行:appl 36 / world 32 / strict 28 / raw 78% / closure 82%;与 Main 给的 cause 计数
-`boot-stall 2, nosuchmethod 2, noclassdef 2, registry-load 1, dependency-not-ok 1` 逐字一致)。
+判据来源(当时,用于确定"八个"是哪八个):先按 `Main` 给的 cause 计数取 fabric 样本的非 strict 集合
+`boot-stall 2, nosuchmethod 2, noclassdef 2, registry-load 1, dependency-not-ok 1`(逐字一致),再用
+`bucket_table.py` 的 `--extra` 折入当时已有的复核行核对出这八行,结论为 applic 36 / world 32 / strict 28
+(raw 78% / closure 82%,均为修复前的数)。
 
-**这条命令只用来界定初始的八个,不是复现用的权威命令。** `2026-10-04-recheck-walls` 后来被撤回(它的每一行
-都是 JDK 25 量的,§1),而上面那个 78%/82% 也是修复前的数。**复现当前数字请用 §9.3 那条**(去掉
-`recheck-walls`、补上修复后的行;fabric 92%/97%)。这两处必须一致,否则读者复现出的是一张已撤回的表。
+**那条当时的 `--extra` 命令行(它含 `2026-10-04-recheck-walls`)已不写在报告任何位置。** 为什么:
+`recheck-walls` 的每一行都是 **JDK 25** 量的(§1),其中 `boot-stall` 是仪器不是主体,该报告已撤回;而
+命令行是可复现性契约——报告里留一条已撤回的命令,就是"陈旧 jar"的同一类缺陷:读者明天照着跑,会得到一张
+不同的表。**唯一可复现的命令是 §9.3 那条**(不含 `recheck-walls`,fabric 92%/97%)。
 
 ## 0. 权威的八个(按行来源,不按旧表)
 

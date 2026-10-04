@@ -109,7 +109,7 @@ int code = CompatibilityLaunchBoundary.run(() -> KernelBoot.launch(KernelBoot.Si
 if (code != 0) System.exit(code);
 ```
 
-兼容性拒绝只会在 `CompatibilityLaunchBoundary` 这一处变成进程退出（退出码 `78`，§12.4），安装损坏而被拒绝的启动也只在这里退出（退出码 `2`，§3.2 第 0 步）。其他任何离开引导过程的异常都会先在这里写进 `latest.log`（消息和堆栈），然后原样重新抛出，因为启动器展示的是这个文件，而不是 stderr。`KernelBoot.launch` 自己处理 `--gameJar`、`--runtimeJar`（可重复，一个值里也可以用路径分隔符连接多个 jar —— PCL2 这类启动器遇到重复的参数只保留最后一个）和 `--libraryPath`；其余参数，以及 `--` 之后的全部内容，都转给游戏的 `Main.main`。专用服务器不接受 `--gameDir`，所以 `KernelBoot` 在服务端会把它去掉。游戏版本从基底 jar 的 `version.json` 读取；代码里的回退常量 `KernelBoot.FALLBACK_GAME_VERSION` 仍写着 `26.2`，早于本次移植。
+兼容性拒绝只会在 `CompatibilityLaunchBoundary` 这一处变成进程退出（退出码 `78`，§12.4），安装损坏而被拒绝的启动也只在这里退出（退出码 `2`，§3.2 第 0 步）。其他任何离开引导过程的异常都会先在这里写进 `latest.log`（消息和堆栈），然后原样重新抛出，因为启动器展示的是这个文件，而不是 stderr。`KernelBoot.launch` 自己处理 `--gameJar`、`--runtimeJar`（可重复，一个值里也可以用路径分隔符连接多个 jar —— PCL2 这类启动器遇到重复的参数只保留最后一个）和 `--libraryPath`；其余参数，以及 `--` 之后的全部内容，都转给游戏的 `Main.main`。专用服务器不接受 `--gameDir`，所以 `KernelBoot` 在服务端会把它去掉。游戏版本从基底 jar 的 `version.json` 读取；代码里的回退常量 `KernelBoot.FALLBACK_GAME_VERSION` 与本分支一致，写着 `1.21.1`。
 
 ### 3.2 `KernelBoot.launch` 的执行顺序
 

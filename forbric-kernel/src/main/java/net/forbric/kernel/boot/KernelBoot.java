@@ -92,8 +92,8 @@ public final class KernelBoot {
 	private KernelBoot() {
 	}
 
-	/** Used only when the base jar carries no {@code version.json}; the merged base is built from 26.2. */
-	private static final String FALLBACK_GAME_VERSION = "26.2";
+	/** Used only when the base jar carries no {@code version.json}; the merged base is built from 1.21.1. */
+	private static final String FALLBACK_GAME_VERSION = "1.21.1";
 
 	/** The two boot sides. */
 	public enum Side {

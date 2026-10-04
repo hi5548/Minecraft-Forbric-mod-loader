@@ -177,8 +177,8 @@ not stderr. `KernelBoot.launch` consumes `--gameJar`, `--runtimeJar` (repeatable
 joined by the path separator — launchers such as PCL2 keep only the last occurrence of a repeated flag) and
 `--libraryPath`; everything else, and everything after `--`, is forwarded to the game's `Main.main`. The dedicated
 server rejects `--gameDir`, so `KernelBoot` strips it on that side. The game version is read from the base jar's
-`version.json`; the code's fallback constant, `KernelBoot.FALLBACK_GAME_VERSION`, still reads `26.2` and predates
-this port.
+`version.json`; the code's fallback constant, `KernelBoot.FALLBACK_GAME_VERSION`, reads `1.21.1` like the rest of the
+branch.
 
 ### 3.2 `KernelBoot.launch`, in order
 

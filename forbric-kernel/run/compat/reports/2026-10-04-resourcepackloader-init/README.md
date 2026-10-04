@@ -161,3 +161,21 @@ fabric-item-api-v1, fabric-loot-api-v3, fabric-object-b…`。归谁判、怎么
 
 **结论(严格按本车道契约)**:`ResourcePackLoader.<clinit>` 的 NPE 已修且已被运行证伪重现;预登记第 1 条成立。
 第 2/3 条被一个**更晚、另一处**的崩溃挡住,不由本改动负责,也未被读成本字段的成功。
+
+### 5.2 收口(§5.1 那面墙也被修掉后,同一集合的合成读数)
+
+`W7Harness` 后续在 `ReviewFixes` 的批次(**`e11e4fcb`**,sha `451c6780…`,已 rebase 到 main)上复用**同一
+十二集合**重跑:
+
+```
+PASS  world=true  frames=1  strict=TRUE  confirmed_required: 0  seconds=102  崩溃报告 0 份
+`Sodium's config could not be found`：0 次
+```
+
+即 §5.1 那面墙由 `ReviewFixes` 的 **P5 `dbc4d3de`**("FRAPI evidence check misses Sodium's real entry
+point")负责;本次改动**先把 `ResourcePackLoader` 解 poison,才第一次让启动走到 Sodium 的 config
+registration**,两步串联、各自暴露下一面墙。`ConfigLoaderForge` 在通过的那次日志里仍出现一次——Sodium 的
+Forge 侧 config 路径是**被走到并满足**,而不是被跳过(墙"消失"与"移走"的区别)。
+
+**因此:同一十二集合的预登记第 2 条(`world=true`)在合成构建上成立;第 3 条(`joined world via
+quick-play`)本报告未取得逐字引用,不作断言。** 本车道的 `ResourcePackLoader` 墙已关。

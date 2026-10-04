@@ -80,6 +80,11 @@ class PassiveSeederLoadingModListTest {
 		private Object loadingModList;
 	}
 
+	/** Stands in for 1.21.1's {@code FMLLoader}, whose {@code loadingModList} is a STATIC field. */
+	static final class StaticFakeFmlLoader {
+		private static Object loadingModList;
+	}
+
 	@AfterEach
 	void clearGlobals() {
 		System.clearProperty(PassiveSeeder.SEED_SWITCH);
@@ -198,6 +203,36 @@ class PassiveSeederLoadingModListTest {
 		Object list = seededList(loader);
 		assertNotNull(list, "a zero-mod boot must behave exactly as before: an empty but present list");
 		assertTrue(((List<?>) call(list, "getMods")).isEmpty());
+	}
+
+	/**
+	 * The 1.21.1 shape: FMLLoader's {@code loadingModList} is a STATIC field and there is no per-launch instance, so
+	 * {@code seedNeoForge21Loader} calls the seeder with a {@code null} {@code loaderInstance}.
+	 *
+	 * <p>The contract the 1.21.1 client launch depends on: the STATIC field is written, and
+	 * {@code LoadingModList.get()} — what Sodium's {@code ResourcePackLoaderMixin} calls from inside
+	 * {@code ResourcePackLoader.<clinit>}, via {@code getModFileById("sodium").getFile()} — answers for a real mod
+	 * instead of returning null (which kills that class initializer and the client with it).
+	 */
+	@Test
+	void the1_21_1StaticShapeSeedsTheSameList() throws Exception {
+		ClassLoader game = neoForgeLoader();
+		Path mods = Files.createDirectories(tmp.resolve("mods"));
+		writeModJar(mods.resolve("kerneltestmod.jar"), "kerneltestmod", "4.12.2", "Kernel Test Mod", false);
+
+		PassiveSeeder.seedNeoForgeLoadingModList(game, StaticFakeFmlLoader.class, null, mods, List.of());
+
+		Field field = StaticFakeFmlLoader.class.getDeclaredField("loadingModList");
+		field.setAccessible(true);
+		Object seeded = field.get(null);
+		assertNotNull(seeded, "a null loaderInstance must write the 1.21.1 STATIC loadingModList field");
+		assertEquals("4.12.2", call(call(seeded, "getModFileById", String.class, "kerneltestmod"), "versionString"));
+
+		Class<?> lml = Class.forName("net.neoforged.fml.loading.LoadingModList", false, game);
+		Object viaGet = lml.getMethod("get").invoke(null);
+		assertNotNull(viaGet, "LoadingModList.get() must answer — it is what the mixin calls at class-init");
+		assertNotNull(call(viaGet, "getModFileById", String.class, "kerneltestmod"),
+				"a mod must resolve ITSELF through the seeded list; an empty list is what NPE'd Sodium's mixin");
 	}
 
 	@Test

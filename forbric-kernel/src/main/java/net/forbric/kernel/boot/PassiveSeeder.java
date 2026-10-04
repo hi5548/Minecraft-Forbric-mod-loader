@@ -209,7 +209,7 @@ public final class PassiveSeeder {
 				// PORT(1.21.1): NeoForge 21.1's FMLLoader keeps its identity in STATIC fields and has a public
 				// no-arg constructor — there is no per-launch instance, so no getCurrentOrNull()/makeCurrent(), and
 				// no (ClassLoader,String[],Dist,boolean,Path) constructor. All of that is the 26.2 shape.
-				seedNeoForge21Loader(gameLoader, fmlLoader, gameDir, side, gameVersion);
+				seedNeoForge21Loader(gameLoader, fmlLoader, gameDir, modsDir, side, gameVersion);
 				return;
 			}
 			if (getCurrentOrNull.invoke(null) != null) {
@@ -268,8 +268,8 @@ public final class PassiveSeeder {
 	 * version. FML-loader and NeoForm versions are launcher-profile inputs the kernel has no runtime source for, so
 	 * they are left null rather than guessed; nothing on the mod-loading path dereferences them.
 	 */
-	private static void seedNeoForge21Loader(ClassLoader gameLoader, Class<?> fmlLoader, Path gameDir, Side side,
-			String gameVersion) throws Exception {
+	private static void seedNeoForge21Loader(ClassLoader gameLoader, Class<?> fmlLoader, Path gameDir, Path modsDir,
+			Side side, String gameVersion) throws Exception {
 		Class<?> distClass = Class.forName(ForeignType.DIST.binary(Ecosystem.NEOFORGE), false, gameLoader);
 		Object dist = Enum.valueOf(distClass.asSubclass(Enum.class), side.distName());
 		setStaticIfNull(fmlLoader, "dist", dist);
@@ -298,7 +298,14 @@ public final class PassiveSeeder {
 			versionInfo.set(null, ctor.newInstance(neoVersion, null, gameVersion, null));
 		}
 
-		seedEmptyNeoForgeLoadingModList(gameLoader, fmlLoader);
+		// POPULATED, not empty — the same seeder the 26.2 shape uses, addressed at 21.1's STATIC field
+		// (loaderInstance null). An empty list answers only "does this thing exist"; a mod that resolves ITSELF
+		// through it gets null and NPEs. Sodium is the measured case: its ResourcePackLoaderMixin merges
+		// `SODIUM_FILE = LoadingModList.get().getModFileById("sodium").getFile()` into ResourcePackLoader.<clinit>,
+		// so an empty list killed that class's initializer and the client died in PackRepository.rebuildSelected
+		// (NoClassDefFoundError: Could not initialize class …ResourcePackLoader). This one seeder is the kernel's
+		// existing answer and already carries the 1.21.1 field shapes (PORT(1.21.1) in buildModFile/fillModFileInfo).
+		seedNeoForgeLoadingModList(gameLoader, fmlLoader, null, modsDir, KernelBoot.nestedJarJarJars());
 		if (side.isClient()) seedNeoForgeWindowProvider(gameLoader);
 
 		ForbricLog.info("[Forbric/Seed] NeoForge 21.1 FMLLoader seeded (dist=%s, production=%s, neoforge=%s, mc=%s) — "
@@ -413,22 +420,6 @@ public final class PassiveSeeder {
 		}
 	}
 
-	/** The STATIC-field twin of {@link #seedEmptyLoadingModList} for the 1.21.1 FMLLoader shape. */
-	private static void seedEmptyNeoForgeLoadingModList(ClassLoader gameLoader, Class<?> fmlLoader) {
-		try {
-			Field field = fmlLoader.getDeclaredField("loadingModList");
-			field.setAccessible(true);
-			if (field.get(null) != null) return;
-			Class<?> lmlCls = Class.forName(ForeignType.LOADING_MOD_LIST.binary(Ecosystem.NEOFORGE), false, gameLoader);
-			// LoadingModList.of(two ModFile lists, a ModInfo list, issues, dependencies) — the 21.1 five-arg shape.
-			Method of = lmlCls.getMethod("of", List.class, List.class, List.class, List.class, Map.class);
-			field.set(null, of.invoke(null, List.of(), List.of(), List.of(), List.of(), Map.of()));
-			ForbricLog.debug("[Forbric/Seed] seeded empty NeoForge LoadingModList (static, zero mods)");
-		} catch (Throwable t) {
-			ForbricLog.warn("[Forbric/Seed] could not seed empty NeoForge LoadingModList", unwrap(t));
-		}
-	}
-
 	static String[] neoForgeVersionArguments(String gameVersion) {
 		List<String> args = new ArrayList<>();
 		if (gameVersion != null && !gameVersion.isBlank()) {
@@ -513,8 +504,12 @@ public final class PassiveSeeder {
 	}
 
 	/**
-	 * @param nestedJars the Forge-family jar-in-jar files this boot extracted and put on the classpath — see
-	 *                   {@link #arbitratedNestedForgeFamilyMods}. Null before extraction has run.
+	 * @param loaderInstance the FMLLoader whose {@code loadingModList} field is written, or {@code null} to write
+	 *                       the 1.21.1 STATIC field ({@code private static LoadingModList loadingModList}) — the
+	 *                       field read is the same either way, and {@code field.get(null)}/{@code set(null,…)} is
+	 *                       exactly how a static field is addressed reflectively.
+	 * @param nestedJars     the Forge-family jar-in-jar files this boot extracted and put on the classpath — see
+	 *                       {@link #arbitratedNestedForgeFamilyMods}. Null before extraction has run.
 	 */
 	static void seedNeoForgeLoadingModList(ClassLoader gameLoader, Class<?> fmlLoader, Object loaderInstance,
 			Path modsDir, List<Path> nestedJars) {

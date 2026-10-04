@@ -50,6 +50,17 @@ class FrapiRendererEvidenceTest {
 				caller("mod/Impl", "net/fabricmc/fabric/impl/client/renderer/RendererManager", "registerRenderer"))))));
 	}
 
+	/**
+	 * The 1.21.1 entry point, which is what Sodium 0.8.13's NeoForge build really calls (measured in its bytes:
+	 * {@code RendererAccess.INSTANCE.registerRenderer(SodiumRenderer.INSTANCE)}), plus the impl behind it.
+	 */
+	@Test void theOlderGenerationsApiEntryPointIsRecognised() throws Exception {
+		assertTrue(FrapiRendererEvidence.registersRenderer(write("api.jar", jar(Map.of("mod/Registrar.class",
+				caller("mod/Registrar", "net/fabricmc/fabric/api/renderer/v1/RendererAccess", "registerRenderer"))))));
+		assertTrue(FrapiRendererEvidence.registersRenderer(write("impl.jar", jar(Map.of("mod/Impl.class",
+				caller("mod/Impl", "net/fabricmc/fabric/impl/renderer/RendererAccessImpl", "registerRenderer"))))));
+	}
+
 	@Test void onlyReadingTheRendererIsNotRegisteringOne() throws Exception {
 		assertFalse(FrapiRendererEvidence.registersRenderer(write("reader.jar", jar(Map.of("mod/Reader.class",
 				caller("mod/Reader", "net/fabricmc/fabric/api/client/renderer/v1/Renderer", "get"))))));
@@ -74,6 +85,7 @@ class FrapiRendererEvidenceTest {
 		assertFalse(FrapiRendererEvidence.registersRenderer(neo));
 		assertTrue(FrapiRendererEvidence.registersRenderer(fabric));
 	}
+
 
 	private static DiscoveredMod mod(String source) {
 		return new DiscoveredMod(Ecosystem.NEOFORGE, "sodium", "0.9.1", "Sodium", List.of(), List.of(), null, source);

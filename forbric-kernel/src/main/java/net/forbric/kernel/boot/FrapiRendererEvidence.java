@@ -19,17 +19,30 @@ import org.objectweb.asm.Opcodes;
  *
  * <p>{@code "fabric-renderer-api-v1:contains_renderer"} is a promise: whoever declares it will register a renderer,
  * so Indigo stands down. A Forge-family build may carry the declaration without the code — Sodium 0.9.1's NeoForge
- * build declares it in {@code [modproperties]} yet ships no FRAPI renderer at all (its {@code FRAPIProvider}
- * service has no implementation; the renderer lives only in the Fabric build). When that build wins arbitration,
- * forwarding the promise leaves the slot empty and the first block drawn through FRAPI (a block in an item frame)
- * dies on "Attempted to retrieve active rendering plug-in before one was registered".
+ * build does, its Fabric build being the one that ships the renderer. When that build wins arbitration, forwarding
+ * the promise leaves the slot empty and the first block drawn through FRAPI (a block in an item frame) dies on
+ * "Attempted to retrieve active rendering plug-in before one was registered".
  *
- * <p>The evidence is a direct call to one of the two registration entry points, anywhere in the jar or the jars
- * nested in it. A reflective registrar would be missed; the caller keeps the promise when the jar cannot be read.
+ * <p>The evidence is a direct call to a registration entry point, anywhere in the jar or the jars nested in it. The
+ * entry point's name moved between generations — 1.21.1 calls
+ * {@code net.fabricmc.fabric.api.renderer.v1.RendererAccess.registerRenderer}, which is exactly what Sodium
+ * 0.8.13's NeoForge build calls, while the newer API moved that package under {@code api/client/renderer/v1} — so
+ * both are recognised (see {@link #isRegistrationEntryPoint}). A reflective registrar would be missed; the caller
+ * keeps the promise when the jar cannot be read.
  */
 final class FrapiRendererEvidence {
-	private static final byte[] NEEDLE = "fabric/api/client/renderer/v1/Renderer".getBytes(StandardCharsets.UTF_8);
-	private static final byte[] IMPL_NEEDLE = "fabric/impl/client/renderer/RendererManager".getBytes(StandardCharsets.UTF_8);
+	/**
+	 * The class-name needles: any of these in the bytes is the cheap "does this class even mention a renderer
+	 * entry point" test. The API's package moved between generations — 1.21.1's fabric-renderer-api-v1 exposes
+	 * {@code fabric/api/renderer/v1} ({@code RendererAccess}, {@code Renderer}), the newer one moved it to
+	 * {@code api/client/renderer/v1} — and Sodium's NeoForge build (measured, 0.8.13) calls the former.
+	 */
+	private static final byte[][] NEEDLES = {
+			needle("fabric/api/renderer/v1/Renderer"),
+			needle("fabric/api/client/renderer/v1/Renderer"),
+			needle("fabric/impl/renderer/Renderer"),
+			needle("fabric/impl/client/renderer/Renderer"),
+	};
 
 	private FrapiRendererEvidence() { }
 
@@ -49,7 +62,7 @@ final class FrapiRendererEvidence {
 		return false;
 	}
 	private static boolean registers(byte[] bytes) {
-		return (contains(bytes, NEEDLE) || contains(bytes, IMPL_NEEDLE)) && callsRegister(bytes);
+		return mentions(bytes) && callsRegister(bytes);
 	}
 
 	private static boolean scan(InputStream stream, int depth) throws IOException {
@@ -71,14 +84,48 @@ final class FrapiRendererEvidence {
 			@Override public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
 				return new MethodVisitor(Opcodes.ASM9) {
 					@Override public void visitMethodInsn(int opcode, String owner, String method, String desc, boolean itf) {
-						if (owner.equals("net/fabricmc/fabric/api/client/renderer/v1/Renderer") && method.equals("register")
-								|| owner.equals("net/fabricmc/fabric/impl/client/renderer/RendererManager") && method.equals("registerRenderer"))
-							found[0] = true;
+						if (isRegistrationEntryPoint(owner, method)) found[0] = true;
 					}
 				};
 			}
 		}, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
 		return found[0];
+	}
+
+	/**
+	 * The FRAPI registration entry points, by the names each generation gives them.
+	 *
+	 * <p>The 1.21.1 API is {@code net.fabricmc.fabric.api.renderer.v1.RendererAccess.registerRenderer}, and that
+	 * is exactly what Sodium 0.8.13's NeoForge build calls (measured in its own bytes: {@code getstatic
+	 * RendererAccess.INSTANCE; getstatic SodiumRenderer.INSTANCE; invokeinterface
+	 * RendererAccess.registerRenderer}). The impl behind it is {@code ...impl.renderer.RendererAccessImpl}. The
+	 * older check looked only for {@code api/client/renderer/v1.Renderer.register} and
+	 * {@code impl/client/renderer/RendererManager.registerRenderer}, so it never saw that call — it stripped
+	 * Sodium's {@code contains_renderer}, Indigo took the FRAPI slot, and Sodium's own registration then threw
+	 * "A second rendering plug-in attempted to register" out of {@code SodiumForgeMod.<init>}. Both generations'
+	 * names are recognised.
+	 */
+	private static boolean isRegistrationEntryPoint(String owner, String method) {
+		if (method.equals("registerRenderer")) {
+			return owner.equals("net/fabricmc/fabric/api/renderer/v1/RendererAccess")
+					|| owner.equals("net/fabricmc/fabric/api/client/renderer/v1/RendererAccess")
+					|| owner.equals("net/fabricmc/fabric/impl/renderer/RendererAccessImpl")
+					|| owner.equals("net/fabricmc/fabric/impl/client/renderer/RendererAccessImpl")
+					|| owner.equals("net/fabricmc/fabric/impl/renderer/RendererManager")
+					|| owner.equals("net/fabricmc/fabric/impl/client/renderer/RendererManager");
+		}
+		return method.equals("register")
+				&& (owner.equals("net/fabricmc/fabric/api/renderer/v1/Renderer")
+						|| owner.equals("net/fabricmc/fabric/api/client/renderer/v1/Renderer"));
+	}
+
+	private static boolean mentions(byte[] bytes) {
+		for (byte[] needle : NEEDLES) if (contains(bytes, needle)) return true;
+		return false;
+	}
+
+	private static byte[] needle(String ascii) {
+		return ascii.getBytes(StandardCharsets.UTF_8);
 	}
 
 	private static boolean contains(byte[] haystack, byte[] needle) {

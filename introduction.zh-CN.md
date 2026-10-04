@@ -1,6 +1,13 @@
 # Forbric —— 架构与内部实现
 
 [English](introduction.md) | 简体中文
+> **本分支的目标版本是 Minecraft 1.21.1。** 下面的正文描述的是最初的 26.2 设计，保留是为了说明来路；
+> 两者冲突之处（尤其是命名空间/重映射那部分——1.21.1 是混淆的，26.2 原生就是 Mojmap），以 1.21.1 构建为准。
+> 版本 pin 见 `forbric-kernel-installer/src/main/java/net/forbric/installer/kernel/Pins.java`
+> （`MINECRAFT = "1.21.1"`、`FORGE = "1.21.1-52.1.16"`、`NEOFORGE = 21.1.252`），安装后的 profile 是
+> `versions/1.21.1-forbric/`。
+
+
 
 写给 mod 开发者和加载器开发者。本文求精确，不求浅显：按 Forbric 实际执行的顺序讲清它做了什么，并直接写出真实的类型名和文件名。本文描述的是 **`main` 分支**，而不是某个发布版；想了解发布版包含什么、玩家如何安装，请读 [README](README.zh-CN.md)。
 

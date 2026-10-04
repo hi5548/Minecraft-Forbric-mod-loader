@@ -4,7 +4,7 @@
 
 **一个 Minecraft 实例，同时运行 Fabric mod、Forge mod 和 NeoForge mod。**
 
-版本 0.3.0 · Minecraft 26.2
+版本 0.3.0 · Minecraft 1.21.1
 
 ## 它能做什么
 
@@ -28,7 +28,7 @@ Connector 已经很成熟，Forbric 还不是，所以如果 Connector 已经能
 - **Java。** 如果你已经能玩 Minecraft，你就已经有了。就算你从没自己装过 Java，安装器也能找到你的启动器下载的那一份。
 - **网络连接**，以及安装过程中约 730 MB 的可用磁盘空间（完成后约保留 190 MB）。
 
-你**不需要**先装 Minecraft 26.2。如果没有，安装器会自动下载。你也**不需要** Fabric、Forge 或 NeoForge，也不用去找其他任何文件：Forbric 需要的一切都由安装器下载并构建。不过你的 mod 照常还需要各自的前置 mod，比如大多数 Fabric mod 都需要 Fabric API。
+你**不需要**先装 Minecraft 1.21.1。如果没有，安装器会自动下载。你也**不需要** Fabric、Forge 或 NeoForge，也不用去找其他任何文件：Forbric 需要的一切都由安装器下载并构建。不过你的 mod 照常还需要各自的前置 mod，比如大多数 Fabric mod 都需要 Fabric API。
 
 ### 安装
 
@@ -58,9 +58,9 @@ Connector 已经很成熟，Forbric 还不是，所以如果 Connector 已经能
 
 5. **点击 Install，然后等待。** 第一次安装需要几分钟。它在下载 Minecraft、Forge 和 NeoForge 各自的文件，并在你的电脑上把它们组装起来，因为按照法律，这些文件不能做成现成的包直接分发。安装期间请保持联网。之后再安装会复用磁盘上已有的文件，很快就能完成。
 
-6. **打开你的启动器。** 列表里会出现一个名为 **`26.2-forbric`** 的新版本。像启动其他版本一样启动它即可。PCL2 会把它显示成 Fabric 版本，这是正常的（见下一节）。
+6. **打开你的启动器。** 列表里会出现一个名为 **`1.21.1-forbric`** 的新版本。像启动其他版本一样启动它即可。PCL2 会把它显示成 Fabric 版本，这是正常的（见下一节）。
 
-   安装器不会把它加进官方 Minecraft 启动器的安装列表。在官方启动器里，你大概得自己新建一个安装，并选择 `26.2-forbric`。
+   安装器不会把它加进官方 Minecraft 启动器的安装列表。在官方启动器里，你大概得自己新建一个安装，并选择 `1.21.1-forbric`。
 
 > 想在点击 Install 之前先检查一下你的电脑？在 jar 所在的文件夹里运行这条命令。它只做检查，不写入任何东西：
 >
@@ -72,12 +72,12 @@ Connector 已经很成熟，Forbric 还不是，所以如果 Connector 已经能
 
 **Fabric、Forge 和 NeoForge 的 mod 都放进同一个 `mods` 文件夹。** 具体是哪个文件夹取决于你的启动器，而不是 Forbric：
 
-- 如果你的启动器让每个版本各自独立（通常叫“版本隔离”；PCL2 和 HMCL 都能这样设置）：`.minecraft/versions/26.2-forbric/mods/`
+- 如果你的启动器让每个版本各自独立（通常叫“版本隔离”；PCL2 和 HMCL 都能这样设置）：`.minecraft/versions/1.21.1-forbric/mods/`
 - 否则就是你所选 Game directory 里共用的 `.minecraft/mods/`。所有没有独立文件夹的版本都用这个文件夹，所以 Forbric 也会尝试加载里面已有的 mod。
 
 安装器完成时会把这两个位置都列出来。不确定你的启动器用的是哪一个？先启动一次游戏：正确的那个 `mods` 文件夹旁边会出现一个名为 `.forbric-kernel` 的文件夹。
 
-你的启动器可能会把 `26.2-forbric` 称为 Fabric 版本。这是有意为之：启动器每个版本只显示一个 mod 加载器，所以 Forbric 的版本告诉它的是 Fabric。PCL2 会读取这一信息，把 `26.2-forbric` 当作 mod 版本，并在它的 mod 浏览器里优先推荐 Fabric 版的 mod。其他启动器可能会把它显示为普通的 Minecraft。不管怎样，Forbric 都会从 `mods` 文件夹加载 Fabric、Forge 和 NeoForge 的 mod。
+你的启动器可能会把 `1.21.1-forbric` 称为 Fabric 版本。这是有意为之：启动器每个版本只显示一个 mod 加载器，所以 Forbric 的版本告诉它的是 Fabric。PCL2 会读取这一信息，把 `1.21.1-forbric` 当作 mod 版本，并在它的 mod 浏览器里优先推荐 Fabric 版的 mod。其他启动器可能会把它显示为普通的 Minecraft。不管怎样，Forbric 都会从 `mods` 文件夹加载 Fabric、Forge 和 NeoForge 的 mod。
 
 有一点要注意：很多 mod 同时有 Fabric 版、Forge 版和 NeoForge 版。每个 mod 只放**一个**版本进文件夹。如果你放了不止一个，Forbric 仍然只会运行其中一个。第一次遇到这种情况时，它会把自己的选择写进 `mods` 文件夹旁边的 `forbric-mods.txt`，你可以在那里改选另一个版本。
 
@@ -107,7 +107,7 @@ Fabric mod 把自己的设置界面交给 Mod Menu 管理，所以只有同时�
 
 **更新**：用相同的设置运行新的安装器。你的 mods 文件夹和世界都不会被动到。从 0.2.0 升级后的第一次安装会重新构建 Forbric 的游戏文件，所以又要花上几分钟。
 
-**卸载**：删除 `.minecraft/versions/26.2-forbric/`。如果你的启动器让每个版本各自独立，这个文件夹里还存着这个版本的 mod、世界和设置，所以请先把想保留的东西复制出来。如果还想收回磁盘空间，再删除 `.minecraft/.forbric-build/` 和 `.minecraft/libraries/net/forbric/`。
+**卸载**：删除 `.minecraft/versions/1.21.1-forbric/`。如果你的启动器让每个版本各自独立，这个文件夹里还存着这个版本的 mod、世界和设置，所以请先把想保留的东西复制出来。如果还想收回磁盘空间，再删除 `.minecraft/.forbric-build/` 和 `.minecraft/libraries/net/forbric/`。
 
 ## 0.3.0 更新内容
 

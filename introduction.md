@@ -1,6 +1,14 @@
 # Forbric — architecture and internals
 
 English | [简体中文](introduction.zh-CN.md)
+> **This branch targets Minecraft 1.21.1.** The body below describes the original 26.2 design and is kept for
+> that reason. Where the two differ — above all the namespace/remapping story, because 1.21.1 ships obfuscated
+> while 26.2 is Mojmap-native — the 1.21.1 build is authoritative. The version pins live in
+> `forbric-kernel-installer/src/main/java/net/forbric/installer/kernel/Pins.java`
+> (`MINECRAFT = "1.21.1"`, `FORGE = "1.21.1-52.1.16"`, `NEOFORGE = 21.1.252`), and the installed profile is
+> `versions/1.21.1-forbric/`.
+
+
 
 For mod and loader developers. This document is precise rather than gentle: it states what Forbric does, in the
 order it does it, naming the real types and files. It describes the **`main` branch**, not a release; for what a

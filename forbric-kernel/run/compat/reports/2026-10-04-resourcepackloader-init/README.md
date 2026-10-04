@@ -78,6 +78,11 @@ private static void seedEmptyNeoForgeLoadingModList(ClassLoader gameLoader, Clas
 
 ## 3. 修法(既有机制,不新增)
 
+**形态归属**:这和今天其它几条同属一类——**第三方 mixin 建立在"内核本该播好、却播成空/丢失"的结构上**
+（今日的 `val$` 捕获名、匿名类编号、重锚适配器都在同一族）。下次的具体结构会不同,形状不会。判别方式也
+因此固定:一个「内核播的数据」+ 一个「mod 编译期就假定它非空」的解引用,通常落在某个类的 `<clinit>`,
+一旦失败就是 `ExceptionInInitializerError` → 整类 poison → 更晚的 `NoClassDefFoundError`。
+
 26.2 路径早就在用"POPULATED, not empty"的播种器 `seedNeoForgeLoadingModList`，其 javadoc 明写空表正是它
 要避免的东西、并点名 Sodium 的 `getModFileById`。1.21.1 路径只是没接上它。改法：
 

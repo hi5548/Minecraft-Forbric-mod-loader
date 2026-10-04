@@ -334,8 +334,8 @@ run/compat/reports/2026-10-04-inert-apis/evidence/run-probes.sh \
 该轮因此判 **(C) 半成立,不算验收**。
 
 **待读数(第二次,预先登记,交给 `W7Harness`)**:冻结内核 jar `/tmp/inert-apis-kernel.jar`,
-sha256 `5b38e7c736f49e25dd6d61e6c22f65af8fd76b9191a492d32a04beccf6d2a1c4`(摘掉 Indigo 剪枝条目 + 两处
-decline 打点之后),JDK 21,客户端表面、quick-play、冷 remap 缓存。只接受:
+sha256 `64f91eb86f7182a9b79493c36d26835fcd72043dd2281b34bac60a45e559fca6`(**从 main 构建**,即 7c431c58 +
+本报告附带的那条编译修复;内容 = 摘掉 Indigo 剪枝条目 + 两处 decline 打点),JDK 21,客户端表面、quick-play、冷 remap 缓存。只接受:
 
 - (A) **该 finding 缺席**:`compatibility-report.json confirmedRequired == 0`,且枚举里没有含
   `SectionBuilderMixin#hookBuildRenderBlock` 或 `fabric-sound-api-v1` `SoundSystemMixin` 的 id;

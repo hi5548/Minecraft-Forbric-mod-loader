@@ -82,7 +82,17 @@ public final class FabricSectionCompilerMixinAdapter {
 
 	public static int adapt(ClassNode mixin, Function<String, ClassNode> targets) {
 		if (!enabled()) return 0;
-		if (MIXIN_1_21_1.equals(mixin.name)) return renderBlockRedirect(mixin, targets);
+		if (MIXIN_1_21_1.equals(mixin.name)) {
+			int moved = renderBlockRedirect(mixin, targets);
+			// A decline must not be silent: an adapter that returns 0 while the mixin still carries the un-retargeted
+			// handler is Indigo's per-block hook staying dead, and the only difference from success on the console was
+			// nothing at all -- the same "0 hits proved nothing" shape the pruner audit was added for.
+			if (moved == 0 && mixin.methods.stream().anyMatch(m -> BLOCK_REDIRECT.equals(m.name) && HANDLER_OLD.equals(m.desc)))
+				net.forbric.kernel.util.ForbricLog.warn("[Forbric/Renderer] Indigo's 1.21.1 retarget DECLINED (fail-closed) on %s "
+						+ "-- its per-block hook stays unbound; the guard order is in FabricSectionCompilerMixinAdapter.renderBlockRedirect",
+						mixin.name);
+			return moved;
+		}
 		if (!MIXIN.equals(mixin.name) || mixin.methods.stream().anyMatch(m -> ORIGINAL.equals(m.name))) return 0;
 		ClassNode target = targets.apply(TARGET);
 		if (target == null) return 0;

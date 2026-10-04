@@ -26,7 +26,11 @@ public final class FabricSoundMixinAdapter {
  private FabricSoundMixinAdapter(){}
  public static int adapt(ClassNode mixin,Function<String,ClassNode> targets){
   if("off".equalsIgnoreCase(System.getProperty(FabricSoundContractTransformer.PROPERTY,"on")))return 0;
-  if(MIXIN_1_21_1.equals(mixin.name))return oneTwentyOne(targets,mixin);
+  if(MIXIN_1_21_1.equals(mixin.name)){int moved=oneTwentyOne(targets,mixin);
+   if(moved==0&&mixin.methods.stream().anyMatch(m->m.name.equals("getStream")&&m.desc.equals(OLD_HANDLER)))
+    ForbricLog.warn("[Forbric/Sound] the 1.21.1 sound retarget DECLINED (fail-closed) on "+mixin.name
+     +" -- FabricSoundInstance.getAudioStream stays unconsulted; the guard order is in FabricSoundMixinAdapter.oneTwentyOne");
+   return moved;}
   if(!mixin.name.equals(MIXIN))return 0;
   String sound=FabricSoundContractTransformer.SOUND,library=FabricSoundContractTransformer.LIBRARY,future=FabricSoundContractTransformer.FUTURE;
   String original="("+library+"Lnet/minecraft/resources/Identifier;ZL"+sound+";)"+future;

@@ -214,7 +214,15 @@ public final class GuestInjectorPruner implements ClassTransformer {
 			"net.fabricmc.fabric.mixin.event.interaction.client.MinecraftClientMixin";
 	static final String INDIGO_SECTION_BUILDER_MIXIN =
 			"net.fabricmc.fabric.mixin.client.indigo.renderer.SectionBuilderMixin";
-	static final String MODMENU_TITLE_MIXIN = "com/terraformersmc/modmenu/mixin/MixinTitleScreen";
+	// DOTTED, like every key in this file, because that is the form the chain hands over: ForbricClassLoader
+	// .getPreMixinClassBytes normalizes the request to a binary name (requested.replace('/', '.')) before it calls
+	// the TransformChain, so a slashed key can never be looked up. Measured 2026-10-04: this constant was written
+	// slashed, TABLE.get() missed, and the whole entry was dead — which the boot's AUDIT switch could not show
+	// either, because its guard asks the same slashed-keyed CONFIGS map, so "the prune did not fire" read as
+	// "the chain never handed the class over". The class does arrive (the console's own
+	// "[Forbric/Mixin] guest mixin modmenu (mixins.modmenu.json):MixinTitleScreen applies only partially" line is
+	// this same MixinFit read); only the lookup was wrong.
+	static final String MODMENU_TITLE_MIXIN = "com.terraformersmc.modmenu.mixin.MixinTitleScreen";
 	static final String MODMENU_TITLE_HANDLER = "(Ljava/lang/String;)Ljava/lang/String;";
 	static final String INDIGO_RENDER_BLOCK_HANDLER =
 			"(Lnet/minecraft/client/renderer/block/BlockRenderDispatcher;"
@@ -933,11 +941,17 @@ public final class GuestInjectorPruner implements ClassTransformer {
 		List<Prune> prunes = TABLE.get(className);
 		// An audit that distinguishes the FOUR ways this can end in silence, because "the prune did not fire" is
 		// not a diagnosis: (1) the chain never calls this class at all — then no AUDIT line appears for it and the
-		// gap is upstream; (2) the class IS known (it has a CONFIGS row) but has no TABLE row — the key does not
-		// match, and this prints the name the chain actually handed over; (3) a row exists but the switch is off;
+		// gap is upstream; (2) the class IS known (it has a CONFIGS row) but no TABLE row matches — the key is
+		// wrong, and this prints the name the chain actually handed over; (3) a row exists but the switch is off;
 		// (4) a row exists and is active but the handler name/desc/selector inside it does not match, which the
-		// existing drift line already reports. Measured need: Mod Menu's MixinTitleScreen reached a world with its
-		// row in force and left no trace anywhere, which (1) or (2) explains and nothing else does.
+		// existing drift line already reports.
+		//
+		// Measured 2026-10-04, and it was (2) — but the guard below could not say so: Mod Menu's MixinTitleScreen
+		// reached a world with its row "in force" and left no trace, because the entry's key was written slashed
+		// ("com/terraformersmc/…") while the chain hands over the dotted binary name, and the guard's own
+		// CONFIGS.containsKey lookup was slashed too. A wrong-form key therefore printed nothing and read exactly
+		// like (1). The key is now the chain's form (see MODMENU_TITLE_MIXIN) and GuestInjectorPrunerTest asserts
+		// every key is a legal binary name, so a dead entry is a build failure rather than a silent one.
 		if (audit() && (prunes != null || CONFIGS.containsKey(className)))
 			ForbricLog.info("[Forbric/GuestInjectorPruner] AUDIT %s: %s, table row %s, switch %s, active %s",
 					className, prunes == null ? "no TABLE row" : prunes.size() + " prune(s)",

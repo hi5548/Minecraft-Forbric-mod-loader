@@ -803,6 +803,62 @@ class GuestInjectorPrunerTest {
 				mixin, null));
 	}
 
+	/**
+	 * The class-delivery bug, as a test. A pruner entry is looked up by the name the TRANSFORM CHAIN passes, and
+	 * that is the DOTTED binary name: {@code ForbricClassLoader.getPreMixinClassBytes} runs
+	 * {@code requested.replace('/', '.')} before it calls the chain, which is why every other key in this file is
+	 * dotted. The Mod Menu entry was written slashed, so {@code TABLE.get(...)} missed and the entry was dead —
+	 * and because the boot audit's guard consults the same slashed-keyed {@code CONFIGS} map, the log could not
+	 * tell that apart from "the chain never handed the class over", which is how it was read.
+	 *
+	 * <p>The mixin itself is real: the remapped {@code modmenu-11.0.5} class declares
+	 * {@code onRender(Ljava/lang/String;)Ljava/lang/String;} carrying
+	 * {@code @ModifyArg(method="Lnet/minecraft/client/gui/screens/TitleScreen;render(...)V")} and the sibling
+	 * {@code adjustRealmsHeight(I)I} — exactly this row and this survivor (javap, 2026-10-04). Red before the key
+	 * fix (the dotted transform returns the input unchanged); green after: the handler is removed and recorded
+	 * CONFIRMED/required=false under the same dotted name.
+	 */
+	@Test
+	void theModMenuEntryMatchesTheNameTheChainHandsOver() throws Exception {
+		net.forbric.api.CompatibilityFindings.reset();
+		String dotted = "com.terraformersmc.modmenu.mixin.MixinTitleScreen";
+		byte[] original = deadInjectorMixin("com/terraformersmc/modmenu/mixin/MixinTitleScreen",
+				"net.minecraft.client.gui.screens.TitleScreen", "adjustRealmsHeight",
+				new String[][] { { "onRender", "(Ljava/lang/String;)Ljava/lang/String;",
+						"Lorg/spongepowered/asm/mixin/injection/ModifyArg;",
+						"Lnet/minecraft/client/gui/screens/TitleScreen;render", "INVOKE",
+						"Lnet/minecraft/client/gui/GuiGraphics;drawString(Lnet/minecraft/client/gui/Font;"
+								+ "Ljava/lang/String;III)I" } });
+
+		byte[] pruned = new GuestInjectorPruner().transform(dotted, original, null);
+
+		assertNotSame(original, pruned, "the chain hands over the dotted name; the entry must match it");
+		ClassNode after = read(pruned);
+		assertEquals(null, methodByDesc(after, "onRender", "(Ljava/lang/String;)Ljava/lang/String;"),
+				"the dead @ModifyArg handler goes");
+		assertNotNull(method(after, "adjustRealmsHeight"), "the sibling Realms-height hook stays");
+		var finding = net.forbric.api.CompatibilityFindings.all().stream()
+				.filter(f -> f.id().startsWith("mixin-injector:mixins.modmenu.json:" + dotted + "#onRender(")).findFirst()
+				.orElseThrow(() -> new AssertionError("no finding for the pruned title-line injector: "
+						+ net.forbric.api.CompatibilityFindings.all()));
+		assertEquals(net.forbric.api.CompatibilityFinding.Confidence.CONFIRMED, finding.confidence());
+		assertFalse(finding.required(), "a pruned injector is a shipped loss, not a continue-or-quit");
+		assertTrue(finding.detail().contains("title"), finding.detail());
+		assertTrue(net.forbric.api.CompatibilityFindings.confirmedRequired().isEmpty());
+	}
+
+	/**
+	 * The durable half of that test: the chain's lookup form is a contract, so a key in any other form is a dead
+	 * entry. This fails the moment a slashed key is added, instead of a boot that "left no trace anywhere".
+	 */
+	@Test
+	void everyPrunerKeyIsTheDottedNameTheChainPasses() {
+		for (String mixin : GuestInjectorPruner.TABLE.keySet()) {
+			assertEquals(-1, mixin.indexOf('/'), mixin + " is keyed with an internal (slashed) name; the chain "
+					+ "passes the dotted binary name, so this entry can never be looked up");
+		}
+	}
+
 	@Test
 	void switchedOffItStandsDownAndTheCompatListPinsTheWholeMixin() throws Exception {
 		System.setProperty(GuestInjectorPruner.PROPERTY, "off");

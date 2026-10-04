@@ -149,10 +149,24 @@ public final class KernelLoadReport {
 				if (rendered.equals(lastRendered)) return;
 				if (lastRendered != null && !rewriteEnabled()) return;
 				if (!failures.isEmpty()) {
-					List<String> ids = new ArrayList<>();
-					for (ModCatalog.Entry e : failures) ids.add(e.modId());
-					ForbricLog.warn("[Forbric/Load] %d mod(s) did not finish loading: %s — details in .forbric-kernel/%s",
-							failures.size(), String.join(", ", ids), FILE);
+					// The two severities are named in the vocabulary ModCatalog.Status defines and the per-entry
+					// lines already use: "did not finish loading" is FAILED's sentence, "partly did not run" is
+					// DEGRADED's. An aggregate that spends the FAILED sentence on an all-DEGRADED set reads as ten
+					// mods missing from a boot where all ten loaded and each only stood down features the kernel
+					// chose to trim; on the user's pack that was the whole row, so the split is not cosmetic.
+					List<ModCatalog.Entry> failed = new ArrayList<>();
+					List<ModCatalog.Entry> degraded = new ArrayList<>();
+					for (ModCatalog.Entry e : failures) {
+						(e.status() == ModCatalog.Status.FAILED ? failed : degraded).add(e);
+					}
+					if (!failed.isEmpty()) {
+						ForbricLog.warn("[Forbric/Load] %d mod(s) did not finish loading: %s — details in .forbric-kernel/%s",
+								failed.size(), idsOf(failed), FILE);
+					}
+					if (!degraded.isEmpty()) {
+						ForbricLog.warn("[Forbric/Load] %d mod(s) partly did not run: %s — details in .forbric-kernel/%s",
+								degraded.size(), idsOf(degraded), FILE);
+					}
 				}
 				if (!unattributed.isEmpty()) {
 					List<String> keys = new ArrayList<>();
@@ -216,6 +230,13 @@ public final class KernelLoadReport {
 		return render(zh, failures, List.of(), List.of());
 	}
 
+	/** The ids of one severity for a single warning line, in the order the catalogue sorted them (by name). */
+	private static String idsOf(List<ModCatalog.Entry> entries) {
+		List<String> ids = new ArrayList<>(entries.size());
+		for (ModCatalog.Entry e : entries) ids.add(e.modId());
+		return String.join(", ", ids);
+	}
+
 	/**
 	 * @param unattributed confirmed findings no catalogue row can carry; see {@link CompatibilityFindings#unattributed}
 	 * @param suspected    findings nobody proved; listed as notes so a player or a bug report can see them without
@@ -224,15 +245,34 @@ public final class KernelLoadReport {
 	static String render(boolean zh, List<ModCatalog.Entry> failures, List<CompatibilityFinding> unattributed,
 			List<CompatibilityFinding> suspected) {
 		StringBuilder sb = new StringBuilder();
+		int failed = 0;
+		for (ModCatalog.Entry e : failures) if (e.status() == ModCatalog.Status.FAILED) failed++;
+		int degraded = failures.size() - failed;
 		boolean headline = !failures.isEmpty() || (unattributed.isEmpty() && suspected.isEmpty());
+		// The headline names each severity in its own words, for the same reason the per-entry lines do: a
+		// DEGRADED mod's classes and its other mixins ARE there, so calling it "did not finish loading" would send
+		// a reader to reinstall something that is present. See ModCatalog.Status.
 		if (zh) {
 			sb.append("Forbric 加载报告\n");
 			sb.append("=================\n\n");
-			if (headline) sb.append("这一次启动，有 ").append(failures.size()).append(" 个 mod 没有完成加载。\n\n");
+			if (headline) {
+				sb.append("这一次启动，");
+				if (failed > 0) sb.append(failed).append(" 个 mod 没有完成加载");
+				if (failed > 0 && degraded > 0) sb.append("，");
+				if (degraded > 0) sb.append(degraded).append(" 个 mod 有一部分没有跑起来");
+				if (failed == 0 && degraded == 0) sb.append("0 个 mod 没有完成加载");
+				sb.append("。\n\n");
+			}
 		} else {
 			sb.append("Forbric load report\n");
 			sb.append("===================\n\n");
-			if (headline) sb.append(failures.size()).append(" mod(s) did not finish loading this time.\n\n");
+			if (headline) {
+				if (failed > 0) sb.append(failed).append(" mod(s) did not finish loading");
+				if (failed > 0 && degraded > 0) sb.append("; ");
+				if (degraded > 0) sb.append(degraded).append(" mod(s) partly did not run");
+				if (failed == 0 && degraded == 0) sb.append("0 mod(s) did not finish loading");
+				sb.append(" this time.\n\n");
+			}
 		}
 
 		for (ModCatalog.Entry e : failures) {

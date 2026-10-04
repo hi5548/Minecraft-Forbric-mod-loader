@@ -277,10 +277,17 @@ public final class KernelModListScreen extends Screen {
 		String counts = ModCatalog.count(Ecosystem.FABRIC) + " Fabric   "
 				+ ModCatalog.count(Ecosystem.NEOFORGE) + " NeoForge   "
 				+ ModCatalog.count(Ecosystem.FORGE) + " MinecraftForge";
-		int broken = ModCatalog.failures().size();
-		// "did not finish loading", never "not running": a withdrawn mod's classes ARE loaded and its mixins ARE
-		// applied. Telling a player it is absent sends them to reinstall something that is already there.
-		String summary = broken == 0 ? counts : counts + "   \u00a7c" + broken + " did not finish loading";
+		int failed = 0, degraded = 0;
+		for (ModCatalog.Entry e : ModCatalog.failures()) {
+			if (e.status() == ModCatalog.Status.FAILED) failed++;
+			else degraded++;
+		}
+		// "did not finish loading" is FAILED's sentence and "partly did not run" is DEGRADED's -- the same split
+		// the detail pane below draws. Neither says "not running": a row here loaded its classes and applied its
+		// other mixins, and telling a player it is absent sends them to reinstall something already there.
+		String summary = counts;
+		if (failed > 0) summary += "   \u00a7c" + failed + " did not finish loading";
+		if (degraded > 0) summary += "   \u00a7e" + degraded + " partly did not run";
 		// Confirmed losses no row can carry -- the kernel's own, or a config no single mod claims. The prompt that
 		// sent the player here counted them, so the screen has to say they exist and where they are written.
 		int unowned = CompatibilityFindings.unattributed().size();

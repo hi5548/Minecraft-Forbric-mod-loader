@@ -159,6 +159,11 @@ java.lang.RuntimeException: Sodium's config could not be found; the game is in a
 `[Forbric/Load] 12 mod(s) did not finish loading: fabric-content-registries-v0, fabric-events-interaction-v0,
 fabric-item-api-v1, fabric-loot-api-v3, fabric-object-b…`。归谁判、怎么修不在本报告范围。
 
+> **已收口(2026-10-04,`reports/2026-10-04-load-row-degraded/`)。** 该行在通过构建上定型为
+> **10 个 DEGRADED、0 个 FAILED**,全部来自内核自己的命名抑制账本(`SUPPRESSED_MIXINS` / `GuestInjectorPruner`),
+> 没有一个模块自己的契约失败;加载路径欠的只是聚合层的措辞——三处聚合面用 `FAILED` 专属的
+> "did not finish loading" 去说一个零 FAILED 的集合。修法只动聚合措辞,抑制决定一个没动。
+
 **结论(严格按本车道契约)**:`ResourcePackLoader.<clinit>` 的 NPE 已修且已被运行证伪重现;预登记第 1 条成立。
 第 2/3 条被一个**更晚、另一处**的崩溃挡住,不由本改动负责,也未被读成本字段的成功。
 

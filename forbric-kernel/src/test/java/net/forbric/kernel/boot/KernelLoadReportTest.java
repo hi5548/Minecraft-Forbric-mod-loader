@@ -248,8 +248,9 @@ class KernelLoadReportTest {
 				net.forbric.api.CompatibilityFindings.unattributed(), net.forbric.api.CompatibilityFindings.suspected());
 		assertTrue(english.contains("not confirmed") && english.contains("1/2 anchors resolve")
 				&& english.contains("mixin:beta.mixins.json:beta.mixin.BetaMixin"), english);
-		assertEquals(1, english.lines().filter(line -> line.contains("partly did not run")).count(), english);
-		assertTrue(said.contains("1 mod(s) did not finish loading: alpha"), said);
+		assertEquals(1, english.lines().filter(line -> line.trim().startsWith("partly did not run")).count(), english);
+		assertTrue(said.contains("1 mod(s) partly did not run: alpha"), said);
+		assertFalse(said.contains("did not finish loading: alpha"), "a DEGRADED mod did not fail to load: " + said);
 	}
 
 	@Test
@@ -354,13 +355,38 @@ class KernelLoadReportTest {
 				new ModCatalog.Entry(Ecosystem.NEOFORGE, "beta", "Beta", "1.0", "", List.of(), "beta.jar", "", "",
 						ModCatalog.Status.DEGRADED, "it threw during common setup")));
 
-		assertTrue(degraded.contains("partly did not run"), degraded);
-		assertFalse(degraded.contains("did not finish loading\n"),
+		assertTrue(degraded.contains("1 mod(s) partly did not run this time."), degraded);
+		assertFalse(degraded.contains("did not finish loading"),
 				"collapsing DEGRADED into FAILED would tell a player their mod is not there when most of it is");
 
 		// And the other direction, so this is not passing on wording that never differs.
 		String failed = KernelLoadReport.render(false, List.of(failed("alpha", "Alpha", "a.jar", "x")));
-		assertTrue(failed.contains("did not finish loading"), failed);
+		assertTrue(failed.contains("1 mod(s) did not finish loading this time."), failed);
+		assertFalse(failed.contains("partly did not run"), failed);
+	}
+
+	@Test
+	void aMixedReportNamesEachSeverityInItsOwnWording() {
+		String mixed = KernelLoadReport.render(false, List.of(
+				failed("alpha", "Alpha", "a.jar", "its main entrypoint threw"),
+				new ModCatalog.Entry(Ecosystem.FABRIC, "beta", "Beta", "1.0", "", List.of(), "b.jar", "", "",
+						ModCatalog.Status.DEGRADED, "its mixin was suppressed")));
+
+		assertTrue(mixed.contains("1 mod(s) did not finish loading; 1 mod(s) partly did not run this time."), mixed);
+		assertTrue(mixed.contains("did not finish loading — its main entrypoint threw"), mixed);
+		assertTrue(mixed.contains("partly did not run — its mixin was suppressed"), mixed);
+	}
+
+	@Test
+	void theWarningNamesTheTwoSeveritiesSeparately(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) {
+		ModCatalog.publish(List.of(entry("alpha"), entry("beta")));
+		ModCatalog.mark("alpha", ModCatalog.Status.FAILED, "its main entrypoint threw");
+		ModCatalog.mark("beta", ModCatalog.Status.DEGRADED, "its mixin was suppressed");
+		String log = capture(() -> KernelLoadReport.writeTo(dir.resolve("load-report.txt")));
+
+		assertTrue(log.contains("1 mod(s) did not finish loading: alpha"), log);
+		assertTrue(log.contains("1 mod(s) partly did not run: beta"), log);
+		assertFalse(log.contains("did not finish loading: alpha, beta"), "the two are not one set: " + log);
 	}
 
 	@Test

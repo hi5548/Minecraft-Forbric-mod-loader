@@ -4,6 +4,8 @@
 
 ## 中文
 
+> 本分支把加载器重定向到 **Minecraft 1.21.1**；这次移植做了什么、实测通过率与已知限制见 [PORT-1.21.1.md](PORT-1.21.1.md)。
+
 **一个 Minecraft 实例，同时运行 Fabric mod、Forge mod 和 NeoForge mod。**
 
 版本 0.3.0 · Minecraft 1.21.1
@@ -202,6 +204,9 @@ Apache-2.0——见 [LICENSE](LICENSE) 和 [NOTICE](NOTICE)。净室边界的说
 <a id="english"></a>
 
 ## English
+
+> This branch retargets the loader to **Minecraft 1.21.1**; what the port changed, the measured rates and
+> the known limits are in [PORT-1.21.1.md](PORT-1.21.1.md).
 
 **One Minecraft instance that runs Fabric mods, Forge mods and NeoForge mods at the same time.**
 

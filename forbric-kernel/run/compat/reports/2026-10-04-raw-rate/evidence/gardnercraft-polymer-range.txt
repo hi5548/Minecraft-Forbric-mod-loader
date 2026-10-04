@@ -1,0 +1,18 @@
+# gardnercraft: the declared polymer range is unsatisfiable on 1.21.1 (no build to re-resolve)
+#
+# subject: gardnercraft-2.0.0.jar  sha256 37dbb1c40d61a37b4e700e1abbae2bb20a7197bfef6d8cd2661a54ed31c60524
+#   fabric.mod.json depends = {"minecraft": "~1.21", "polymer-core": ">=0.15.2+1.21.11",
+#                              "polymer-resource-pack": ">=0.15.2+1.21.11", "packet_tweaker": ">=0.6.0", ...}
+#   recorded first cause (w7/reports/2026-10-03-recheck-frozen/per-mod/run/004-gardnercraft-mod__fabric/console.log:1105):
+#     java.lang.NoSuchMethodError: 'net.minecraft.sounds.SoundEvent eu.pb4.polymer.core.api.other.PolymerSoundEvent.registerOverlay(...)'
+#
+# Modrinth project jJXL1Bwm (Gardnercraft Mod): total versions = 1
+#   2.0.0 | game_versions ['1.21','1.21.1',...,'1.21.11'] | fabric | file gardnercraft-2.0.0.jar | 2026-05-11
+# (a project search for "gardnercraft" returns total_hits = 1 -> no earlier 1.21.1 release, no sibling project)
+#
+# Polymer (project xGdtZczs) provides for game_version 1.21.1 only: 0.9.9 ... 0.9.19 (newest 0.9.19+1.21.1, 2026-01-11).
+#   polymer-core-0.9.19+1.21.1.jar's PolymerSoundEvent methods: of(...) x4, <init>, getPolymerReplacement(...)   -> NO registerOverlay
+#   polymer-core-0.15.2+1.21.11.jar's PolymerSoundEvent                                    -> HAS registerOverlay
+#   0.15.2+1.21.11's per-version game_versions = ['1.21.11'] (not 1.21.1)
+#
+# => no 1.21.1 provider satisfies >=0.15.2+1.21.11; the subject's own range/game_versions is the defect. No corpus change.

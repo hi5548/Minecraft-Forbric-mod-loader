@@ -1,0 +1,28 @@
+# cobblemon_pufferfish_api's undeclared runtime providers, read from the subject jar's constant pools
+#
+# subject: cobblemon_pufferfish_api_fabric-0.9.1-beta.jar  sha256 21f2009455d168562dd2fa29608b4a0df7a64b949a4a463a4b58ad05cdce0b2c
+#   fabric.mod.json depends = {"fabricloader": ">=0.18.4", "minecraft": "1.21.1", "fabric": "*"}   (no Puffish, no Cobblemon)
+#
+# classes named in its constant pools:
+#   net/puffish/skillsmod/api/*  : 15 classes
+#   com/cobblemon/mod/*          : 94 classes
+# member references (field/method/interface-method) to those roots:
+#   224 total = 46 fieldrefs + 153 methodrefs + 25 interface-methodrefs
+#   resolution against Cobblemon-1.8.1+1.21.1 + puffish_skills-0.19.1:
+#       215 declared directly on the named class
+#         9 through a supertype (walked):  subscribe -> SimpleObservable (x2);
+#                                         getEntity -> SpawnCause; getOrDefault -> PokemonStats (x2);
+#                                         getShowdownName -> Status;
+#                                         ordinal -> java.lang.Enum; method_7854 -> mapped vanilla superclass (x2)
+#       missing = 0
+#
+# provider candidates for the Puffish half (all 1.21.1 fabric builds of project hqQqvaa4):
+#   puffish_skills 0.17.3 : missing_classes=0 missing_methods=0 missing_fields=0
+#   puffish_skills 0.18.3 : missing_classes=0 missing_methods=0 missing_fields=0
+#   puffish_skills 0.19.1 : missing_classes=0 missing_methods=0 missing_fields=0   <- chosen (newest)
+#   puffish_skills 0.19.1 fabric.mod.json depends = {"fabricloader": ">=0.15.11", "fabric-api": "*", "minecraft": "~1.21", "java": ">=17"}
+#
+# Cobblemon half: Cobblemon-fabric-1.8.1+1.21.1.jar already in the corpus (dependency of cobblemon-coop);
+#   missing com/cobblemon/mod/ classes = 0 (of 94); all six mixin targets present
+#   (BattleRegistry, Pokemon, PokemonEntity, GraalShowdownService, CookingPotResultSlot,
+#    BattleInitializePacket$ActiveBattlePokemonDTO$Companion).

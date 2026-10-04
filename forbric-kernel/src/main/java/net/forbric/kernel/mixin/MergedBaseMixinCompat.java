@@ -237,7 +237,76 @@ public final class MergedBaseMixinCompat {
 			// from guest mixins entirely, which would demote every group everywhere to independent injectors and
 			// silently discard their max checks too: a blast radius far wider than the one entry it would remove.
 			// So this stays a pin, by measurement rather than by omission.
-			"mixins.essential.json:events.Mixin_GuiDrawScreenEvent_Priority");
+			"mixins.essential.json:events.Mixin_GuiDrawScreenEvent_Priority",
+			// Five CLIENT mixins that assert a @Shadow field the merge re-typed. fabric-registry-sync-v0's
+			// BlockColorsMixin/ItemColorsMixin/ParticleManagerMixin and fabric-rendering-v1's BlockColorsMixin/
+			// ItemColorsMixin all shadow the colour/particle handle of their target, and on the staged merged base
+			// the field is still THERE under the same name but is no longer an IdMapper: javap of
+			// patched-mc-merged-1.21.1.jar reads `private final java.util.Map<Block,BlockColor> blockColors`,
+			// `Map<Item,ItemColor> itemColors` and `Map<ResourceLocation,ParticleProvider<?>> providers`. Mixin
+			// binds a @Shadow field by name AND descriptor, so each of the five throws
+			// `InvalidMixinException: @Shadow field X was not located in the target class` and Mixin discards the
+			// WHOLE mixin -- including the handlers whose anchors are present. ShadowFieldAliases cannot bridge it:
+			// its rule is one target field of the SAME descriptor, and the descriptor is the thing that changed
+			// (IdMapper -> Map), so there is no candidate to alias to. Nor is the retarget a rename in the other
+			// direction: the two consumers want the IdMapper itself (registry-sync's IdListTracker.register takes
+			// one, rendering-v1's ColorMapperHolder.get indexes it by `BuiltInRegistries.BLOCK.getId`), and the
+			// merged base answers neither -- its own colour lookups were re-keyed to a Forge registry delegate
+			// (javap: `getColor` calls `ForgeRegistries.BLOCKS.getDelegateOrThrow(state.getBlock())` before
+			// `Map.get`, while its own `register` still stores the raw Block). Pinned rather than trimmed because
+			// the binding failure is the field itself, so there is nothing left for a trim to keep.
+			//
+			// Cost, stated: on this base fabric-registry-sync-v0's client-side colour/particle ID tracking is inert,
+			// and fabric-rendering-v1's whole ColorProviderRegistry is -- `initialize` is fired from the same
+			// mixin's createDefault injector, so a Fabric mod's block/item colours are registered nowhere and read
+			// nowhere. Vanilla's own block/item colour path is untouched by the pin.
+			"fabric-registry-sync-v0.client.mixins.json:BlockColorsMixin",
+			"fabric-registry-sync-v0.client.mixins.json:ItemColorsMixin",
+			"fabric-registry-sync-v0.client.mixins.json:ParticleManagerMixin",
+			"fabric-rendering-v1.mixins.json:BlockColorsMixin",
+			"fabric-rendering-v1.mixins.json:ItemColorsMixin",
+			// fabric-rendering-fluids-v1's single mixin, and the merge left it no site to bind to. javap of the
+			// staged merged LiquidBlockRenderer.tesselate shows NeoForge's own body: FluidSpriteCache.getFluidSprites,
+			// IClientFluidTypeExtensions.of(...).getTintColor and one BlockState.shouldDisplayFluidOverlay. The
+			// method declares isNeighborSameFluid but no longer calls it (its only caller is shouldRenderFace), and
+			// it reads neither waterOverlay nor the waterIcons/lavaIcons arrays. Five of the mixin's injectors anchor
+			// on exactly those sites -- two @ModifyVariables on isNeighborSameFluid (ordinals 0 and 0), one
+			// @ModifyVariable(CONSTANT) for the tint the FluidType call replaced, one @ModifyExpressionValue on the
+			// overlay's BlockState.getBlock(), one waterOverlay field read -- so all five are required losses on
+			// every client carrying the module. Not retargeted because the seam moved ecosystems: Fabric's
+			// FluidRenderHandler has no member on the merged base to re-bind to, and re-implementing it on NeoForge's
+			// IClientFluidTypeExtensions would be a bridge, not an anchor fix.
+			// Cost, stated: FluidRenderHandlerRegistry on the client -- a Fabric mod's custom fluid appearance (tint,
+			// sprites, overlay) does not apply; NeoForge's FluidType path is what renders.
+			"fabric-rendering-fluids-v1.mixins.json:FluidRendererMixin",
+			// fabric-particles-v1's single mixin, whose @Slice has no end on the merged base. It modifies the
+			// BlockState the block-dust tint is computed from, anchored at a LOAD inside a slice that runs from the
+			// `TerrainParticle.bCol` read to the `BlockState.is(Block)` call that decides whether the dust is tinted.
+			// javap of the merged TerrainParticle.<init>(..., BlockState, BlockPos) reads: rCol/gCol/bCol are set to
+			// 0.6f, and the tint decision is then
+			// `IClientBlockExtensions.of(state).areBreakingParticlesTinted(state, level, pos)` -- NeoForge's
+			// extension, not vanilla's `BlockState.is(Block)`, so the slice's END anchor does not exist and the
+			// modifier binds nowhere. Not retargeted because the seam's own question changed: the handler returns a
+			// BlockState whose `is(...)` answer was what gated the tint, while the merged gate is a live extension
+			// call on the ORIGINAL state.
+			// Cost, stated: ParticleRenderEvents.ALLOW_BLOCK_DUST_TINT is not consulted on this base -- a Fabric mod
+			// cannot veto the tint of block-break dust; NeoForge's areBreakingParticlesTinted decides.
+			"fabric-particles-v1.client.mixins.json:BlockDustParticleMixin",
+			// fabric-sound-api-v1's single mixin. Its @Redirect watches the `SoundBufferLibrary.getStream(id, loop)`
+			// call inside `SoundEngine.play`, which is where a Fabric SoundInstance's own `getAudioStream` becomes
+			// the stream source. The merged `play` does not make that call: javap shows
+			// `SoundInstance.getStream(SoundBufferLibrary, Sound, boolean)` at +587 -- the interface default, whose
+			// own body is what consults the library -- so the anchor is gone. The kernel HAS the two mechanisms for
+			// this shape (FabricSoundMixinAdapter, and FabricSoundContractTransformer on the interface default), and
+			// both are 26.2-generation: they name `SoundEngineMixin`/`Identifier` and gate on instruction
+			// fingerprints compiled there, so neither matches a 0.116.17 module. Re-binding the redirect onto the
+			// interface call is a handler rewrite (the redirect's receiver+args change shape from
+			// (library, id, loop) to (sound, library, Sound, loop)) plus a FabricSoundInstance cast, and is recorded
+			// here as the follow-up rather than attempted blind -- a wrong body here is a VerifyError inside
+			// sound playback.
+			// Cost, stated: FabricSoundInstance.getAudioStream is not consulted by SoundEngine.play -- a Fabric mod
+			// cannot supply its own AudioStream for a custom SoundInstance; NeoForge's own stream path runs.
+			"fabric-sound-api-v1.mixins.json:SoundSystemMixin");
 
 	/**
 	 * A duck interface that {@code pin}, a {@link #SUPPRESSED_MIXINS} entry, implements on {@code target} (internal

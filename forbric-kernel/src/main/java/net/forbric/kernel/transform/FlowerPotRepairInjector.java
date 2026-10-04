@@ -42,10 +42,17 @@ public final class FlowerPotRepairInjector implements ClassTransformer {
 	static final String OWNER = "net/minecraft/world/level/block/FlowerPotBlock";
 	static final String BLOCK = "net/minecraft/world/level/block/Block";
 	static final String BLOCK_CTOR = "(L" + BLOCK + ";Lnet/minecraft/world/level/block/state/BlockBehaviour$Properties;)V";
-	static final String USE_ITEM_ON = "(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/level/block/state/BlockState;"
+	static final String USE_ITEM_ON_ARGS = "(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/level/block/state/BlockState;"
 			+ "Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/entity/player/Player;"
-			+ "Lnet/minecraft/world/InteractionHand;Lnet/minecraft/world/phys/BlockHitResult;)Lnet/minecraft/world/InteractionResult;";
-	static final String ADD_PLANT = "(Lnet/minecraft/resources/Identifier;Ljava/util/function/Supplier;)V";
+			+ "Lnet/minecraft/world/InteractionHand;Lnet/minecraft/world/phys/BlockHitResult;)";
+	/** 1.21.1's return type: javap of the merged base gives {@code ItemInteractionResult} (ItemInteractionResult came in 1.20.5). */
+	static final String USE_ITEM_ON = USE_ITEM_ON_ARGS + "Lnet/minecraft/world/ItemInteractionResult;";
+	/** The name the injector used before the port; kept so a base that still returns it keeps its edit. */
+	static final String USE_ITEM_ON_INTERACTION_RESULT = USE_ITEM_ON_ARGS + "Lnet/minecraft/world/InteractionResult;";
+	/** 1.21.1's parameter type: javap gives {@code addPlant(net.minecraft.resources.ResourceLocation, Supplier)}. */
+	static final String ADD_PLANT = "(Lnet/minecraft/resources/ResourceLocation;Ljava/util/function/Supplier;)V";
+	/** The newer generation's name for the same member; kept alongside, as before. */
+	static final String ADD_PLANT_IDENTIFIER = "(Lnet/minecraft/resources/Identifier;Ljava/util/function/Supplier;)V";
 	static final String RUNTIME = "net/forbric/kernel/runtime/KernelFlowerPots";
 	static final String FULL_POT_FOR = "(Ljava/util/Map;L" + OWNER + ";L" + BLOCK + ";)L" + BLOCK + ";";
 	static final String FORGE_BLOCKS = "net/minecraftforge/registries/ForgeRegistries";
@@ -99,8 +106,35 @@ public final class FlowerPotRepairInjector implements ClassTransformer {
 				stores++;
 			}
 		}
-		if (stores != 1 || store.getPrevious() == null || store.getPrevious().getOpcode() != Opcodes.ACONST_NULL) return 0;
-		ctor.instructions.set(store.getPrevious(), new VarInsnNode(Opcodes.ALOAD, 1));
+		if (stores > 1) return 0;
+		if (stores == 1) {
+			// 26.2 and earlier: `potted = null` sits in this constructor; take the null away and store the plant.
+			// (Reached on a second pass too — the previous instruction is then ALOAD 1, so this declines.)
+			if (store.getPrevious() == null || store.getPrevious().getOpcode() != Opcodes.ACONST_NULL) return 0;
+			ctor.instructions.set(store.getPrevious(), new VarInsnNode(Opcodes.ALOAD, 1));
+		} else {
+			// PORT(1.21.1): this constructor now only DELEGATES to the supplier constructor and `potted = null`
+			// moved into that one — javap: the (Block, Properties) body is aload_0/…/aconst_null (emptyPot
+			// supplier)/aload_1/…/invokespecial <init>(Supplier,Supplier,Properties)/…/return, with no putfield
+			// potted. Store this constructor's own plant — the Block argument, the same value the 26.2 edit
+			// stored — right after the delegation, so a full pot holds its plant and the empty pot
+			// (Blocks.FLOWER_POT = flowerPot(AIR)) holds AIR, which is what isEmpty() tests.
+			MethodInsnNode delegation = null;
+			int delegations = 0;
+			for (AbstractInsnNode insn : ctor.instructions) {
+				if (insn instanceof MethodInsnNode call && call.getOpcode() == Opcodes.INVOKESPECIAL
+						&& call.owner.equals(OWNER) && call.name.equals("<init>")) {
+					delegation = call;
+					delegations++;
+				}
+			}
+			if (delegations != 1 || delegation == null) return 0;
+			InsnList storePlant = new InsnList();
+			storePlant.add(new VarInsnNode(Opcodes.ALOAD, 0));
+			storePlant.add(new VarInsnNode(Opcodes.ALOAD, 1));
+			storePlant.add(new FieldInsnNode(Opcodes.PUTFIELD, OWNER, "potted", "L" + BLOCK + ";"));
+			ctor.instructions.insert(delegation, storePlant);
+		}
 		if (hasField(node, "POTTED_BY_CONTENT", "L" + MAP + ";") && !references(ctor, "POTTED_BY_CONTENT")) {
 			for (AbstractInsnNode insn : ctor.instructions.toArray()) {
 				if (insn.getOpcode() != Opcodes.RETURN) continue;
@@ -122,6 +156,7 @@ public final class FlowerPotRepairInjector implements ClassTransformer {
 	 */
 	static int lookUpAllFamilies(ClassNode node) {
 		MethodNode use = method(node, "useItemOn", USE_ITEM_ON);
+		if (use == null) use = method(node, "useItemOn", USE_ITEM_ON_INTERACTION_RESULT);
 		if (use == null) return 0;
 		// Real instructions only: a line-number label may sit inside the expression.
 		AbstractInsnNode[] code = java.util.Arrays.stream(use.instructions.toArray()).filter(insn -> insn.getOpcode() >= 0)
@@ -154,6 +189,7 @@ public final class FlowerPotRepairInjector implements ClassTransformer {
 	/** {@code addPlant}: after NeoForge's check, {@code fullPots.put(id, supplier)}, as MinecraftForge's body does. */
 	static int recordAddedPlant(ClassNode node) {
 		MethodNode add = method(node, "addPlant", ADD_PLANT);
+		if (add == null) add = method(node, "addPlant", ADD_PLANT_IDENTIFIER);
 		if (add == null || references(add, "fullPots")) return 0;
 		AbstractInsnNode last = add.instructions.getLast();
 		while (last != null && last.getOpcode() < 0) last = last.getPrevious();

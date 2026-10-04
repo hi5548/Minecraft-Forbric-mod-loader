@@ -177,5 +177,25 @@ point")负责;本次改动**先把 `ResourcePackLoader` 解 poison,才第一次�
 registration**,两步串联、各自暴露下一面墙。`ConfigLoaderForge` 在通过的那次日志里仍出现一次——Sodium 的
 Forge 侧 config 路径是**被走到并满足**,而不是被跳过(墙"消失"与"移走"的区别)。
 
-**因此:同一十二集合的预登记第 2 条(`world=true`)在合成构建上成立;第 3 条(`joined world via
-quick-play`)本报告未取得逐字引用,不作断言。** 本车道的 `ResourcePackLoader` 墙已关。
+**因此:同一十二集合的预登记第 2 条(`world=true`)在合成构建上成立。** 第 3 条(`joined world via
+quick-play`)当时因只有转述、无逐字来源而未断言;`W7Harness` 随后补上了逐字行与出处,故在此**逐字回填**:
+
+同一个 run(`451c6780f682df26bfc9b7fbc5eb26d17c25f7973219b2cfe3cceda945d1025f`,`world=true`、
+`strict=TRUE`、`confirmed_required: 0`),`reports/2026-10-04-reviewfix-usermods/per-mod/run/000-modmenu__fabric/console.log`:
+
+```
+1493:[09:28:34] [Forbric/ClientSmoke] quick-play state: quickPlayLog=QuickPlayLog (world=W7Client)
+      — null means the client was never given quick-play data
+1662:[09:28:46] [Forbric/ClientSmoke] joined world via quick-play: W7Client
+1684:[09:28:57] [Forbric/ClientSmoke] requesting clean disconnect after 220 world tick(s)
+2828:[09:28:58] [Forbric/ClientSmoke] clean disconnect observed; stopping client
+```
+
+即:quick-play 数据确实送达、世界在 `09:28:46` 进入、渲染了 **220 个 world tick**、并在 `09:28:58`
+主动请求且观察到 clean disconnect——一个跑了十二秒、以"请求结束"而非"崩死"收尾的世界。
+
+**结论:预登记三条(无 `NoClassDefFoundError … ResourcePackLoader`、`world=true`、`joined world via
+quick-play`)在合成构建 `e11e4fcb` 上全部成立,逐字有据。本车道的 `ResourcePackLoader` 墙已关。**
+
+> 记一条流程教训(来自本轮的两次):判据只认**逐字来源**——不认转述、也不认"从计数里回忆出来的引用"。
+> 我在第 3 条上先拒绝断言,`W7Harness` 又主动纠正了自己把前缀当全句的引用;两边都照这条规则办事。

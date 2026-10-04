@@ -46,7 +46,8 @@ import org.objectweb.asm.tree.VarInsnNode;
  */
 class RegistryAliasParityInjectorTest {
 	private static final String WRAPPER = "net/minecraftforge/registries/NamespacedWrapper";
-	private static final String ID = "net/minecraft/resources/Identifier";
+	private static final String ID = "net/minecraft/resources/ResourceLocation";
+	private static final String ID_NEWER = "net/minecraft/resources/Identifier";
 	private static final String KEY = "net/minecraft/resources/ResourceKey";
 	private static final String HOOK = "net/forbric/kernel/boot/KernelRegistryAliases";
 
@@ -107,6 +108,11 @@ class RegistryAliasParityInjectorTest {
 				internalName.replace('/', '.'), wrapper(internalName), null);
 	}
 
+	private static byte[] transform(String internalName, String idType) {
+		return new RegistryAliasParityInjector().transform(
+				internalName.replace('/', '.'), wrapper(internalName, idType), null);
+	}
+
 	private static void assertHookAtHead(byte[] classBytes, String name, String desc, String hook, String cast) {
 		List<AbstractInsnNode> real = realInstructions(classBytes, name, desc);
 		assertTrue(real.size() >= 5, name + desc + " was not rewritten");
@@ -149,12 +155,29 @@ class RegistryAliasParityInjectorTest {
 		throw new AssertionError(name + desc + " not found");
 	}
 
+	/**
+	 * The id-keyed methods are also recognised under the newer generation's {@code Identifier} spelling, so a base
+	 * that has moved to it keeps its edits (the kernel must not weaken the newer path while fixing 1.21.1).
+	 */
+	@Test
+	void acceptsTheNewerGenerationsIdentifierSpellingToo() {
+		byte[] out = transform(WRAPPER, ID_NEWER);
+		assertNotNull(out);
+		for (String name : List.of("get", "getValue", "containsKey", "getOptional", "getHolder")) {
+			assertHookAtHead(out, name, "(L" + ID_NEWER + ";)Ljava/lang/Object;", "resolveId", ID_NEWER);
+		}
+	}
+
 	/** The wrapper's shape: every lookup it really overrides, plus three that must NOT be rewritten. */
 	private static byte[] wrapper(String internalName) {
+		return wrapper(internalName, ID);
+	}
+
+	private static byte[] wrapper(String internalName, String idType) {
 		ClassWriter cw = new ClassWriter(0);
 		cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, internalName, null, "net/minecraft/core/MappedRegistry", null);
 		for (String name : List.of("get", "getValue", "containsKey", "getOptional", "getHolder")) {
-			body(cw, name, "(L" + ID + ";)Ljava/lang/Object;");
+			body(cw, name, "(L" + idType + ";)Ljava/lang/Object;");
 		}
 		for (String name : List.of("get", "getValue", "containsKey", "registrationInfo", "getOrCreateHolderOrThrow")) {
 			body(cw, name, "(L" + KEY + ";)Ljava/lang/Object;");

@@ -47,8 +47,8 @@ import net.forbric.kernel.util.ForbricLog;
  * Same semantics as fabric-api's (it reads fabric-api's own map, so an alias registered through either ecosystem
  * resolves in both), so a caller cannot tell which class answered.
  *
- * <p>Two methods beyond fabric-api's list are covered — {@code getOptional(Identifier)} and
- * {@code getHolder(Identifier)}. On a stock instance those are {@code Registry} defaults that route through
+ * <p>Two methods beyond fabric-api's list are covered — {@code getOptional(ResourceLocation)} and
+ * {@code getHolder(ResourceLocation)}. On a stock instance those are {@code Registry} defaults that route through
  * {@code getValue}, so fabric-api gets them for free; the wrapper overrides them into direct delegates, which
  * breaks exactly that. Covering them is parity of EFFECT, which is the thing that matters.
  *
@@ -63,7 +63,17 @@ public final class RegistryAliasParityInjector implements ClassTransformer {
 
 	private static final String HOOK_OWNER = "net/forbric/kernel/boot/KernelRegistryAliases";
 	private static final String HOOK_DESC = "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;";
-	private static final String IDENTIFIER = "net/minecraft/resources/Identifier";
+	/**
+	 * The id argument type, under either generation's name. The wrapper's lookups take
+	 * {@code net.minecraft.resources.ResourceLocation} on 1.21.1 — javap: {@code get/getOptional/containsKey/
+	 * getHolder(ResourceLocation)} on {@code NamespacedWrapper}, and a single {@code get(ResourceLocation)} on
+	 * {@code NamespacedDefaultedWrapper} — while the injector looked only for the newer {@code Identifier}, which
+	 * does not exist there. Every id-keyed method was therefore skipped and the defaulted subclass got zero edits
+	 * (the log's {@code forbric-registry-alias-parity -> NamespacedDefaultedWrapper} Miss).
+	 */
+	private static final Set<String> IDENTIFIER_TYPES = Set.of(
+			"net/minecraft/resources/ResourceLocation",
+			"net/minecraft/resources/Identifier");
 	private static final String RESOURCE_KEY = "net/minecraft/resources/ResourceKey";
 
 	/** fabric-api's Identifier-keyed list, plus the two the wrapper overrides out of {@code Registry}'s defaults. */
@@ -106,7 +116,7 @@ public final class RegistryAliasParityInjector implements ClassTransformer {
 
 			String param = args[0].getInternalName();
 			String hook;
-			if (IDENTIFIER.equals(param) && BY_IDENTIFIER.contains(m.name)) {
+			if (IDENTIFIER_TYPES.contains(param) && BY_IDENTIFIER.contains(m.name)) {
 				hook = "resolveId";
 			} else if (RESOURCE_KEY.equals(param) && BY_RESOURCE_KEY.contains(m.name)) {
 				hook = "resolveKey";

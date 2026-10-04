@@ -24,7 +24,7 @@ import java.nio.file.Path;
  * <pre>
  *   java -jar forbric-kernel-installer.jar                       # window
  *   java -jar forbric-kernel-installer.jar --dir DIR [options]   # install, no window
- *       --mc 26.2            the base version (default 26.2)
+ *       --mc VERSION         the base version (default: {@link Pins#MINECRAFT}, which usage() prints)
  *       --artifacts DIR      developers only: game jars already built from source, used instead of building
  *       --jdk PATH           a JVM to build the game artifacts with
  *       --remote             take Forbric's jars from the release even if they are carried here

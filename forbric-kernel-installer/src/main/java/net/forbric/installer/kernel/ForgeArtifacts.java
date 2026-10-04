@@ -37,8 +37,8 @@ final class ForgeArtifacts {
 	static final String OUT_GROUP = "net.forbric";
 
 	final String mcVersion;     // e.g. "1.21.1" (Pins.MINECRAFT)
-	final String forgeVersion;  // "26.2-65.0.1"
-	final String fmlVersion;    // "65.0.1"  (the part after '-' — the FML/language-provider version domain)
+	final String forgeVersion;  // "1.21.1-52.1.16" (Pins.FORGE)
+	final String fmlVersion;    // "52.1.16"  (the part after '-' — the FML/language-provider version domain)
 
 	ForgeArtifacts(String mcVersion, String forgeVersion) {
 		this.mcVersion = mcVersion;

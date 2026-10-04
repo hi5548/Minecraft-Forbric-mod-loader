@@ -105,8 +105,9 @@ final class JdkLocator {
 		}
 		rejected.add("this installer's own JVM (Java " + own + ")");
 
-		// 2) The launcher's runtimes. A Minecraft player has these even when they have no other Java, and 26.2
-		//    declares javaVersion 25, so the launcher has already fetched one new enough.
+		// 2) The launcher's runtimes. A Minecraft player has these even when they have no other Java, and the
+		//    game's own version json declares the Java it needs, so the launcher has already fetched one new
+		//    enough — a machine with only the launcher's runtime still builds.
 		for (Path candidate : launcherRuntimes(mcDir)) {
 			int feature = probeFeature(candidate);
 			if (feature >= MINIMUM_FEATURE) {
@@ -128,7 +129,7 @@ final class JdkLocator {
 			message.append("\nTried:");
 			for (String r : rejected) message.append("\n  - ").append(r);
 		}
-		message.append("\nStart Minecraft 26.2 once so the launcher downloads its runtime, or pass --jdk <path>.");
+		message.append("\nStart Minecraft " + Pins.MINECRAFT + " once so the launcher downloads its runtime, or pass --jdk <path>.");
 		throw new IOException(message.toString());
 	}
 

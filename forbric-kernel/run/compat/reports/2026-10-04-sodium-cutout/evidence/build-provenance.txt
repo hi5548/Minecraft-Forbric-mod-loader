@@ -1,0 +1,14 @@
+kernel fix-arm jar : /private/tmp/sodium-cutout-kernel.jar
+sha256             : a56bf626e983b1dda81cf1b15f5c7f485eaec9c13cb099f1d96ef1d136a6e721
+control-arm jar    : /private/tmp/val4-control/frozen/forbric-kernel-client.jar (== published forbric-kernel-0.3.4-beta.jar)
+control sha256     : bf56012d7bf6f025dba3628e43c303bf54970ce81142fa41b3833fb1dd8e21f4
+
+Assembly (same as the tint lane's, because energy-4.1.0-named.jar is absent on this box):
+  1. ./gradlew --offline -q jar          (boot half; no staged game jars, so no nested runtime)
+     -> forbric-kernel/build/libs/forbric-kernel-0.1.0-SNAPSHOT.jar
+  2. jar cf META-INF/jars/forbric-kernel-runtime.jar -C build/classes/java/runtime . + build/resources/runtime
+  3. jar uf <boot.jar> META-INF/jars/forbric-kernel-runtime.jar
+
+The boot half carries net/forbric/kernel/mixin/MixinStubRebind.class and
+net/forbric/kernel/mixin/carrier-stubs.txt (69 rows, the added SpriteContents row included).
+The game-side runtime half is unchanged by this fix; it was repackaged from the same checkout's build outputs.

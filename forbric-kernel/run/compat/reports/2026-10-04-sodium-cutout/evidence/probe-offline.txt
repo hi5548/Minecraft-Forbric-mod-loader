@@ -1,0 +1,17 @@
+$ java SoProbeFinal <merged-base> <entries> <sodium-mod-jar>
+merged-base SpriteContents:
+  4-arg <init> = stub? true  -> delegates to 5-arg (Lnet/minecraft/resources/ResourceLocation;Lnet/minecraft/client/resources/metadata/animation/FrameSize;Lcom/mojang/blaze3d/platform/NativeImage;Lnet/minecraft/server/packs/resources/ResourceMetadata;Lnet/minecraftforge/client/textures/ForgeTextureMetadata;)V
+  carrier-stubs row: present (forge=STUB, neo=BODY)
+  NeoForge family moves the name-only selector? true
+
+guest net/caffeinemc/mods/sodium/mixin/features/textures/scan/SpriteContentsMixin:
+  handler sodium$beforeGenerateMipLevels selector=[<init>]
+    intrinsicArity(own)=3  destination=true
+[Forbric/INFO] [Forbric/Mixin] net.caffeinemc.mods.sodium.mixin.features.textures.scan.SpriteContentsMixin: sodium$beforeGenerateMipLevels now targets net.minecraft.client.renderer.texture.SpriteContents.<init>(Lnet/minecraft/resources/ResourceLocation;Lnet/minecraft/client/resources/metadata/animation/FrameSize;Lcom/mojang/blaze3d/platform/NativeImage;Lnet/minecraft/server/packs/resources/ResourceMetadata;Lnet/minecraftforge/client/textures/ForgeTextureMetadata;)V — Mixin bound its selector to the merge-added stub (Lnet/minecraft/resources/ResourceLocation;Lnet/minecraft/client/resources/metadata/animation/FrameSize;Lcom/mojang/blaze3d/platform/NativeImage;Lnet/minecraft/server/packs/resources/ResourceMetadata;)V, which only forwards to it; a NeoForge mod, and NeoForge's own class runs that selector on the body
+  adapt() moved 1 injector(s)
+
+guest net/caffeinemc/mods/sodium/mixin/features/textures/mipmaps/SpriteContentsMixin:
+  handler sodium$beforeGenerateMipLevels selector=[<init>]
+    intrinsicArity(own)=3  destination=true
+[Forbric/INFO] [Forbric/Mixin] net.caffeinemc.mods.sodium.mixin.features.textures.mipmaps.SpriteContentsMixin: sodium$beforeGenerateMipLevels now targets net.minecraft.client.renderer.texture.SpriteContents.<init>(Lnet/minecraft/resources/ResourceLocation;Lnet/minecraft/client/resources/metadata/animation/FrameSize;Lcom/mojang/blaze3d/platform/NativeImage;Lnet/minecraft/server/packs/resources/ResourceMetadata;Lnet/minecraftforge/client/textures/ForgeTextureMetadata;)V — Mixin bound its selector to the merge-added stub (Lnet/minecraft/resources/ResourceLocation;Lnet/minecraft/client/resources/metadata/animation/FrameSize;Lcom/mojang/blaze3d/platform/NativeImage;Lnet/minecraft/server/packs/resources/ResourceMetadata;)V, which only forwards to it; a NeoForge mod, and NeoForge's own class runs that selector on the body
+  adapt() moved 1 injector(s)

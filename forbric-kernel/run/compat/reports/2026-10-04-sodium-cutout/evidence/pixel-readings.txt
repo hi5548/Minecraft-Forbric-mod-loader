@@ -1,0 +1,52 @@
+## pre-committed control reading is reproduced exactly
+$ python3 sampler.py grass_side=1180,455,1240,725 dandelion_cell=640,440,860,690 leaves_cell=1290,420,1450,560 <frame>
+
+########## CONTROL  /private/tmp/sodiumcut-control2  (bf56012d) ##########
+== /private/tmp/sodiumcut-control2/per-mod/run/000-modmenu__fabric/screenshots/2026-10-06_11.08.40.png (1708x960)
+  grass_side box=(1180, 455, 1240, 725) n=16200 mean_rgb=(6.3, 6.8, 5.7)
+    frac={'grass_green': 0.0328, 'black': 0.9327, 'grey_tex': 0.0346}
+    top_rgb=[((0, 0, 0), 15109), ((48, 62, 30), 362), ((127, 127, 127), 121), ((129, 129, 129), 119), ((64, 83, 39), 103), ((157, 157, 157), 87)]
+  dandelion_cell box=(640, 440, 860, 690) n=55000 mean_rgb=(21.6, 24.6, 7.4)
+    frac={'black': 0.8516, 'sky': 0.0014, 'other': 0.0041, 'dirt_brown': 0.0753, 'grass_green': 0.0676}
+    top_rgb=[((0, 0, 0), 46837), ((237, 220, 74), 2391), ((21, 115, 4), 1230), ((69, 133, 37), 813), ((237, 199, 53), 722), ((21, 114, 4), 618)]
+  leaves_cell box=(1290, 420, 1450, 560) n=22400 mean_rgb=(17.8, 23.0, 11.0)
+    frac={'grass_green': 0.2114, 'other': 0.1607, 'black': 0.6279}
+    top_rgb=[((0, 0, 0), 14065), ((46, 59, 29), 809), ((52, 67, 32), 788), ((49, 63, 30), 685), ((46, 60, 29), 510), ((53, 68, 32), 492)]
+
+########## FIX  /private/tmp/sodiumcut-fix4  (a56bf626) ##########
+== /private/tmp/sodiumcut-fix4/per-mod/run/000-modmenu__fabric/screenshots/2026-10-06_11.10.43.png (1708x960)
+  grass_side box=(1180, 455, 1240, 725) n=16200 mean_rgb=(77.9, 58.8, 40.2)
+    frac={'grass_green': 0.0673, 'dirt_brown': 0.7856, 'other': 0.1159, 'grey_tex': 0.0311}
+    top_rgb=[((50, 34, 23), 1254), ((67, 47, 32), 1097), ((67, 47, 31), 888), ((67, 48, 32), 860), ((90, 63, 43), 737), ((82, 59, 40), 731)]
+  dandelion_cell box=(640, 440, 860, 690) n=55000 mean_rgb=(100.1, 107.5, 81.3)
+    frac={'other': 0.1849, 'dirt_brown': 0.2969, 'grass_green': 0.2735, 'black': 0.0399, 'sky': 0.2035, 'grey_tex': 0.0013}
+    top_rgb=[((181, 209, 255), 6666), ((237, 220, 74), 2733), ((21, 115, 4), 1573), ((69, 133, 37), 1045), ((85, 110, 52), 840), ((237, 199, 53), 742)]
+  leaves_cell box=(1290, 420, 1450, 560) n=22400 mean_rgb=(56.8, 50.8, 30.4)
+    frac={'grass_green': 0.2114, 'other': 0.4931, 'dirt_brown': 0.2802, 'grey_tex': 0.0153}
+    top_rgb=[((48, 33, 22), 3066), ((49, 33, 22), 1992), ((66, 47, 31), 1425), ((65, 46, 31), 975), ((82, 59, 40), 825), ((46, 59, 29), 809)]
+
+########## icon / held item (own ROIs; the two lanes' cutout boxes are unchanged)
+== /private/tmp/sodiumcut-control2/per-mod/run/000-modmenu__fabric/screenshots/2026-10-06_11.08.40.png (1708x960)
+  hotbar_icon box=(505, 872, 585, 946) n=5920 mean_rgb=(94.3, 93.6, 81.1)
+    frac={'grass_green': 0.2655, 'other': 0.2667, 'black': 0.1662, 'grey_tex': 0.1883, 'dirt_brown': 0.1132}
+    top_rgb=[((161, 178, 157), 336), ((48, 34, 23), 312), ((213, 232, 208), 304), ((78, 55, 37), 301), ((95, 109, 92), 256), ((59, 43, 29), 204)]
+  held_item box=(1080, 676, 1700, 955) n=172980 mean_rgb=(77.2, 78.0, 71.9)
+    frac={'black': 0.2319, 'grass_green': 0.0448, 'other': 0.118, 'grey_tex': 0.5895, 'dirt_brown': 0.0159}
+    top_rgb=[((0, 0, 0), 28641), ((126, 126, 126), 2916), ((119, 119, 119), 2580), ((68, 68, 68), 2578), ((118, 118, 118), 2381), ((117, 117, 117), 2117)]
+== /private/tmp/sodiumcut-fix4/per-mod/run/000-modmenu__fabric/screenshots/2026-10-06_11.10.43.png (1708x960)
+  hotbar_icon box=(505, 872, 585, 946) n=5920 mean_rgb=(81.8, 88.4, 65.5)
+    frac={'grass_green': 0.4297, 'other': 0.2811, 'black': 0.165, 'grey_tex': 0.011, 'dirt_brown': 0.1132}
+    top_rgb=[((161, 178, 157), 336), ((48, 34, 23), 312), ((213, 232, 208), 304), ((78, 55, 37), 301), ((95, 109, 92), 256), ((59, 43, 29), 204)]
+  held_item box=(1080, 676, 1700, 955) n=172980 mean_rgb=(57.0, 70.8, 40.6)
+    frac={'grass_green': 0.4932, 'dirt_brown': 0.1523, 'other': 0.2728, 'black': 0.06, 'grey_tex': 0.0217, 'sky': 0.0}
+    top_rgb=[((53, 81, 46), 2026), ((57, 87, 49), 1952), ((60, 92, 52), 1795), ((33, 50, 29), 1770), ((56, 85, 48), 1686), ((61, 43, 29), 1647)]
+
+########## black fraction, two definitions (the bug's black is exactly (0,0,0))
+== control2 (bf56012d)
+  grass_side     n= 16200 black(max<40)=0.9327 pure_black(max==0)=0.9327
+  dandelion_cell n= 55000 black(max<40)=0.8516 pure_black(max==0)=0.8516
+  leaves_cell    n= 22400 black(max<40)=0.6279 pure_black(max==0)=0.6279
+== fix4 (a56bf626)
+  grass_side     n= 16200 black(max<40)=0.0000 pure_black(max==0)=0.0000
+  dandelion_cell n= 55000 black(max<40)=0.0399 pure_black(max==0)=0.0000
+  leaves_cell    n= 22400 black(max<40)=0.0000 pure_black(max==0)=0.0000

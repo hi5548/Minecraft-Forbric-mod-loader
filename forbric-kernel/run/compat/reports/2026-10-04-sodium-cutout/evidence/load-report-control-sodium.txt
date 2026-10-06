@@ -1,0 +1,18 @@
+  ModernFix  (modernfix)
+    Mixin org.embeddedt.modernfix.common.mixin.bugfix.world_screen_skipped.WorldSelectionListMixin — 2/3 anchors resolve, missing: @At(INVOKE) WorldSelectionList$WorldListEntry.doDeleteWorld in <init>
+    mixin:modernfix-modernfix.mixins.json:org.embeddedt.modernfix.common.mixin.bugfix.world_screen_skipped.WorldSelectionListMixin
+  Sodium  (sodium)
+    Mixin injection sodium$beforeGenerateMipLevels — A required MixinExtras injector has no attachment in the actual defined class; no audited replacement says whether its feature is lost
+    mixin-injector:sodium-common.mixins.json:net.caffeinemc.mods.sodium.mixin.features.textures.mipmaps.SpriteContentsMixin#sodium$beforeGenerateMipLevels(Lnet/minecraft/client/renderer/texture/SpriteContents;Lcom/mojang/blaze3d/platform/NativeImage;Lcom/llamalad7/mixinextras/injector/wrapoperation/Operation;)V@net.minecraft.client.renderer.texture.SpriteContents
+  Sodium  (sodium)
+    Mixin injection sodium$beforeGenerateMipLevels — A required MixinExtras injector has no attachment in the actual defined class; no audited replacement says whether its feature is lost
+    mixin-injector:sodium-common.mixins.json:net.caffeinemc.mods.sodium.mixin.features.textures.scan.SpriteContentsMixin#sodium$beforeGenerateMipLevels(Lnet/minecraft/client/renderer/texture/SpriteContents;Lcom/mojang/blaze3d/platform/NativeImage;Lcom/llamalad7/mixinextras/injector/wrapoperation/Operation;)V@net.minecraft.client.renderer.texture.SpriteContents
+  Sodium  (sodium)
+    Mixin net.caffeinemc.mods.sodium.mixin.features.textures.mipmaps.SpriteContentsMixin — 2/3 anchors resolve, missing: @At(FIELD) SpriteContents.originalImage in <init>
+    mixin:sodium-common.mixins.json:net.caffeinemc.mods.sodium.mixin.features.textures.mipmaps.SpriteContentsMixin
+  Sodium  (sodium)
+    Mixin net.caffeinemc.mods.sodium.mixin.features.textures.scan.SpriteContentsMixin — 2/3 anchors resolve, missing: @At(FIELD) SpriteContents.originalImage in <init>
+    mixin:sodium-common.mixins.json:net.caffeinemc.mods.sodium.mixin.features.textures.scan.SpriteContentsMixin
+
+怎么办
+------

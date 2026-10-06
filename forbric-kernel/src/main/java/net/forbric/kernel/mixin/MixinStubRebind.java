@@ -61,7 +61,10 @@ import net.forbric.kernel.util.ForbricLog;
  *       method references (a constant, like a static field — NeoForge's {@code Language.loadFromJson(InputStream,
  *       BiConsumer)} passes a no-op component consumer) and argument construction, then one call to a same-name
  *       overload of the same class and static-ness, returning its result unchanged; the overload must have a body
- *       (an interface default forwarding to an abstract overload is no stub);</li>
+ *       (an interface default forwarding to an abstract overload is no stub). A constructor stub's {@code this(...)}
+ *       is such a call: the merged base kept vanilla's signature as {@code <init>} forwarding to the constructor the
+ *       carrier widened, which is where Sodium's {@code SpriteContentsMixin}s look for their {@code originalImage}
+ *       write;</li>
  *   <li>every {@code INVOKE}/{@code FIELD}/{@code NEW} anchor absent from the stub and present in the delegate
  *       ({@code HEAD}, {@code RETURN} and {@code TAIL} are equivalent on both: the stub returns what the delegate
  *       returns);</li>
@@ -740,16 +743,23 @@ public final class MixinStubRebind {
 		MixinFit.Member member = MixinFit.parseMember(target);
 		if (member == null) return -1;
 		boolean field = "FIELD".equals(value);
+		// An `opcode` narrows the point to one access, and Mixin's own selector reads the handler's shape off that access
+		// alone: Sodium's SpriteContents mixins wrap the `originalImage` PUTFIELD (181) in a constructor that also reads
+		// the field to build `byMipLevel`, and a shape that counted both would call one read and one write ambiguous.
+		Object opcode = MixinFit.value(at, "opcode");
+		Integer wantOpcode = opcode instanceof Integer one ? one : null;
 		if (field && MixinFit.value(at, "args") != null) return -1;   // array element access: another handler shape
 		if (!field && !CALL_POINTS.contains(value)) return -1;
 		int shape = -1;
 		for (AbstractInsnNode insn : body.instructions) {
 			int one;
 			if (!field && insn instanceof MethodInsnNode call) {
+				if (wantOpcode != null && call.getOpcode() != wantOpcode) continue;
 				if (member.desc() == null || !call.name.equals(member.name()) || !call.desc.equals(member.desc())
 						|| member.owner() != null && !call.owner.equals(member.owner())) continue;
 				one = (call.getOpcode() == Opcodes.INVOKESTATIC ? 0 : 1) + Type.getArgumentTypes(call.desc).length;
 			} else if (field && insn instanceof FieldInsnNode access) {
+				if (wantOpcode != null && access.getOpcode() != wantOpcode) continue;
 				if (!access.name.equals(member.name()) || member.desc() != null && !access.desc.equals(member.desc())
 						|| member.owner() != null && !access.owner.equals(member.owner())) continue;
 				one = switch (access.getOpcode()) {
@@ -1017,9 +1027,17 @@ public final class MixinStubRebind {
 			} else if (insn instanceof MethodInsnNode m) {
 				Type[] args = Type.getArgumentTypes(m.desc);
 				if (m.name.equals("<init>") && op == Opcodes.INVOKESPECIAL) {
-					if (stack.size() < args.length + 1) return null;
-					for (int k = 0; k <= args.length; k++) stack.removeLast();   // the args and the dup'd instance
-					continue;
+					// A constructor stub's `this(...)`: vanilla's signature forwards to the overload the carrier added, and
+					// that constructor is the delegate. Every other `<init>` — `super()`, or constructing an argument — is
+					// object construction, not the delegation call. Sodium's SpriteContents mixins bind `<init>` to the
+					// four-argument signature the merged base kept as a stub over Forge's five-argument body.
+					boolean thisDelegation = m.owner.equals(owner.name) && m.name.equals(stub.name) && !m.desc.equals(stub.desc)
+							&& !isStatic && stack.size() == args.length + 1 && stack.getFirst() == -2;
+					if (!thisDelegation) {
+						if (stack.size() < args.length + 1) return null;
+						for (int k = 0; k <= args.length; k++) stack.removeLast();   // the args and the dup'd instance
+						continue;
+					}
 				}
 				if (op == Opcodes.INVOKESTATIC && args.length == 0 && !(m.owner.equals(owner.name) && m.name.equals(stub.name))) {
 					stack.add(-1);

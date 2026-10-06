@@ -16,44 +16,114 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 import net.forbric.kernel.TestFixtures;
-import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.MethodNode;
 
 /**
- * Re-derives {@code carrier-stubs.txt} — every merged-base method that is a pure delegating stub to a same-name overload
- * the CARRIER added (vanilla has the stub's signature and not the overload's) — and asserts the shipped table equals it.
- * MixinStubRebind moves an injector only along a row here: where vanilla has both overloads itself, a mod that chose the
- * short one meant it. Each row also says, per Forge family, what that carrier's OWN patched class has at the stub's
- * signature ({@link MixinStubRebind.Shape}) — whether a mod of that family was compiled against code there or against the
- * same stub.
+ * Re-derives {@code carrier-stubs.txt} against the base this checkout ships — every merged-base method that is a pure
+ * delegating stub to an overload, or a RENAMED method, the CARRIER added (vanilla has the stub's signature and not the
+ * delegate's) — and asserts the shipped table equals it, so the table cannot silently drift to another generation.
+ * MixinStubRebind moves an injector only along a row here: where vanilla has both overloads itself, a mod that chose
+ * the short one meant it. Each row also says, per Forge family, what that carrier's OWN patched class has at the stub's
+ * signature ({@link MixinStubRebind.Shape}) — whether a mod of that family was compiled against code there or against
+ * the same stub.
+ *
+ * <p>The paths are the VERSION-AWARE ones every other staged test uses ({@code forbric.mcVersion}, the merge outputs
+ * beside {@code -Pforbric.mcLibraries}), not 26.2 constants: the previous revision hardcoded
+ * {@code ../forbric-loader/run/merged-base/patched-mc-merged-26.2.jar} and skipped when it was absent, so on the
+ * 1.21.1 port the assertion below never ran and the table stayed the 26.2 census.
  */
 class CarrierStubCensusTest {
-	private static final String OLD = System.getenv().getOrDefault("FORBRIC_OLD", "../forbric-loader");
-	private static final Path MERGED = Path.of(OLD, "run/merged-base/patched-mc-merged-26.2.jar");
+	/** The Minecraft version this checkout is built for; {@code build.gradle} keys every staged path on it. */
+	private static final String VERSION = System.getProperty("forbric.mcVersion", "1.21.1");
 	private static final Path MC = TestFixtures.minecraftDir();
+	/** The merged base the kernel boots: the staged one when the build hands it over, else the merge's own output. */
+	private static final Path MERGED = mergedBase();
+	/** The carrier's OWN patched game jars: what a MinecraftForge / NeoForge mod was compiled against. */
+	private static final Path FORGE = MC.resolve(".forbric-build/out/patched-mc-forge-" + VERSION + ".jar");
+	private static final Path NEO = MC.resolve(".forbric-build/out/patched-mc-neoforge-" + VERSION + ".jar");
 	/**
-	 * The two jars build-merged-base.sh merges by default. Not run/forge-patched's MinecraftForge jar: it is an older
-	 * build, and its LivingEntity differs from the one the merge took.
+	 * Vanilla in the Mojmap namespace the merged base is in. The NeoForm intermediate, NOT
+	 * {@code versions/&lt;v&gt;/&lt;v&gt;.jar}: a launcher jar is obfuscated, and a census read off it would compare
+	 * Mojmap descriptors to obfuscated ones and find nothing.
 	 */
-	private static final Path FORGE = MC.resolve("libraries/net/forbric/patched-mc-forge/26.2-65.0.1/patched-mc-forge-26.2-65.0.1.jar");
-	private static final Path NEO = Path.of(OLD, "run/neoforge-patched/patched-mc-neoforge-26.2.jar");
-	private static final Path VANILLA = MC.resolve("versions/26.2/26.2.jar");
+	private static final Path VANILLA = MC.resolve(".forbric-build/client-official.jar");
+
+	private static Path mergedBase() {
+		String staged = System.getProperty("forbric.stagedRoot");
+		Path base = staged != null && !staged.isBlank()
+				? Path.of(staged).resolve("merged-base/patched-mc-merged-" + VERSION + ".jar")
+				: MC.resolve(".forbric-build/out/patched-mc-merged-" + VERSION + ".jar");
+		return base;
+	}
+
+	/**
+	 * The staged artifacts, or a skip on a checkout that has none (CI). {@code FORBRIC_COMPAT_FIXTURES_REQUIRED=1}
+	 * turns the skip into a failure, so a machine that is supposed to hold them cannot pass by quietly skipping.
+	 */
+	private static void requireFixtures() {
+		TestFixtures.requireFiles("the census fixtures (merged base, named vanilla, both carriers)",
+				MERGED, VANILLA, FORGE, NEO);
+	}
 
 	@Test void theShippedTableIsExactlyWhatTheArtifactsSay() throws Exception {
-		Assumptions.assumeTrue(Files.isRegularFile(MERGED) && Files.isRegularFile(VANILLA), "merged base and vanilla jar required");
-		// The rows themselves need only the merged base and vanilla; each row's forge=/neo= columns need both carriers.
-		boolean carriers = Files.isRegularFile(FORGE) && Files.isRegularFile(NEO);
+		requireFixtures();
+		TreeSet<String> rows = derive();
+		assertFalse(rows.isEmpty(), "the census found no delegating stub at all — the merged base is not the one this "
+				+ "table was derived from");
+		List<String> shipped = new ArrayList<>();
+		try (InputStream in = MixinStubRebind.class.getResourceAsStream(MixinStubRebind.TABLE)) {
+			assertNotNull(in, MixinStubRebind.TABLE + " is missing");
+			for (String line : new String(in.readAllBytes(), StandardCharsets.UTF_8).split("\n")) {
+				if (!line.isBlank() && !line.startsWith("#")) shipped.add(line.trim());
+			}
+		}
+		if (System.getenv("FORBRIC_WRITE_CARRIER_STUBS") != null) {
+			Files.writeString(Path.of("src/main/resources" + MixinStubRebind.TABLE), HEADER + String.join("\n", rows) + "\n");
+		}
+		// Set equality, both directions: a derived row the table is missing fails it, and so does a row the base no
+		// longer has. The previous revision skipped here; on the 1.21.1 port this is the assertion that runs.
+		assertEquals(rows, new TreeSet<>(shipped), "carrier-stubs.txt must equal what the staged merged base, vanilla and "
+				+ "both carriers say; regenerate with FORBRIC_WRITE_CARRIER_STUBS=1 after a base rebuild");
+	}
+
+	/**
+	 * A handful of rows pinned by name, read off the 1.21.1 artifacts: the shapes the kernel's Forge-family rule turns
+	 * on. These are the same {@link MixinStubRebind.Shape} outcomes the 26.2 revision pinned, re-pointed at rows that
+	 * exist on this base (ModelManager, PackDetector, MultiPartModel, ServerExplosion and AxeItem are gone from
+	 * 1.21.1's merged base and head no row there).
+	 */
+	@Test void theShapesTheForgeFamilyRuleTurnsOnAreStillThere() throws Exception {
+		requireFixtures();
+		TreeSet<String> rows = derive();
+		// A carrier kept vanilla's signature as its own BODY: a mod of that family was compiled against code.
+		assertRow(rows, "net/minecraft/client/multiplayer/ClientPacketListener#startWaitingForNewLevel(", "forge=body neo=stub");
+		assertRow(rows, "net/minecraft/client/resources/language/ClientLanguage#<init>(", "forge=body neo=stub");
+		assertRow(rows, "net/minecraft/client/renderer/entity/layers/HumanoidArmorLayer#renderArmorPiece(", "forge=body neo=stub");
+		assertRow(rows, "net/minecraft/client/multiplayer/ClientLevel#addBreakingBlockEffect(", "forge=descriptor-body neo=stub");
+		// The mirror: NeoForge kept vanilla's signature as the body where MinecraftForge forwards.
+		assertRow(rows, "net/minecraft/network/protocol/login/custom/DiscardedQueryAnswerPayload#<init>(", "forge=stub neo=body");
+		assertRow(rows, "net/minecraft/world/item/crafting/RecipeManager#<init>(", "forge=stub neo=body");
+		// NeoForge RENAMED the overload: Player.getDestroySpeed(BlockState) forwards to getDigSpeed(BlockState,
+		// BlockPos), which a same-name-only rule cannot see, so the row was inert and its columns were read off the
+		// wrong shape. The descriptor is the same either way, which is what makes the row usable.
+		assertRow(rows, "net/minecraft/world/entity/player/Player#getDestroySpeed(", "forge=stub neo=stub");
+		// Forge's creativeNameSearch forwards to the renamed getSearchTree(Key) too: a Forge mod must not move there.
+		assertRow(rows, "net/minecraft/client/multiplayer/SessionSearchTrees#creativeNameSearch(", "forge=stub neo=stub");
+		assertRow(rows, "net/minecraft/client/multiplayer/SessionSearchTrees#creativeTagSearch(", "forge=stub neo=stub");
+	}
+
+	/** The census of the staged base: {@code owner#stubNameDesc -> delegateDesc} plus both carriers' Shape. */
+	private static TreeSet<String> derive() throws Exception {
 		Map<String, ClassNode> vanilla = read(VANILLA, true);
 		TreeSet<String> rows = new TreeSet<>();
-		try (ZipFile zip = new ZipFile(MERGED.toFile()); ZipFile forge = carriers ? new ZipFile(FORGE.toFile()) : null;
-				ZipFile neo = carriers ? new ZipFile(NEO.toFile()) : null) {
+		try (ZipFile zip = new ZipFile(MERGED.toFile()); ZipFile forge = new ZipFile(FORGE.toFile());
+				ZipFile neo = new ZipFile(NEO.toFile())) {
 			for (ZipEntry entry : Collections.list(zip.entries())) {
 				if (!entry.getName().endsWith(".class") || !entry.getName().startsWith("net/minecraft/")) continue;
-				ClassNode merged = new ClassNode();
-				new ClassReader(zip.getInputStream(entry).readAllBytes()).accept(merged, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+				ClassNode merged = read(entry, zip);
 				ClassNode original = vanilla.get(merged.name);
 				if (original == null) continue;
 				for (MethodNode stub : merged.methods) {
@@ -62,49 +132,29 @@ class CarrierStubCensusTest {
 					MixinStubRebind.Delegation delegation = MixinStubRebind.delegation(merged, stub);
 					if (delegation == null) continue;
 					String delegate = delegation.delegate().desc;
+					// Vanilla must have the stub and NOT the delegate: where it has both, the merge changed nothing.
 					if (!declares(original, stub.name, stub.desc) || declares(original, delegation.delegate().name, delegate)) continue;
-					String row = merged.name + "#" + stub.name + stub.desc + " -> " + delegate;
-					rows.add(!carriers ? row : row
+					rows.add(merged.name + "#" + stub.name + stub.desc + " -> " + delegate
 							+ " forge=" + MixinStubRebind.Shape.of(entry(forge, merged.name), stub.name, stub.desc, delegate).token
 							+ " neo=" + MixinStubRebind.Shape.of(entry(neo, merged.name), stub.name, stub.desc, delegate).token);
 				}
 			}
 		}
-		List<String> shipped = new ArrayList<>();
-		try (InputStream in = MixinStubRebind.class.getResourceAsStream(MixinStubRebind.TABLE)) {
-			assertNotNull(in, MixinStubRebind.TABLE + " is missing");
-			for (String line : new String(in.readAllBytes(), StandardCharsets.UTF_8).split("\n")) {
-				if (!line.isBlank() && !line.startsWith("#")) shipped.add(line.trim());
-			}
-		}
-		if (!carriers) {
-			assertEquals(rows, new TreeSet<>(shipped.stream().map(line -> line.replaceAll(" (forge|neo)=\\S+", "")).toList()),
-					"carrier-stubs.txt's rows must equal what the staged merged base and vanilla say");
-			Assumptions.abort("both carriers' patched game jars required for the forge=/neo= columns");
-		}
-		if (System.getenv("FORBRIC_WRITE_CARRIER_STUBS") != null) {
-			Path out = Path.of("src/main/resources" + MixinStubRebind.TABLE);
-			Files.writeString(out, "# Generated by CarrierStubCensusTest (FORBRIC_WRITE_CARRIER_STUBS=1): merged-base delegating stubs to a\n"
-					+ "# same-name overload the carrier added. MixinStubRebind moves an injector only along these rows: a Fabric mod's\n"
-					+ "# on every row; a MinecraftForge (forge=) or NeoForge (neo=) mod's only where its own carrier's patched class\n"
-					+ "# ran that selector on code - body (vanilla's signature is the body there, first of its name), descriptor-body\n"
-					+ "# (a body, declared after another overload: a descriptor selector only), overload-body (only the widened\n"
-					+ "# overload is there: a name-only selector only). stub (the carrier keeps the same stub) and absent never move.\n"
-					+ String.join("\n", rows) + "\n");
-		}
-		assertEquals(rows, new TreeSet<>(shipped), "carrier-stubs.txt must equal what the staged merged base, vanilla and "
-				+ "both carriers say; regenerate with FORBRIC_WRITE_CARRIER_STUBS=1 after a base rebuild");
-		// What fusion (MinecraftForge) was built against: MinecraftForge's ModelManager has both as bodies, NeoForge added
-		// the overloads. The mirror: NeoForge kept PackDetector's signature as the body where MinecraftForge forwards.
-		assertRow(rows, "net/minecraft/client/resources/model/ModelManager#loadModels(", "forge=body neo=stub");
-		assertRow(rows, "net/minecraft/client/resources/model/ModelManager#discoverModelDependencies(", "forge=body neo=stub");
-		assertRow(rows, "net/minecraft/server/packs/repository/PackDetector#detectPackResources(", "forge=stub neo=body");
-		assertRow(rows, "net/minecraft/client/renderer/block/dispatch/multipart/MultiPartModel#collectParts(", "forge=stub neo=absent");
-		assertRow(rows, "net/minecraft/world/level/ServerExplosion#hurtEntities(", "forge=overload-body neo=stub");
-		assertRow(rows, "net/minecraft/world/item/AxeItem#evaluateNewBlockState(", "forge=stub neo=overload-body");
-		assertRow(rows, "net/minecraft/client/multiplayer/ClientLevel#addBreakingBlockEffect(", "forge=descriptor-body neo=stub");
-		assertRow(rows, "net/minecraft/world/entity/player/Player#getDestroySpeed(", "forge=stub neo=stub");
+		return rows;
 	}
+
+	/**
+	 * The header {@code FORBRIC_WRITE_CARRIER_STUBS=1} writes, and the one the shipped table carries. Kept verbatim
+	 * so a regeneration does not rewrite the file's first seven lines.
+	 */
+	private static final String HEADER =
+			"# Generated by CarrierStubCensusTest (FORBRIC_WRITE_CARRIER_STUBS=1): merged-base delegating stubs to a\n"
+			+ "# same-name overload, or a renamed method, the carrier added. MixinStubRebind moves an injector only along\n"
+			+ "# these rows: a Fabric mod's on every row; a MinecraftForge (forge=) or NeoForge (neo=) mod's only where its\n"
+			+ "# own carrier's patched class ran that selector on code - body (vanilla's signature is the body there, first\n"
+			+ "# of its name), descriptor-body (a body, declared after another overload: a descriptor selector only),\n"
+			+ "# overload-body (only the widened overload is there: a name-only selector only). stub (the carrier keeps the\n"
+			+ "# same stub) and absent never move.\n";
 
 	private static void assertRow(TreeSet<String> rows, String head, String columns) {
 		List<String> matching = rows.stream().filter(r -> r.startsWith(head)).toList();
@@ -115,6 +165,10 @@ class CarrierStubCensusTest {
 	private static ClassNode entry(ZipFile jar, String name) throws Exception {
 		ZipEntry entry = jar.getEntry(name + ".class");
 		if (entry == null) return null;
+		return read(entry, jar);
+	}
+
+	private static ClassNode read(ZipEntry entry, ZipFile jar) throws Exception {
 		ClassNode node = new ClassNode();
 		new ClassReader(jar.getInputStream(entry).readAllBytes()).accept(node, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
 		return node;

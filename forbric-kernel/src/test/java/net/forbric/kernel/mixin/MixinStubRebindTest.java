@@ -480,24 +480,41 @@ class MixinStubRebindTest {
 	}
 
 	/**
-	 * A row only says a method is a stub when the overload it forwards to is on THIS base. carrier-stubs.txt names a
-	 * {@code setItem(int,ItemStack,boolean)} delegate for four vanilla {@code setItem(int,ItemStack)} bodies the
-	 * 1.21.1 base never grew, and the injectors bound there were reported "attached only inside a forwarding stub"
-	 * while their host held the body itself.
+	 * A row only says a method is a stub when the method really does forward to the delegate the row names. The base
+	 * is asked, not the row: a renamed delegate (NeoForge's {@code getDigSpeed} for vanilla's {@code getDestroySpeed})
+	 * has to be found on the call the method makes. The old shape of this test pinned the 26.2 table's four
+	 * {@code setItem(int,ItemStack,boolean)} rows, which 1.21.1 never grew; the census that now runs forbids such a
+	 * row outright, so the guard is exercised through a row that exists.
 	 */
-	@Test void aRowWithNoDelegateOnTheBaseIsNotAStub() {
-		String stubDesc = "(ILnet/minecraft/world/item/ItemStack;)V";
-		String delegateDesc = "(ILnet/minecraft/world/item/ItemStack;Z)V";
+	@Test void aRowAppliesOnlyWhereTheMethodReallyForwardsToItsDelegate() {
+		String stubDesc = "(Ljava/util/Map;Z)V";
+		String delegateDesc = "(Ljava/util/Map;ZLjava/util/Map;)V";
+		ClassNode language = new ClassNode();
+		language.name = "net/minecraft/client/resources/language/ClientLanguage";
+		language.methods = new java.util.ArrayList<>(List.of(ctor(stubDesc, delegateDesc), ctor(delegateDesc, null)));
+		assertTrue(MixinStubRebind.isStubOverBody(language, language.methods.get(0), Ecosystem.FABRIC),
+				"the row applies: the base declares the exact stub and it forwards to the delegate the row names");
 
-		ClassNode withoutDelegate = platform(m("setItem", stubDesc, false));
-		withoutDelegate.name = "net/minecraft/world/SimpleContainer";
+		ClassNode withoutDelegate = new ClassNode();
+		withoutDelegate.name = language.name;
+		withoutDelegate.methods = new java.util.ArrayList<>(List.of(ctor(stubDesc, delegateDesc)));
 		assertFalse(MixinStubRebind.isStubOverBody(withoutDelegate, withoutDelegate.methods.get(0), Ecosystem.FABRIC),
-				"nothing declares the delegate on this base, so setItem holds the body and nothing forwards from it");
+				"the delegate the row forwards to is not on this base, so the method is a body and nothing forwards from it");
+	}
 
-		ClassNode withDelegate = platform(m("setItem", stubDesc, true), m("setItem", delegateDesc, false));
-		withDelegate.name = "net/minecraft/world/SimpleContainer";
-		assertTrue(MixinStubRebind.isStubOverBody(withDelegate, withDelegate.methods.get(0), Ecosystem.FABRIC),
-				"with the delegate present the row applies again");
+	/** A {@code <init>} whose body is {@code this(…)} to {@code forwardingTo} when it is given, else a plain body. */
+	private static MethodNode ctor(String desc, String forwardingTo) {
+		MethodNode method = new MethodNode(Opcodes.ACC_PUBLIC, "<init>", desc, null, null);
+		if (forwardingTo != null) {
+			method.instructions.add(new VarInsnNode(Opcodes.ALOAD, 0));
+			method.instructions.add(new VarInsnNode(Opcodes.ALOAD, 1));
+			method.instructions.add(new VarInsnNode(Opcodes.ILOAD, 2));
+			method.instructions.add(new org.objectweb.asm.tree.InsnNode(Opcodes.ACONST_NULL));
+			method.instructions.add(new MethodInsnNode(Opcodes.INVOKESPECIAL, "net/minecraft/client/resources/language/ClientLanguage",
+					"<init>", forwardingTo, false));
+		}
+		method.instructions.add(new org.objectweb.asm.tree.InsnNode(Opcodes.RETURN));
+		return method;
 	}
 
 	/** A static method: a body ({@code return}), or a stub forwarding its int to {@code f(IZ)V}. */
@@ -524,7 +541,10 @@ class MixinStubRebindTest {
 		for (String owner : List.of("net/minecraft/client/Minecraft", "net/minecraft/world/level/Level", "game/Target")) {
 			assertFalse(MixinStubRebind.ownsCarrierStub(owner), owner);
 		}
-		assertTrue(MixinStubRebind.ownsCarrierStub("net/minecraft/world/level/block/entity/FuelValues"), "torrential's fuel hook's host");
+		assertTrue(MixinStubRebind.ownsCarrierStub("net/minecraft/client/resources/language/ClientLanguage"),
+				"ModernFix's dynamic-languages host, which heads a row on 1.21.1");
+		assertFalse(MixinStubRebind.ownsCarrierStub("net/minecraft/world/level/block/entity/FuelValues"),
+				"the 26.2 table's fuel row is gone: on 1.21.1 vanillaBurnTimes is nobody's forwarding stub");
 	}
 
 	@Test void theSwitchMovesNothing() throws Exception {

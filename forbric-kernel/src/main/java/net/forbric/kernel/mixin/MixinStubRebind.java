@@ -357,26 +357,27 @@ public final class MixinStubRebind {
 		String head = target.name + "#" + method.name + method.desc + " -> ";
 		for (Map.Entry<String, Row> row : carrierStubs().entrySet()) {
 			if (!row.getKey().startsWith(head)) continue;
-			// A row only says anything on a base where the delegate it forwards to is actually present. The table is
-			// pinned per game version, and on a base that never grew the carrier's overload vanilla's own signature
-			// holds the body — nothing forwards from it, so an injector bound there is on the body, not a stub.
-			// Measured on 1.21.1 (patched-mc-merged-1.21.1): the four rows below name a `setItem(int,ItemStack,boolean)`
-			// delegate that does not exist there, and four fabric-transfer-api-v1 injectors whose host is the real
-			// `setItem(int,ItemStack)` body were reported "attached only inside a forwarding stub".
-			if (!hasDelegate(target, method.name, row.getKey())) return false;
+			// A row only says anything on a base where the method really does forward to that delegate. The table is
+			// pinned per game version: on a base that never grew the carrier's overload vanilla's own signature holds
+			// the body — nothing forwards from it, so an injector bound there is on the body, not a stub.
+			if (!forwardsTo(target, method, row.getKey())) return false;
 			return row.getValue().ranOnCode(ecosystem);
 		}
 		return false;
 	}
 
-	/** Whether {@code target} declares the overload a row's key forwards to ({@code owner#name(stub)ret -> (delegate)ret}). */
-	private static boolean hasDelegate(ClassNode target, String name, String row) {
+	/**
+	 * Whether {@code method} of {@code target} really forwards to the delegate a row's key names
+	 * ({@code owner#name(stub)ret -> (delegate)ret}) — asked of the base itself, not of the row, so a RENAMED delegate
+	 * (NeoForge's {@code getDigSpeed} for vanilla's {@code getDestroySpeed}, {@code renderFluid} for
+	 * {@code renderWater}) is checked on the call the method actually makes.
+	 */
+	private static boolean forwardsTo(ClassNode target, MethodNode method, String row) {
 		if (target.methods == null) return false;
 		int arrow = row.indexOf(" -> ");
 		if (arrow < 0) return false;
-		String delegateDesc = row.substring(arrow + 4);
-		for (MethodNode method : target.methods) if (method.name.equals(name) && method.desc.equals(delegateDesc)) return true;
-		return false;
+		Delegation delegation = delegation(target, method);
+		return delegation != null && delegation.delegate().desc.equals(row.substring(arrow + 4));
 	}
 
 	/**

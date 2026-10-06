@@ -1,0 +1,25 @@
+arm=control  control/per-mod/run/000-modmenu__fabric/screenshots/2026-10-06_09.51.45.png
+  size=1708x960 sampled=409920 verdict=DREW
+  grass_green=183256 (0.4471)  grey_tex=37390 (0.0912)  sky=51042 (0.1245)
+  mean_green_excess_over_grass=21.7
+  top_rgb=(0,0,0)x60626, (67,53,37)x3983, (71,93,44)x3699, (73,95,45)x3291, (68,89,42)x3179, (72,94,44)x3048
+arm=control2  control2/per-mod/run/000-modmenu__fabric/screenshots/2026-10-06_09.57.34.png
+  size=1708x960 sampled=409920 verdict=DREW
+  grass_green=137550 (0.3356)  grey_tex=4474 (0.0109)  sky=2164 (0.0053)
+  mean_green_excess_over_grass=22.4
+  top_rgb=(0,0,0)x238227, (61,81,37)x14652, (88,113,54)x5508, (87,112,54)x4628, (81,104,50)x4426, (85,109,52)x4351
+arm=fix  fix/per-mod/run/000-modmenu__fabric/screenshots/2026-10-06_09.50.36.png
+  size=1708x960 sampled=409920 verdict=DREW
+  grass_green=213273 (0.5203)  grey_tex=8465 (0.0207)  sky=2700 (0.0066)
+  mean_green_excess_over_grass=20.8
+  top_rgb=(0,0,0)x145745, (73,95,45)x2614, (68,89,42)x2608, (66,86,41)x2539, (75,97,46)x2364, (69,89,43)x2362
+arm=fix2  fix2/per-mod/run/000-modmenu__fabric/screenshots/2026-10-06_09.55.23.png
+  size=1708x960 sampled=409920 verdict=DREW
+  grass_green=137550 (0.3356)  grey_tex=4474 (0.0109)  sky=2164 (0.0053)
+  mean_green_excess_over_grass=22.4
+  top_rgb=(0,0,0)x238227, (61,81,37)x14652, (88,113,54)x5508, (87,112,54)x4628, (81,104,50)x4426, (85,109,52)x4351
+arm=fix3  fix3/per-mod/run/000-modmenu__fabric/screenshots/2026-10-06_09.58.06.png
+  size=1708x960 sampled=409920 verdict=DREW
+  grass_green=137550 (0.3356)  grey_tex=4474 (0.0109)  sky=2164 (0.0053)
+  mean_green_excess_over_grass=22.4
+  top_rgb=(0,0,0)x238227, (61,81,37)x14652, (88,113,54)x5508, (87,112,54)x4628, (81,104,50)x4426, (85,109,52)x4351

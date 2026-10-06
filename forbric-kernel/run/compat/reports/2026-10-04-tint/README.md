@@ -135,7 +135,72 @@ FerriteCore / ModernFix / EntityCulling / ImmediatelyFast / AppleSkin / Cloth Co
 
 ## 5. 验证运行读数（登记后回填）
 
-_（待运行；本节在 §4 登记之后追加，不改 §4。）_
+### 5.1 运行行（逐字，`per-mod/results.jsonl`）
+
+| 臂 | 冻结内核 sha256 | run | world | frames | strict | confirmed_required | seconds |
+|---|---|---|---|---|---|---|---|
+| **修复** `/tmp/tint-kernel.jar` | `b50c95b0…` | PASS | true | 1 | TRUE | **0** | 35 / 32 / 32（3 次） |
+| **控制** `0.3.4-beta`（`bf56012d…`，已验证**不含**本修复） | `bf56012d…` | PASS | true | 1 | TRUE | 0 | 31 / 31（2 次） |
+
+两臂都 `java=jdk-21.0.7`、`[Forbric/ClientSmoke] joined world via quick-play: W7Client` ≥1、`clean disconnect
+observed`、0 份 crash-report。**(D) 达成**（修复臂无回归）。
+
+### 5.2 控制台落地点 (C) —— 修复臂全中，控制臂全无
+
+修复臂逐字各出现 ≥1 次（`main` 与 `Render thread` 各一次，随类加载）：
+
+```
+[Forbric/MergedBaseCompat] net.minecraft.client.color.block.BlockColors looked its colours up through a Forge
+  registry delegate while its own register stored the raw object, so every one missed and fell back to MapColor
+  (2 site(s) re-keyed to getBlock)
+[Forbric/MergedBaseCompat] net.minecraft.client.color.item.ItemColors looked its colours up through a Forge
+  registry delegate ... (1 site(s) re-keyed to getItem)
+[Forbric/MergedBaseCompat] net.fabricmc.fabric.mixin.client.rendering.BlockColorsMixin's @Shadow blockColors is an
+  IdMapper this base no longer has, so Mixin could not bind it and discarded the whole mixin; it now reads the live
+  Map by raw key
+[Forbric/MergedBaseCompat] net.fabricmc.fabric.mixin.client.rendering.ItemColorsMixin's @Shadow itemColors is an
+  IdMapper this base no longer has, ... it now reads the live Map by raw key
+```
+
+控制臂：这四条**0 次**（控制台无任何 `looked its colours up` / `is an IdMapper` 行）。**修复确实在客户端生效。**
+
+### 5.3 像素读数 (B) —— 预登记的**方向判据被证伪**
+
+`evidence/sample-tint.py` 对每张截图（1708×960，step=2）：
+
+| 截图 | 视图 | verdict | grass_green | grey_tex | sky | mean_green_excess |
+|---|---|---|---|---|---|---|
+| 控制 #1（未种子） | 开阔田野 | DREW | **0.4471** | 0.0912 | 0.1245 | 21.7 |
+| 修复 #1（未种子） | 暗坑 | DREW | 0.5203 | 0.0207 | 0.0066 | 20.8 |
+| **控制 #2**（种子化） | 近距草地 | DREW | **0.3356** | 0.0109 | 0.0053 | 22.4 |
+| **修复 #2**（种子化） | 近距草地 | DREW | 0.3356 | 0.0109 | 0.0053 | 22.4 |
+| **修复 #3**（种子化） | 近距草地 | DREW | 0.3356 | 0.0109 | 0.0053 | 22.4 |
+
+- 修复臂**绝对值判据达成**：`grass_green_frac` 0.34–0.52 ≥ 0.03，`mean_green_excess` 20.8–22.4 ≥ 15。
+- 控制臂**预测（≤0.01）被证伪**：未修复内核的草同样上色（0.34–0.45，绿）。
+- **决定性读数**：`控制 #2`、`修复 #2`、`修复 #3` 三张 PNG **逐字节相同**
+  （sha256 `f7c26fbbd93667e620f943ddc5928f8cb0b8672244df563ea352046152f9ab67`）。同一确定性场景下，
+  **修复内核与未修复内核渲染出完全一样的像素**。
+
+（相机非确定：未种子化时出生视角随机——两次未种子运行的 yaw 为 170.4° / 95.1°；把一次运行保存的
+`playerdata/*.dat` 放回复现世界后，三次运行的帧开始逐字节可复现。）
+
+### 5.4 结论与**未证**（不藏）
+
+- **(C)/(D) 达成**：修复在客户端确实执行（四个 marker），12-mod 集合 strict-clean 启动，无回归。
+- **(B) 的方向判据不成立**：控制臂与修复臂的画面**逐字节相同**，草在两边都是绿的。也就是说，
+  上下文（`2026-10-04-inert-apis` §3.2）里那条"基底原版同色路径失活 ⇒ 草/水/树叶发灰"是**字节层面的推断**
+  ——该报告自己已注明"**由字节判定，未在运行中看到**"——而**本次真机读数没有复现它**：原版颜色路径在未修复
+  内核上就已经工作（草顶被上色为绿）。
+- 因此这两步里，**二步（基底原始键）在本场景是行为等价的**（帧逐字节相同；`ForgeRegistries.*.getDelegateOrThrow`
+  在运行期交出的键与 `register` 存的原始对象事实上一致），**一步（重绑两个 guest mixin）才是功能性改变**：
+  它让 `fabric-rendering-v1` 的 `ColorProviderRegistry` 注册面复活（四个 marker 为证），而**本 12-mod 集合没有
+  注册自定义方块/物品颜色的 mod**，故这条收益**未被本读数覆盖**。
+- **"草方块物品图标发灰 / 放置后泥土发黑"这两条玩家可见症状，本次没有复现**（截图里草是绿的；视野中未见
+  独立可判的"发黑泥土"面）。本车道不把"两侧都绿"读成通过，如实记为上述**未证**。
+
+`evidence/` 存了确定性场景的修复帧与控制帧（相同 sha 的另一臂不重复存）、未种子控制帧（开阔田野），
+以及全部 `sample-tint.py` 输出。
 
 ---
 
@@ -167,6 +232,11 @@ _（待运行；本节在 §4 登记之后追加，不改 §4。）_
 | `ColourFixProbe.java` | 驱动真实维修方法的三腿探针（形状/帧/幂等/负对照 + ASM verifier） |
 | `colour-fix-probe-output.txt` | 上述探针的完整输出（ALL CHECKS PASSED） |
 | `sample-tint.py` | 纯 stdlib 的 PNG 像素采样器（grass_green / grey_tex / sky 分类 + 模式 RGB） |
+| `pixel-readings.txt` | 五张截图的完整采样输出（§5.3 的表） |
+| `run-readings.txt` | 五臂的 `results.jsonl` 行 + 修复臂四个 marker + 控制臂同一 grep=0 |
+| `frame-fix__deterministic.png` | 确定性场景的修复帧（sha `f7c26fbb…`） |
+| `frame-control__deterministic.png` | 同一确定性场景的控制帧，**与上一张逐字节相同**（同 sha） |
+| `frame-control__open-field.png` | 未种子控制帧（开阔田野，供对照何为"可判/不可判"的视野） |
 | `colour-census.txt` | （引用自 `2026-10-04-inert-apis/evidence/`）合并基底/Forge/NeoForge/guest 的字段与键路径逐条 javap |
 
 ## 8. 提交
@@ -174,4 +244,6 @@ _（待运行；本节在 §4 登记之后追加，不改 §4。）_
 | 提交 | 覆盖 |
 |---|---|
 | `ad9d5615` | 两步一体：基底 `getColor` 原始键 + 重绑两个 guest 颜色 mixin + 摘两条 pin |
-| _（本节报告与读数回填的提交）_ | |
+| `c07ce387` | 报告（预登记）：形状/字节/离线证明 + §4 运行前登记读数 |
+| _（本次报告回填写数）_ | §5 回填、证据与截图 |
+

@@ -1,0 +1,22 @@
+Pixel sub-readings — the same classifier (evidence/sampler.py, verbatim from the 0.3.5 gate) and the same ROIs.
+Pre-registered criterion: pure black (0,0,0) fraction = 0.0000 in all three ROIs in both arms.
+
+== arm A — the user's real 12  /tmp/rel036/gate12/per-mod/run/000-modmenu__fabric/screenshots/2026-10-07_07.23.42.png  (1708x960)
+   grass_side box=(1180, 455, 1240, 725) n=16200  pure_black(0,0,0)=0.0000  max(R,G,B)<10=0.0000
+   dandelion  box=(640, 440, 860, 690) n=55000  pure_black(0,0,0)=0.0000  max(R,G,B)<10=0.0000
+   leaves     box=(1290, 420, 1450, 560) n=22400  pure_black(0,0,0)=0.0000  max(R,G,B)<10=0.0000
+     classifier frac[grass_side]={'grass_green': 0.7383, 'other': 0.181, 'black': 0.0255, 'dirt_brown': 0.0543, 'grey_tex': 0.0009}
+     classifier frac[dandelion]={'grey_tex': 0.0025, 'dirt_brown': 0.0851, 'grass_green': 0.8674, 'other': 0.0398, 'black': 0.0012, 'sky': 0.0041}
+     classifier frac[leaves]={'black': 0.0124, 'grass_green': 0.8554, 'dirt_brown': 0.0432, 'grey_tex': 0.0005, 'other': 0.0886}
+
+== arm B — the same 12 + Create 6.0.10  /tmp/rel036/gate13/per-mod/run/000-create__neoforge/screenshots/2026-10-07_07.24.23.png  (1708x960)
+   grass_side box=(1180, 455, 1240, 725) n=16200  pure_black(0,0,0)=0.0000  max(R,G,B)<10=0.0000
+   dandelion  box=(640, 440, 860, 690) n=55000  pure_black(0,0,0)=0.0000  max(R,G,B)<10=0.0000
+   leaves     box=(1290, 420, 1450, 560) n=22400  pure_black(0,0,0)=0.0000  max(R,G,B)<10=0.0000
+     classifier frac[grass_side]={'grass_green': 0.7848, 'other': 0.0788, 'dirt_brown': 0.1251, 'grey_tex': 0.0035, 'black': 0.0079}
+     classifier frac[dandelion]={'grass_green': 0.788, 'dirt_brown': 0.1362, 'other': 0.064, 'black': 0.0003, 'grey_tex': 0.0075, 'sky': 0.0041}
+     classifier frac[leaves]={'other': 0.2817, 'black': 0.0668, 'dirt_brown': 0.1796, 'grass_green': 0.4647, 'grey_tex': 0.0072}
+
+NOTE: this fixture is the corpus world (the ROIs frame grass tops). The absolute dirt_brown/grey_tex
+fractions are therefore NOT comparable with the 2026-10-04 cycles (/private/tmp/sodcut-fixture is gone).
+The pre-registered invariant holds: no pure-black regression, identical across both arms.

@@ -1,0 +1,35 @@
+kernel sha256: 16bcd60242c54890fda728e294ad41935619ff4b499f359f539d6e44dae45b74
+
+Marker counts (str.count on console.log):
+
+marker                                                arm A  arm B
+joined world via quick-play                               1      1
+client-ready after                                        1      1
+clean disconnect observed                                 1      1
+seeded NeoForge LoadingModList                            1      1
+now targets                                               6      6
+SpriteContents.<init>                                     2      2
+applies only partially                                   28     28
+@Mixin target type mismatch                               0      0
+ParticleEngine is not an interface                        0      0
+SYNTHETIC default method over ParticleEngine              2      2
+create failed during client setup                         0      0
+Render layers can only be set                             0      0
+HumanoidArmorLayer.renderArmorPiece                       1      1
+re-keyed to getBlock                                      2      2
+re-keyed to getItem                                       2      2
+blockColors is an IdMapper                                1      1
+itemColors is an IdMapper                                 1      1
+
+the 6 'now targets' lines (arm A; arm B identical modulo timestamps):
+
+  [07:23:24] [main/INFO]: [Forbric/Mixin] net.fabricmc.fabric.mixin.client.keybinding.GameOptionsMixin: loadHook now targets net.minecraft.client.Options.load(Z)V — Mixin bound its selector to the merge-added stub ()V, which only forwards to it
+  [07:23:24] [main/INFO]: [Forbric/Mixin] net.fabricmc.fabric.mixin.client.indigo.renderer.BlockModelRendererMixin: hookRender$forbricshim now targets net.minecraft.client.renderer.block.ModelBlockRenderer.tesselateBlock(Lnet/minecraft/world/level/BlockAndTintGetter;Lnet/minecraft/client/resources/model/BakedModel;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/core/BlockPos;Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;ZLnet/minecraft/util/RandomSource;JILnet/neoforged/neoforge/client/model/data/ModelData;Lnet/minecraft/client/renderer/RenderType;)V — Mixin bound its selector to the merge-added stub (Lnet/minecraft/world/level/BlockAndTintGetter;Lnet/minecraft/client/resources/model/BakedModel;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/core/BlockPos;Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;ZLnet/minecraft/util/RandomSource;JI)V, which only forwards to it; the handler still receives the stub's arguments
+  [07:23:24] [main/INFO]: [Forbric/Mixin] net.fabricmc.fabric.mixin.client.rendering.ArmorFeatureRendererMixin: renderArmor$forbricshim now targets net.minecraft.client.renderer.entity.layers.HumanoidArmorLayer.renderArmorPiece(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/entity/EquipmentSlot;ILnet/minecraft/client/model/HumanoidModel;FFFFFF)V — Mixin bound its selector to the merge-added stub (Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/entity/EquipmentSlot;ILnet/minecraft/client/model/HumanoidModel;)V, which only forwards to it; the handler still receives the stub's arguments
+  [07:23:24] [main/INFO]: [Forbric/Mixin] net.fabricmc.fabric.mixin.resource.loader.client.GameOptionsMixin: onLoad now targets net.minecraft.client.Options.load(Z)V — Mixin bound its selector to the merge-added stub ()V, which only forwards to it
+  [07:23:24] [main/INFO]: [Forbric/Mixin] net.caffeinemc.mods.sodium.mixin.features.textures.mipmaps.SpriteContentsMixin: sodium$beforeGenerateMipLevels now targets net.minecraft.client.renderer.texture.SpriteContents.<init>(Lnet/minecraft/resources/ResourceLocation;Lnet/minecraft/client/resources/metadata/animation/FrameSize;Lcom/mojang/blaze3d/platform/NativeImage;Lnet/minecraft/server/packs/resources/ResourceMetadata;Lnet/minecraftforge/client/textures/ForgeTextureMetadata;)V — Mixin bound its selector to the merge-added stub (Lnet/minecraft/resources/ResourceLocation;Lnet/minecraft/client/resources/metadata/animation/FrameSize;Lcom/mojang/blaze3d/platform/NativeImage;Lnet/minecraft/server/packs/resources/ResourceMetadata;)V, which only forwards to it; a NeoForge mod, and NeoForge's own class runs that selector on the body
+  [07:23:24] [main/INFO]: [Forbric/Mixin] net.caffeinemc.mods.sodium.mixin.features.textures.scan.SpriteContentsMixin: sodium$beforeGenerateMipLevels now targets net.minecraft.client.renderer.texture.SpriteContents.<init>(Lnet/minecraft/resources/ResourceLocation;Lnet/minecraft/client/resources/metadata/animation/FrameSize;Lcom/mojang/blaze3d/platform/NativeImage;Lnet/minecraft/server/packs/resources/ResourceMetadata;Lnet/minecraftforge/client/textures/ForgeTextureMetadata;)V — Mixin bound its selector to the merge-added stub (Lnet/minecraft/resources/ResourceLocation;Lnet/minecraft/client/resources/metadata/animation/FrameSize;Lcom/mojang/blaze3d/platform/NativeImage;Lnet/minecraft/server/packs/resources/ResourceMetadata;)V, which only forwards to it; a NeoForge mod, and NeoForge's own class runs that selector on the body
+
+control (0.3.5-beta, kernel a56bf626), quoted from the 0.3.5 release gate and 2026-10-06-bughunt-create:
+  2 'now targets' lines; '@Mixin target type mismatch … ParticleEngine is not an interface' = 2 lines
+  (the rejection this release removes).

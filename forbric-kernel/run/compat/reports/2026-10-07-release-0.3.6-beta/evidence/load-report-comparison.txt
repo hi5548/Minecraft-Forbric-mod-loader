@@ -1,0 +1,46 @@
+load-report.txt — arm A (the 12) vs the 0.3.5-beta release gate (kernel a56bf626):
+  arm A  19427 bytes  md5=68ae1f74f2606768561176ebe6ef005e
+  ctrl   19427 bytes  md5=68ae1f74f2606768561176ebe6ef005e
+  BYTE-IDENTICAL: True
+
+load-report.txt — arm B (12+create): 24429 bytes  md5=581e8128dbb16813321d00b04a4942ff
+  arm A vs arm B (unified diff, n=0):
+
+  --- arm-A
+  +++ arm-B
+  @@ -48,0 +49,18 @@
+  +  Create  (create)
+  +    Mod dependency integration — Entrypoint member closure remains unproved: com/simibubi/create/foundation/data/CreateRegistrate#registerEventListeners(Lnet/neoforged/bus/api/IEventBus;)Lcom/simibubi/create/foundation/data/CreateRegistrate;: local helper dispatch may select another body
+  +    arbitration:entry-closure:com/simibubi/create/foundation/data/CreateRegistrate#registerEventListeners(Lnet/neoforged/bus/api/IEventBus;)Lcom/simibubi/create/foundation/data/CreateRegistrate;:local helper dispatch may select another body:true
+  +  Create  (create)
+  +    Mod dependency integration — Entrypoint member closure remains unproved: com/simibubi/create/foundation/events/ClientEvents#onLoadComplete(Lnet/neoforged/fml/event/lifecycle/FMLLoadCompleteEvent;)V: helper closure limit (depth=0, nodes=256, instructions=7832)
+  +    arbitration:entry-closure:com/simibubi/create/foundation/events/ClientEvents#onLoadComplete(Lnet/neoforged/fml/event/lifecycle/FMLLoadCompleteEvent;)V:helper closure limit (depth=0, nodes=256, instructions=7832):true
+  +  Create  (create)
+  +    Mod dependency integration — Entrypoint member closure remains unproved: com/simibubi/create/foundation/model/ModelSwapper#registerListeners(Lnet/neoforged/bus/api/IEventBus;)V: local helper dispatch may select another body
+  +    arbitration:entry-closure:com/simibubi/create/foundation/model/ModelSwapper#registerListeners(Lnet/neoforged/bus/api/IEventBus;)V:local helper dispatch may select another body:true
+  +  Create  (create)
+  +    Mod dependency integration — entrypoint-reachable com/simibubi/create/content/logistics/box/PackageRenderer#renderBox(Lnet/minecraft/world/entity/Entity;FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;ILdev/engine_room/flywheel/lib/model/baked/PartialModel;)V uses INVOKEINTERFACE net/createmod/catnip/render/SuperByteBuffer#nudge(I)Ldev/engine_room/flywheel/lib/transform/Translate; (activation or member resolution not proved)
+  +    arbitration:entry:com/simibubi/create/content/logistics/box/PackageRenderer#renderBox(Lnet/minecraft/world/entity/Entity;FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;ILdev/engine_room/flywheel/lib/model/baked/PartialModel;)V:net/createmod/catnip/render/SuperByteBuffer#nudge(I)Ldev/engine_room/flywheel/lib/transform/Translate;:185
+  +  Create  (create)
+  +    Mod dependency integration — entrypoint-reachable com/simibubi/create/content/logistics/box/PackageRenderer#renderBox(Lnet/minecraft/world/entity/Entity;FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;ILdev/engine_room/flywheel/lib/model/baked/PartialModel;)V uses INVOKEINTERFACE net/createmod/catnip/render/SuperByteBuffer#rotateCentered(FLnet/minecraft/core/Direction;)Ldev/engine_room/flywheel/lib/transform/Affine; (activation or member resolution not proved)
+  +    arbitration:entry:com/simibubi/create/content/logistics/box/PackageRenderer#renderBox(Lnet/minecraft/world/entity/Entity;FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;ILdev/engine_room/flywheel/lib/model/baked/PartialModel;)V:net/createmod/catnip/render/SuperByteBuffer#rotateCentered(FLnet/minecraft/core/Direction;)Ldev/engine_room/flywheel/lib/transform/Affine;:185
+  +  Create  (create)
+  +    Mod dependency integration — entrypoint-reachable com/simibubi/create/content/logistics/box/PackageRenderer#renderBox(Lnet/minecraft/world/entity/Entity;FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;ILdev/engine_room/flywheel/lib/model/baked/PartialModel;)V uses INVOKEINTERFACE net/createmod/catnip/render/SuperByteBuffer#translate(DDD)Ldev/engine_room/flywheel/lib/transform/Translate; (activation or member resolution not proved)
+  +    arbitration:entry:com/simibubi/create/content/logistics/box/PackageRenderer#renderBox(Lnet/minecraft/world/entity/Entity;FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;ILdev/engine_room/flywheel/lib/model/baked/PartialModel;)V:net/createmod/catnip/render/SuperByteBuffer#translate(DDD)Ldev/engine_room/flywheel/lib/transform/Translate;:185
+  @@ -54,0 +73,3 @@
+  +  Fabric Data Generation API (v1)  (fabric-data-generation-api-v1)
+  +    Mixin injection addReplaced — A required injector's attachment in the actual defined class could not be established
+  +    mixin-injector:fabric-data-generation-api-v1.mixins.json:net.fabricmc.fabric.mixin.datagen.TagProviderMixin#addReplaced(ZLnet/minecraft/tags/TagBuilder;)Z@net.minecraft.data.tags.TagsProvider
+  @@ -123,0 +145,3 @@
+  +  Flywheel  (flywheel)
+  +    Mod dependency integration — Entrypoint member closure remains unproved: dev/engine_room/flywheel/impl/NeoForgeFlwConfig#registerSpecs(Lnet/neoforged/fml/ModContainer;)V: local helper dispatch may select another body
+  +    arbitration:entry-closure:dev/engine_room/flywheel/impl/NeoForgeFlwConfig#registerSpecs(Lnet/neoforged/fml/ModContainer;)V:local helper dispatch may select another body:true
+
+Both arms' aggregate first line is identical: '这一次启动，9 个 mod 有一部分没有跑起来。'
+The 9 'did not finish' owners are the same set in both arms; Create is NOT among them:
+  fabric-content-registries-v0, fabric-events-interaction-v0, fabric-item-api-v1,
+  fabric-object-builder-api-v1, fabric-particles-v1, fabric-recipe-api-v1,
+  fabric-registry-sync-v0, fabric-rendering-fluids-v1, modmenu.
+Create adds only informational findings (3 entrypoint-closure + 3 entrypoint-reachable arbitration lines),
+plus one fabric-data-generation-api-v1 injector finding and one flywheel closure finding;
+it adds no 'did not finish' owner and does not move the aggregate.

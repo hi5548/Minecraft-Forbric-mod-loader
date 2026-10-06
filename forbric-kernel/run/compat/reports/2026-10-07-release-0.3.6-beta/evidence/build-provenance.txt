@@ -1,0 +1,60 @@
+# Build provenance — the released candidate kernel jar
+
+REPORTED release kernel jar : /private/tmp/rel036/release-kernel.jar
+sha256                     : 16bcd60242c54890fda728e294ad41935619ff4b499f359f539d6e44dae45b74
+entries                    : 735 (734 boot + 1 nested runtime)
+
+## Source
+
+Clean git worktree /private/tmp/rel036/wt, detached at the main tip
+`13e4ff3fb2b4ab9234429dabbdcb4cf0f46e616e` — the stub-table lane's last source commit
+(`git diff --stat 232f8de3 13e4ff3f` touches `CarrierStubCensusTest.java` only). Built there
+rather than in the main tree so the artifact cannot pick up a concurrent lane's uncommitted
+`forbric-kernel/src/main/resources/...` edits — this is what "clean entry set" means here.
+
+## Assembly
+
+`energy-4.1.0-named.jar` is absent on this box and `/Volumes/ORICO` is unmounted, so the game side
+cannot be compiled here. Same assembly as the 0.3.5 release and the 2026-10-06 lanes:
+
+1. boot half  `./gradlew --offline -q jar` in `/private/tmp/rel036/wt/forbric-kernel`
+              -> forbric-kernel-0.1.0-SNAPSHOT.jar
+              sha256 30cef190ddf2cf065f2f0344ab0ee8f8ce7bec050e041455db93445cb9938af6
+              (no staged game jars -> the jar task wires in no nested runtime, by design)
+2. runtime half  `META-INF/jars/forbric-kernel-runtime.jar` copied BYTE-FOR-BYTE out of the
+              published 0.3.5-beta jar (`libraries/net/forbric/forbric-kernel/0.3.5-beta/`)
+              sha256 67c2a49b55c8ef860e552ec5b9e028d8836e68d46f5bb4595a40016debde8c6d
+              `git diff --stat b1b90566 13e4ff3f -- forbric-kernel/src/runtime` is EMPTY, so the
+              game side is untouched by everything this release adds.
+3. `zip -X` the runtime half into the boot half.
+
+## Checks on the frozen jar
+
+- 735 entries; 0 stale-numbered entries (`X N.class`, `X 3.txt`, `… 3.IMixinService`, …).
+- The boot half's non-directory entry set is EXACTLY the published 0.3.5-beta boot jar's
+  (checked with a name-set difference after removing the nested runtime jar and MANIFEST.MF:
+  added 0 / removed 0).
+- `carrier-stubs.txt` inside it carries **95 data rows**, sha256
+  `4736ce5d00264be4869d7a1158d63842f61c80d4a9cad03aa70caf0e5a4776ea`
+  — byte-identical to the file at `13e4ff3f`.
+- The compiled transformer carries the 0.3.6 log text
+  `SYNTHETIC default method over ParticleEngine` (the particle-accessor fix), and
+  `KernelLifecycle.class` carries `setClientModLoadingState` (the Create fix).
+- The W7Harness's `assert_game_side` accepted it (`META-INF/jars/forbric-kernel-runtime.jar`
+  present) and both arms ran these exact bytes
+  (`frozen/frozen-kernel-sha256.txt` = this sha in both run dirs).
+
+## The arm corpora
+
+- /private/tmp/rel036/corpus12 — the user's real 12, byte-identical to
+  `/Applications/.minecraft/versions/1.21.1-forbric/mods/*.jar` (checked, all 12 sha256 equal).
+- /private/tmp/rel036/corpus13 — the same 12 + `create-1.21.1-6.0.10.jar` taken from
+  `/Applications/.minecraft/versions/1.21.1-NeoForge/mods/`,
+  sha256 `ef87fe5709f1ba1f5b8bb20a2925b5afb4669e178fd6d8bf10c167759eefe37a`
+  (the same bytes the 2026-10-06-bughunt-create lane used).
+
+## Working-tree note
+
+Everything ran out of /private/tmp/rel036; the main tree's `forbric-kernel/build/` was not used to
+produce these bytes, the released artifact under `/Applications/.minecraft/libraries/net/forbric/`
+was not touched before the install step, and the user's 12 mods were not touched at all.

@@ -36,7 +36,9 @@ import net.forbric.kernel.util.ForbricLog;
  * <p>Mixin binds a selector without a descriptor to the FIRST declared method of that name (the selector's default
  * quantifier is one match; {@code TargetSelectors} stops there), and one with a descriptor to exactly that method. A
  * carrier that widened a vanilla method usually kept vanilla's signature in place as a stub —
- * {@code Player.getDestroySpeed(BlockState)} is {@code return getDestroySpeed(state, null)} on the merged base — and
+ * {@code Player.getDestroySpeed(BlockState)} forwards to a widened overload on the merged base, which carries both
+ * MinecraftForge's same-named {@code getDestroySpeed(BlockState, BlockPos)} and NeoForge's renamed
+ * {@code getDigSpeed(BlockState, BlockPos)} — and
  * put the body in the new overload after it. A Fabric mod was compiled against vanilla, where that one method IS the
  * body, so its injector lands on the stub: an anchor inside the body is simply missing, and a {@code HEAD} or
  * {@code RETURN} injection runs only when something calls the stub. Nothing on the merged base calls
@@ -983,7 +985,9 @@ public final class MixinStubRebind {
 	}
 
 	/**
-	 * The one same-name overload {@code stub} forwards to, with the argument mapping, when {@code stub} is nothing else:
+	 * The one overload {@code stub} forwards to — of the same name, or a RENAMED one the carrier added, as NeoForge's
+	 * {@code getDigSpeed(BlockState, BlockPos)} is for vanilla's {@code Player.getDestroySpeed(BlockState)} — with the
+	 * argument mapping, when {@code stub} is nothing else:
 	 * loads, constants, static fields, zero-argument static factories and argument construction feeding one call,
 	 * whose result is returned unchanged. Null otherwise.
 	 */
@@ -1043,8 +1047,20 @@ public final class MixinStubRebind {
 					stack.add(-1);
 					continue;
 				}
-				boolean delegationCall = m.owner.equals(owner.name) && m.name.equals(stub.name) && !m.desc.equals(stub.desc)
-						&& (op == Opcodes.INVOKESTATIC) == isStatic;
+				// The delegate may be RENAMED, not just a same-name overload: NeoForge's Player keeps vanilla's
+				// getDestroySpeed(BlockState) as a stub over the widened getDigSpeed(BlockState, BlockPos), and the
+				// old same-name rule could not see that call, so the row naming that overload stayed inert and its
+				// Shape column read body where the carrier's own class also forwards. Owner, static-ness and a
+				// different descriptor are the whole test; the argument mapping below still has to account for every
+				// stub parameter, or nothing moves.
+				// A CONSTRUCTOR is the exception: it must forward through this(...) (the branch above already reads
+				// that call), never to a helper it merely calls after super(). The merged DetectorRailBlock's
+				// <init>(Properties) is `super(properties); registerDefaultState();` — vanilla's constructor with
+				// setDefaultState extracted — and an injector moved off it would land on a method the block also
+				// reaches by other paths.
+				boolean delegationCall = m.owner.equals(owner.name) && !m.desc.equals(stub.desc)
+						&& (op == Opcodes.INVOKESTATIC) == isStatic
+						&& (!"<init>".equals(stub.name) || m.name.equals(stub.name));
 				if (!delegationCall) return null;
 				int receiver = isStatic ? 0 : 1;
 				if (stack.size() != args.length + receiver) return null;

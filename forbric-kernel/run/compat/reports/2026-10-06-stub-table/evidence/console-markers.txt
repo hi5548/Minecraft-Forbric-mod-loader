@@ -1,29 +1,32 @@
-== fix arm (kernel 1f9a1997f912dd588499c2bfce12a99cc335e965a664d7396d0be900bc7999f, table 94 rows) ==
+== final fix arm: 'now targets' (6 lines; the 4 non-SpriteContents ones are rows this lane added) ==
+  net.fabricmc.fabric.mixin.client.keybinding.GameOptionsMixin: loadHook now targets net.minecraft.client.Options.load(Z)V — Mixin bound its selector to the merge-added stub ()V, which only forwards
+  net.fabricmc.fabric.mixin.client.indigo.renderer.BlockModelRendererMixin: hookRender$forbricshim now targets net.minecraft.client.renderer.block.ModelBlockRenderer.tesselateBlock(Lnet/minecraft/worl
+  net.fabricmc.fabric.mixin.client.rendering.ArmorFeatureRendererMixin: renderArmor$forbricshim now targets net.minecraft.client.renderer.entity.layers.HumanoidArmorLayer.renderArmorPiece(Lcom/mojang/
+  net.fabricmc.fabric.mixin.resource.loader.client.GameOptionsMixin: onLoad now targets net.minecraft.client.Options.load(Z)V — Mixin bound its selector to the merge-added stub ()V, which only forwa
+  net.caffeinemc.mods.sodium.mixin.features.textures.mipmaps.SpriteContentsMixin: sodium$beforeGenerateMipLevels now targets net.minecraft.client.renderer.texture.SpriteContents.<init>(Lnet/minecraft/
+  net.caffeinemc.mods.sodium.mixin.features.textures.scan.SpriteContentsMixin: sodium$beforeGenerateMipLevels now targets net.minecraft.client.renderer.texture.SpriteContents.<init>(Lnet/minecraft/res
 
--- 'now targets' lines --
-  [07:10:22] [main/INFO]: [Forbric/Mixin] net.fabricmc.fabric.mixin.client.rendering.ArmorFeatureRendererMixin: renderArmor$forbricshim now targets net.minecraft.client.renderer.entity.layers.HumanoidArmorLayer.renderArmorPiece(Lcom/mojang/blaze3d/vertex/PoseSta
-  [07:10:23] [main/INFO]: [Forbric/Mixin] net.caffeinemc.mods.sodium.mixin.features.textures.mipmaps.SpriteContentsMixin: sodium$beforeGenerateMipLevels now targets net.minecraft.client.renderer.texture.SpriteContents.<init>(Lnet/minecraft/resources/ResourceLoca
-  [07:10:23] [main/INFO]: [Forbric/Mixin] net.caffeinemc.mods.sodium.mixin.features.textures.scan.SpriteContentsMixin: sodium$beforeGenerateMipLevels now targets net.minecraft.client.renderer.texture.SpriteContents.<init>(Lnet/minecraft/resources/ResourceLocatio
-  count: 3
+== control arm (0.3.5 a56bf626): 'now targets' (2 lines) ==
+  net.caffeinemc.mods.sodium.mixin.features.textures.mipmaps.SpriteContentsMixin: sodium$beforeGenerateMipLevels now targets net.minecraft.client.renderer.texture.SpriteContents.<init>(Lnet/minecraft/
+  net.caffeinemc.mods.sodium.mixin.features.textures.scan.SpriteContentsMixin: sodium$beforeGenerateMipLevels now targets net.minecraft.client.renderer.texture.SpriteContents.<init>(Lnet/minecraft/res
 
--- sodium cutout: 'now targets ... SpriteContents.<init>(...ForgeTextureMetadata)V' (expect 2) --
-  count: 2
+== sodium cutout ==
+  now targets ... SpriteContents.<init>(...ForgeTextureMetadata)V : 2 (fix) / 2 (control)
+  applies only partially ... SpriteContents.originalImage   : 0 / 0
 
--- 'applies only partially ... SpriteContents.originalImage' (expect 0) --
-  count: 0
+== colour markers (fix / control) ==
+  2 site(s) re-keyed to getBlock             2 / 2
+  1 site(s) re-keyed to getItem              2 / 2
+  blockColors is an IdMapper                 1 / 1
+  itemColors is an IdMapper                  1 / 1
 
--- colour markers (expect >=1 each) --
-  2 site(s) re-keyed to getBlock                             2
-  1 site(s) re-keyed to getItem                              2
-  BlockColorsMixin's @Shadow blockColors is an IdMapper      1
-  ItemColorsMixin's @Shadow itemColors is an IdMapper        1
+== 26.2 spellings in [Forbric/...] findings (fix) ==
+  LevelLoadingScreen       0
+  resources/Identifier     0
 
--- 26.2 spellings inside [Forbric/...] findings other than ClientSmoke (expect 0) --
-  LevelLoadingScreen           0
-  resources/Identifier         0
-
--- boot gate lines --
-  [07:10:20] [main/INFO]: [Forbric/Seed] seeded NeoForge LoadingModList with 64 mod(s) (16 Forge-family, 48 Fabric for presence) — mods that resolve the
-  [07:10:37] [Render thread/INFO]: [Forbric/ClientSmoke] joined world via quick-play: W7Client
-  [07:10:46] [Render thread/INFO]: [Forbric/ClientSmoke] client-ready after 200 world tick(s)
-  [07:10:49] [Render thread/INFO]: [Forbric/ClientSmoke] clean disconnect observed; stopping client
+== boot gate lines (fix) ==
+  [07:20:39] [main/INFO]: [Forbric/Seed] seeded NeoForge LoadingModList with 64 mod(s) (16 Forge-family, 48 Fabric for presence) — mods that
+  [07:20:56] [Render thread/INFO]: [Forbric/ClientSmoke] joined world via quick-play: W7Client
+  [07:21:05] [Render thread/INFO]: [Forbric/ClientSmoke] client-ready after 200 world tick(s)
+  [07:21:06] [Render thread/INFO]: [Forbric/ClientSmoke] requesting clean disconnect after 220 world tick(s)
+  [07:21:07] [Render thread/INFO]: [Forbric/ClientSmoke] clean disconnect observed; stopping client

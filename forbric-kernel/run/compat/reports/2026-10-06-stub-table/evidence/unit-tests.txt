@@ -1,0 +1,37 @@
+== scoped unit tests, 1.21.1 fixtures actually loaded (worktree @ 13e4ff3f) ==
+
+JAVA : JDK 25 (gradle's own toolchain), MC_DIR=/Applications/.minecraft (via -Pforbric.mcLibraries)
+Kernel sources : forbric-kernel @ 13e4ff3f
+
+$ FORBRIC_COMPAT_FIXTURES_REQUIRED=1 ./gradlew --offline test --tests '*CarrierStubCensusTest*' \
+      -Pforbric.mcLibraries=/Applications/.minecraft/libraries
+> Task :test
+test: 2 tests, 0 skipped, 0 failed
+BUILD SUCCESSFUL
+build/test-results/test/TEST-net.forbric.kernel.mixin.CarrierStubCensusTest.xml:
+  tests="2" skipped="0" failures="0" errors="0"
+
+  This is the assertion the lane exists for: it RE-DERIVES carrier-stubs.txt from
+  patched-mc-merged-1.21.1 + client-official + patched-mc-{forge,neoforge}-1.21.1 and compares the
+  set to the shipped file. It used to hardcode the 26.2 paths and skip; on this box it now runs and
+  the sets are equal (95 rows, both directions).
+
+$ ./gradlew --offline test --tests '*MixinStubRebindTest*' -Pforbric.mcLibraries=/Applications/.minecraft/libraries
+> Task :test
+test: 34 tests, 28 skipped, 0 failed
+BUILD SUCCESSFUL
+build/test-results/test/TEST-net.forbric.kernel.mixin.MixinStubRebindTest.xml:
+  tests="34" skipped="28" failures="0" errors="0"
+
+  The 28 skips are the tests whose fixtures are gone from this box (the 26.2 merged jar under
+  ../forbric-loader/run/merged-base, the sweep90 mods, run/client-merged-pack/mods). The 6 that can
+  run include the two this change re-pointed (theOwnersThatHeadARowAreTheTablesOwners,
+  aRowAppliesOnlyWhereTheMethodReallyForwardsToItsDelegate) and they pass on the 95-row table.
+
+NOT RUN HERE: the whole suite (./gradlew test with no --tests filter) needs
+stagedGameJars + the Team Reborn Energy fixture (verifyRebornEnergy), neither of which exists on this
+box — the same blocker the previous lanes recorded. `--tests` scoped invocations above are the
+reachable surface. Tests outside the two classes above that reference the removed 26.2 rows
+(fusionsSpriteCaptureMovesToTheBodyMinecraftForgeRan, aNeoForgeModMovesOffAStubOnlyMinecraftForgeHas,
+the FuelValues pair) all read MERGED/the sweep jars and therefore skip here; they are pinned to the
+26.2 base and are listed as follow-up work in the report.

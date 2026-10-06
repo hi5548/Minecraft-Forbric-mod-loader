@@ -1,20 +1,20 @@
-source        : worktree /Users/charlescai/Desktop/dsh/实验/forbric/stubtable-wt @ 72fe8d7e
-                (main; the table commit lands on top of the rule commit 4a0a5302)
+source        : main @ 13e4ff3f (frozen); built in the worktree
+                /Users/charlescai/Desktop/dsh/实验/forbric/stubtable-wt (detached at 13e4ff3f)
 fix kernel    : /Users/charlescai/Desktop/dsh/实验/forbric/stubtable/kernel-stubtable.jar
-  sha256      : 1f9a19977f912dd588499c2bfce12a99cc335e965a664d7396d0be900bc7999f
+  sha256      : 0654d448cbfd9dbef656218bf74ad68c823015391ec4361c0c34200d2bc92b09
 control kernel: /Applications/.minecraft/libraries/net/forbric/forbric-kernel/0.3.5-beta/forbric-kernel-0.3.5-beta.jar
   sha256      : a56bf626e983b1dda81cf1b15f5c7f485eaec9c13cb099f1d96ef1d136a6e721
 
 Assembly (energy-4.1.0-named.jar absent on this box; /Volumes/ORICO unmounted):
   1. ./gradlew --offline -q jar                       (boot half; no staged game jars -> no nested runtime)
   2. game side taken from the 0.3.5 artifact's META-INF/jars/forbric-kernel-runtime.jar
-     (src/runtime and src/main/resources are unchanged between b1b90566 and HEAD: git diff --stat is empty)
+     (src/runtime is unchanged between b1b90566 and HEAD: git diff --stat is empty)
   3. injected as META-INF/jars/forbric-kernel-runtime.jar
 
 Verification of the frozen fix jar:
-  - carrier-stubs.txt inside it carries 94 data rows (the landed table)
+  - carrier-stubs.txt inside it carries 95 data rows (the landed table)
   - META-INF/jars/forbric-kernel-runtime.jar present
-  - the MixinStubRebind.class in it derives 95 rows on the staged base and the table probes 45 pass / 49 stale
+  - the MixinStubRebind.class in it derives 95 rows on the staged base and the table probes 95/95
 
 Staged artifacts (sha256):
   c92f9b0826c9d4d3c1933ccf417d045467ffd113f9bddfb4b2faefb64b92075d  /Applications/.minecraft/.forbric-build/client-official.jar
@@ -25,7 +25,7 @@ Staged artifacts (sha256):
 Harness stage (symlinks): merged-base/{patched-mc-merged-1.21.1.jar,forge-runtime-interop.jar},
 neoforge-runtime/neoforge-runtime.jar.
 MC root: symlinks to libraries/ assets/ .forbric/mappings/ + extracted macos-arm64 LWJGL natives.
+World fixture: w7/corpus/client-world (the corpus one).
 
 Note: /private/tmp was wiped between the previous cycles and this one (the release lane's stage, world fixture and
-remap cache are gone). Everything above was rebuilt from /Applications/.minecraft; the world fixture is the corpus
-one (w7/corpus/client-world/W7Client), not the deleted /private/tmp/sodcut-fixture.
+remap cache are gone). Everything above was rebuilt from /Applications/.minecraft.

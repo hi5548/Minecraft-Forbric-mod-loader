@@ -105,7 +105,7 @@ class CarrierStubCensusTest {
 		assertRow(rows, "net/minecraft/client/multiplayer/ClientPacketListener#startWaitingForNewLevel(", "forge=body neo=stub");
 		assertRow(rows, "net/minecraft/client/resources/language/ClientLanguage#<init>(", "forge=body neo=stub");
 		assertRow(rows, "net/minecraft/client/renderer/entity/layers/HumanoidArmorLayer#renderArmorPiece(", "forge=body neo=stub");
-		assertRow(rows, "net/minecraft/client/multiplayer/ClientLevel#addBreakingBlockEffect(", "forge=descriptor-body neo=stub");
+		assertRow(rows, "net/minecraft/resources/RegistryDataLoader$RegistryData#<init>(", "forge=descriptor-body neo=stub");
 		// The mirror: NeoForge kept vanilla's signature as the body where MinecraftForge forwards.
 		assertRow(rows, "net/minecraft/network/protocol/login/custom/DiscardedQueryAnswerPayload#<init>(", "forge=stub neo=body");
 		assertRow(rows, "net/minecraft/world/item/crafting/RecipeManager#<init>(", "forge=stub neo=body");

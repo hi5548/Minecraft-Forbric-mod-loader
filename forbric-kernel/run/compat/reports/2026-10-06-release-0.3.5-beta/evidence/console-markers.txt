@@ -1,0 +1,15 @@
+== sodium cutout: 'now targets ... SpriteContents.<init>(...ForgeTextureMetadata)V' (expect 2) ==
+  [11:27:45] [main/INFO]: [Forbric/Mixin] net.caffeinemc.mods.sodium.mixin.features.textures.mipmaps.SpriteContentsMixin: sodium$beforeGenerateMipLevels now targets net.minecraft.client.renderer.texture.SpriteContents.<init>(Lnet/minecraft/resources/ResourceLocation;Lnet/minecraft/client/resources/metadata/animation/FrameSize;Lcom/mojang/blaze3d/platform/NativeImage;Lnet/minecraft/server/packs/resources/ResourceMetadata;Lnet/minecraftforge/client/textures/ForgeTextureMetadata;)V
+  [11:27:45] [main/INFO]: [Forbric/Mixin] net.caffeinemc.mods.sodium.mixin.features.textures.scan.SpriteContentsMixin: sodium$beforeGenerateMipLevels now targets net.minecraft.client.renderer.texture.SpriteContents.<init>(Lnet/minecraft/resources/ResourceLocation;Lnet/minecraft/client/resources/metadata/animation/FrameSize;Lcom/mojang/blaze3d/platform/NativeImage;Lnet/minecraft/server/packs/resources/ResourceMetadata;Lnet/minecraftforge/client/textures/ForgeTextureMetadata;)V
+  count: 2
+
+== sodium cutout: 'applies only partially ... SpriteContents.originalImage' (expect 0) ==
+  count: 0
+
+== colour markers (expect >=1 each of 4 kinds) ==
+  [11:27:43] [main/INFO]: [Forbric/MergedBaseCompat] net.fabricmc.fabric.mixin.client.rendering.BlockColorsMixin's @Shadow blockColors is an IdMapper this base no longer has, so Mixin could not bind it and discarded the whole mixin; it now reads the live Map by raw key
+  [11:27:43] [main/INFO]: [Forbric/MergedBaseCompat] net.fabricmc.fabric.mixin.client.rendering.ItemColorsMixin's @Shadow itemColors is an IdMapper this base no longer has, so Mixin could not bind it and discarded the whole mixin; it now reads the live Map by raw key
+  [11:27:43] [main/INFO]: [Forbric/MergedBaseCompat] net.minecraft.client.color.block.BlockColors looked its colours up through a Forge registry delegate while its own register stored the raw object, so every one missed and fell back to MapColor (2 site(s) re-keyed to getBlock)
+  [11:27:43] [main/INFO]: [Forbric/MergedBaseCompat] net.minecraft.client.color.item.ItemColors looked its colours up through a Forge registry delegate while its own register stored the raw object, so every one missed and fell back to MapColor (1 site(s) re-keyed to getItem)
+  [11:27:52] [Render thread/INFO]: [Forbric/MergedBaseCompat] net.minecraft.client.color.block.BlockColors looked its colours up through a Forge registry delegate while its own register stored the raw object, so every one missed and fell back to MapColor (2 site(s) re-keyed to getBlock)
+  [11:27:52] [Render thread/INFO]: [Forbric/MergedBaseCompat] net.minecraft.client.color.item.ItemColors looked its colours up through a Forge registry delegate while its own register stored the raw object, so every one missed and fell back to MapColor (1 site(s) re-keyed to getItem)

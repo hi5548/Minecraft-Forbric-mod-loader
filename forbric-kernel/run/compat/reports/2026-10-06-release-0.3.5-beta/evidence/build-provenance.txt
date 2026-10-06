@@ -1,0 +1,19 @@
+release kernel jar : /private/tmp/rel035/release-kernel.jar
+sha256             : a56bf626e983b1dda81cf1b15f5c7f485eaec9c13cb099f1d96ef1d136a6e721
+source             : main tip b1b90566 (forbric-kernel/build/libs/forbric-kernel-0.1.0-SNAPSHOT.jar)
+control (0.3.4)    : /private/tmp/val4-control/frozen/forbric-kernel-client.jar  sha bf56012d…
+
+Assembly (energy-4.1.0-named.jar absent on this box; /Volumes/ORICO unmounted):
+  1. ./gradlew --offline -q jar            (boot half; no staged game jars -> no nested runtime)
+  2. runtime half repacked from build/classes/java/runtime + build/resources/runtime
+  3. injected as META-INF/jars/forbric-kernel-runtime.jar
+
+Verification (evidence):
+  - rebuilt boot half vs the tip jar already in build/libs: 292/292 entries, 0 content-differing entries
+    (only the nested runtime jar differs by name); i.e. the boot half is reproduced from the tip source.
+  - embedded runtime payload: 292 entries, identical CRCs to the 0.3.4 runtime payload except MANIFEST.MF
+    (the runtime half is unaffected by this release's boot-half changes).
+  - 0 duplicate-name classes (' N.class') in the jar.
+  - installer embedded kernel == this jar, byte for byte:
+      forbric/libs/net/forbric/forbric-kernel/0.3.5-beta/forbric-kernel-0.3.5-beta.jar
+      sha256 a56bf626e983b1dda81cf1b15f5c7f485eaec9c13cb099f1d96ef1d136a6e721

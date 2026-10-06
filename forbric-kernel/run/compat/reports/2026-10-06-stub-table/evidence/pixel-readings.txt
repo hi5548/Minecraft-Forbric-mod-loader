@@ -1,0 +1,37 @@
+== two arms, SAME corpus, SAME world fixture (w7/corpus/client-world/W7Client), SAME ROIs ==
+  control = 0.3.5-beta a56bf626 (frozen from the released artifact)
+  fix     = 1f9a19977f912dd588499c2bfce12a99cc335e965a664d7396d0be900bc7999f (this lane)
+
+NOTE (pre-registered): the fixture the 2026-10-04/2026-10-06 cycles used (/private/tmp/sodcut-fixture)
+was deleted with the rest of /private/tmp before this run, so the ROIs below frame a DIFFERENT scene and the
+2026-10-04 readings (grass-side dirt_brown 0.7856, dandelion black 0.0399) are NOT comparable; what IS
+comparable is fix vs control, byte scene and all. See the preregistration §3 caveat.
+
+== /Users/charlescai/Desktop/dsh/实验/forbric/stubtable/run-control/per-mod/run/000-modmenu__fabric/screenshots/2026-10-07_07.12.46.png (1708x960)
+  grass_side box=(1180, 455, 1240, 725) n=16200 mean_rgb=(74.2, 90.4, 44.5)
+    frac={'grass_green': 0.8172, 'other': 0.1032, 'dirt_brown': 0.0707, 'black': 0.0089}
+    top_rgb=[((61, 81, 38), 1046), ((75, 97, 46), 940), ((84, 109, 52), 813), ((96, 125, 60), 796), ((96, 125, 59), 547), ((67, 86, 42), 481)]
+  dandelion box=(640, 440, 860, 690) n=55000 mean_rgb=(69.1, 88.7, 42.5)
+    frac={'grass_green': 0.9786, 'other': 0.0047, 'dirt_brown': 0.012, 'grey_tex': 0.0001, 'black': 0.0005, 'sky': 0.0041}
+    top_rgb=[((55, 72, 33), 13852), ((78, 100, 48), 9422), ((69, 89, 43), 8523), ((61, 81, 37), 8040), ((91, 117, 56), 4860), ((85, 110, 52), 1654)]
+  leaves box=(1290, 420, 1450, 560) n=22400 mean_rgb=(64.2, 70.6, 36.9)
+    frac={'grass_green': 0.496, 'other': 0.2885, 'dirt_brown': 0.1184, 'black': 0.0971}
+    top_rgb=[((83, 107, 51), 1111), ((93, 121, 58), 970), ((95, 123, 59), 952), ((67, 86, 42), 610), ((82, 106, 50), 598), ((94, 122, 58), 430)]
+== /Users/charlescai/Desktop/dsh/实验/forbric/stubtable/run/per-mod/run/000-modmenu__fabric/screenshots/2026-10-07_07.10.41.png (1708x960)
+  grass_side box=(1180, 455, 1240, 725) n=16200 mean_rgb=(71.8, 86.7, 42.8)
+    frac={'grass_green': 0.7763, 'other': 0.1168, 'dirt_brown': 0.0812, 'black': 0.022, 'grey_tex': 0.0037}
+    top_rgb=[((83, 107, 51), 1006), ((74, 96, 45), 959), ((83, 108, 51), 902), ((84, 108, 51), 806), ((96, 125, 59), 707), ((59, 78, 36), 638)]
+  dandelion box=(640, 440, 860, 690) n=55000 mean_rgb=(78.1, 97.9, 47.8)
+    frac={'dirt_brown': 0.0396, 'other': 0.0399, 'grass_green': 0.9116, 'black': 0.0023, 'sky': 0.0041, 'grey_tex': 0.0025}
+    top_rgb=[((91, 117, 56), 16697), ((61, 81, 37), 8133), ((78, 100, 48), 5352), ((85, 110, 52), 2842), ((97, 126, 60), 2117), ((69, 89, 43), 1746)]
+  leaves box=(1290, 420, 1450, 560) n=22400 mean_rgb=(69.4, 79.8, 40.6)
+    frac={'other': 0.273, 'grass_green': 0.6091, 'dirt_brown': 0.0844, 'black': 0.0277, 'grey_tex': 0.0058}
+    top_rgb=[((59, 78, 36), 1921), ((82, 106, 50), 1725), ((94, 122, 58), 1699), ((81, 105, 50), 1631), ((95, 123, 59), 1311), ((94, 123, 58), 703)]
+
+== pure black (0,0,0) per ROI, both arms ==
+  control  grass_side  pure_black=0.0000  maxRGB<10=0.0000
+  control  dandelion   pure_black=0.0000  maxRGB<10=0.0000
+  control  leaves      pure_black=0.0000  maxRGB<10=0.0000
+  fix      grass_side  pure_black=0.0000  maxRGB<10=0.0000
+  fix      dandelion   pure_black=0.0000  maxRGB<10=0.0000
+  fix      leaves      pure_black=0.0000  maxRGB<10=0.0000

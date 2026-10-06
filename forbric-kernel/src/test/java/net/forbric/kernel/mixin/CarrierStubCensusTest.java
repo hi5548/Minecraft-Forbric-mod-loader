@@ -40,10 +40,10 @@ class CarrierStubCensusTest {
 	private static final String VERSION = System.getProperty("forbric.mcVersion", "1.21.1");
 	private static final Path MC = TestFixtures.minecraftDir();
 	/** The merged base the kernel boots: the staged one when the build hands it over, else the merge's own output. */
-	private static final Path MERGED = mergedBase();
+	private static final Path MERGED = staged("merged-base", "patched-mc-merged-", mergeOutput("patched-mc-merged"));
 	/** The carrier's OWN patched game jars: what a MinecraftForge / NeoForge mod was compiled against. */
-	private static final Path FORGE = MC.resolve(".forbric-build/out/patched-mc-forge-" + VERSION + ".jar");
-	private static final Path NEO = MC.resolve(".forbric-build/out/patched-mc-neoforge-" + VERSION + ".jar");
+	private static final Path FORGE = staged("forge-patched", "patched-mc-forge-", mergeOutput("patched-mc-forge"));
+	private static final Path NEO = staged("neoforge-patched", "patched-mc-neoforge-", mergeOutput("patched-mc-neoforge"));
 	/**
 	 * Vanilla in the Mojmap namespace the merged base is in. The NeoForm intermediate, NOT
 	 * {@code versions/&lt;v&gt;/&lt;v&gt;.jar}: a launcher jar is obfuscated, and a census read off it would compare
@@ -51,12 +51,15 @@ class CarrierStubCensusTest {
 	 */
 	private static final Path VANILLA = MC.resolve(".forbric-build/client-official.jar");
 
-	private static Path mergedBase() {
-		String staged = System.getProperty("forbric.stagedRoot");
-		Path base = staged != null && !staged.isBlank()
-				? Path.of(staged).resolve("merged-base/patched-mc-merged-" + VERSION + ".jar")
-				: MC.resolve(".forbric-build/out/patched-mc-merged-" + VERSION + ".jar");
-		return base;
+	/** The jar the merge scripts wrote under the staged {@code run/}, when this build has one. */
+	private static Path staged(String subdirectory, String prefix, Path fallback) {
+		Path jar = TestFixtures.stagedJar(subdirectory, prefix);
+		return jar != null ? jar : fallback;
+	}
+
+	/** Where {@code build-merged-base.sh} / the carrier scripts put the merge output beside MC_DIR. */
+	private static Path mergeOutput(String name) {
+		return MC.resolve(".forbric-build/out/" + name + "-" + VERSION + ".jar");
 	}
 
 	/**

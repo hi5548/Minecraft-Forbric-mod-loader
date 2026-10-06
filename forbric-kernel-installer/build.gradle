@@ -3,7 +3,7 @@ plugins {
 }
 
 group = 'net.forbric'
-version = '0.3.4-beta'
+version = '0.3.5-beta'
 
 java {
 	sourceCompatibility = JavaVersion.VERSION_17

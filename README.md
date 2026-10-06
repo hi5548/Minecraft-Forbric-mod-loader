@@ -42,9 +42,9 @@ Connector 已经很成熟，Forbric 还不是，所以如果 Connector 已经能
 
    | 你的系统 | 下载 |
    | --- | --- |
-   | Windows | `forbric-kernel-installer-0.3.4-beta.jar` **和** `Forbric-Installer.bat` |
-   | macOS | `forbric-kernel-installer-0.3.4-beta.jar` **和** `Forbric-Installer.command` |
-   | Linux | `forbric-kernel-installer-0.3.4-beta.jar`（用 `java -jar` 运行） |
+   | Windows | `forbric-kernel-installer-0.3.5-beta.jar` **和** `Forbric-Installer.bat` |
+   | macOS | `forbric-kernel-installer-0.3.5-beta.jar` **和** `Forbric-Installer.command` |
+   | Linux | `forbric-kernel-installer-0.3.5-beta.jar`（用 `java -jar` 运行） |
 
 3. **双击 `.bat`（Windows）或 `.command`（macOS）。** 它会查找 Java，包括启动器放在默认 Minecraft 文件夹里的那一份，然后用它启动安装器。在某些 Windows 电脑上，直接双击 jar 只会闪一下黑窗口，这是因为 Windows 曾被设置成用一种行不通的方式打开 `.jar` 文件；用脚本就能避开这个问题。如果双击 jar 确实打开了安装器窗口，那也没问题：是同一个安装器。
 
@@ -69,7 +69,7 @@ Connector 已经很成熟，Forbric 还不是，所以如果 Connector 已经能
 > 想在点击 Install 之前先检查一下你的电脑？在 jar 所在的文件夹里运行这条命令。它只做检查，不写入任何东西：
 >
 > ```bash
-> java -jar forbric-kernel-installer-0.3.4-beta.jar --doctor
+> java -jar forbric-kernel-installer-0.3.5-beta.jar --doctor
 > ```
 
 ### mod 放在哪里
@@ -271,9 +271,9 @@ usual, for example Fabric API for most Fabric mods.
 
    | You are on | Download |
    | --- | --- |
-   | Windows | `forbric-kernel-installer-0.3.4-beta.jar` **and** `Forbric-Installer.bat` |
-   | macOS | `forbric-kernel-installer-0.3.4-beta.jar` **and** `Forbric-Installer.command` |
-   | Linux | `forbric-kernel-installer-0.3.4-beta.jar` (run it with `java -jar`) |
+   | Windows | `forbric-kernel-installer-0.3.5-beta.jar` **and** `Forbric-Installer.bat` |
+   | macOS | `forbric-kernel-installer-0.3.5-beta.jar` **and** `Forbric-Installer.command` |
+   | Linux | `forbric-kernel-installer-0.3.5-beta.jar` (run it with `java -jar`) |
 
 3. **Double-click the `.bat` (Windows) or the `.command` (macOS).** It looks for Java, including the copy
    a launcher keeps in the usual Minecraft folder, and starts the installer with it. On some Windows PCs,
@@ -312,7 +312,7 @@ usual, for example Fabric API for most Fabric mods.
 > looks, and writes nothing:
 >
 > ```bash
-> java -jar forbric-kernel-installer-0.3.4-beta.jar --doctor
+> java -jar forbric-kernel-installer-0.3.5-beta.jar --doctor
 > ```
 
 ### Where to put mods

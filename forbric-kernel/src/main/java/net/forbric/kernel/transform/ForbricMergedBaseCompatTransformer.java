@@ -94,7 +94,7 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 	}
 
 	/** The repairs {@link #transform} runs, in its order; a test pins the two lists against each other. */
-	static final List<String> REPAIRS = List.of("repairLambdaBootstrapHandles", "addBlockStateModelConflictResolvers", "addBlockStateAppearanceResolver", "addMissingForgeFluidTypeBridge", "addMissingForgeKeyMappingLookupInitializer", "addMissingForgeKnownRegistriesInitializer", "addMissingIngredientInvalidationCounterInitializer", "routeKeyMappingClickToPopulatedLookup", "giveKeyMappingItsMinecraftForgeFace", "routeFabricParticleFactoriesThroughTheLiveMap", "giveFeaturesPerStepItsVanillaDescriptorBack", "letDungeonsGenerateWithoutTheDataMap", "restoreDoublePrecisionToTheRandomSources", "convertRadiansWithVanillasFoldedConstant", "saveTheHeightmapsVanillaSaves", "guardNeoForgesWorldModifierPass", "letForeignResourceConditionsThrough", "letForeignResourceConditionsThroughMinecraftForge", "letFabricResourceConditionsDecide", "translateAGuestsPrivateSkipMarker", "serveDefaultAttributesBothEcosystems", "restoreForgeClientInit", "restoreForgeGeometryReload", "nameTheReloadListenersNeoForgeRefusesToName", "dropInterfaceDefaultShadowingOverrides", "tolerateEmptyCreativeTabStacks", "routePlaceItemHookToNeoForge", "bridgeOrphanedPipRenderers", "keepForgeOutboundProtocolCurrent", "surviveTheMissingForgeModelDataManager", "dropTheWindowTitlesLoaderBrand", "keepTheSaveOffTheTeardownsFailurePath", "postNeoForgesItemTooltipEvent", "askNeoForgeWhatAnItemsAttributesAre", "readTheSpawnReasonThatIsActuallyWritten", "giveTheUnwrittenLoggerAValue", "addTheMissingCapabilityLifecycleStubs", "addTheMissingNbtBuilderFactory", "postMinecraftForgesReloadListenerEvent", "giveMinecraftForgesReloadEventItsConditionContext", "letMinecraftForgeIngredientTypesDecode", "letMinecraftForgeFluidsChooseTheirModel", "giveMinecraftForgesParticleLookupItsFirstVariant", "dropStubsThatBypassARealSuperclassMethod", "inlineTheSwitchMapTheMergeLost", "vetoUnjudgeableOverlayConditions", "hideTheLegacyLootModifierIndexFromTheDirectoryScan", "letModdedFeatureFlagsRegister", "dropTheKeyModifierSuffixBeforeParsingAKeyName", "letTheAtlasLowerItsMipLevelLikeVanilla", "wrapTheStreamsVanillaWraps", "returnFromANestedBootstrapBeforeItsTail", "letBothEcosystemsSetBurnTime", "letMinecraftForgeSeeSpawnerMobs", "letMinecraftForgeAddPackFinders", "giveForgeEventsTheConstructorTheEventBusWants", "readASelfDependencyAsACycle", "routeForeignEntityDataSerializersToNeoForge");
+	static final List<String> REPAIRS = List.of("repairLambdaBootstrapHandles", "addBlockStateModelConflictResolvers", "addBlockStateAppearanceResolver", "addMissingForgeFluidTypeBridge", "addMissingForgeKeyMappingLookupInitializer", "addMissingForgeKnownRegistriesInitializer", "addMissingIngredientInvalidationCounterInitializer", "routeKeyMappingClickToPopulatedLookup", "giveKeyMappingItsMinecraftForgeFace", "routeFabricParticleFactoriesThroughTheLiveMap", "giveFeaturesPerStepItsVanillaDescriptorBack", "letDungeonsGenerateWithoutTheDataMap", "restoreDoublePrecisionToTheRandomSources", "convertRadiansWithVanillasFoldedConstant", "saveTheHeightmapsVanillaSaves", "guardNeoForgesWorldModifierPass", "letForeignResourceConditionsThrough", "letForeignResourceConditionsThroughMinecraftForge", "letFabricResourceConditionsDecide", "translateAGuestsPrivateSkipMarker", "serveDefaultAttributesBothEcosystems", "restoreForgeClientInit", "restoreForgeGeometryReload", "nameTheReloadListenersNeoForgeRefusesToName", "dropInterfaceDefaultShadowingOverrides", "tolerateEmptyCreativeTabStacks", "routePlaceItemHookToNeoForge", "bridgeOrphanedPipRenderers", "keepForgeOutboundProtocolCurrent", "surviveTheMissingForgeModelDataManager", "dropTheWindowTitlesLoaderBrand", "keepTheSaveOffTheTeardownsFailurePath", "postNeoForgesItemTooltipEvent", "askNeoForgeWhatAnItemsAttributesAre", "readTheSpawnReasonThatIsActuallyWritten", "giveTheUnwrittenLoggerAValue", "addTheMissingCapabilityLifecycleStubs", "addTheMissingNbtBuilderFactory", "postMinecraftForgesReloadListenerEvent", "giveMinecraftForgesReloadEventItsConditionContext", "letMinecraftForgeIngredientTypesDecode", "letMinecraftForgeFluidsChooseTheirModel", "giveMinecraftForgesParticleLookupItsFirstVariant", "dropStubsThatBypassARealSuperclassMethod", "inlineTheSwitchMapTheMergeLost", "vetoUnjudgeableOverlayConditions", "hideTheLegacyLootModifierIndexFromTheDirectoryScan", "letModdedFeatureFlagsRegister", "dropTheKeyModifierSuffixBeforeParsingAKeyName", "letTheAtlasLowerItsMipLevelLikeVanilla", "wrapTheStreamsVanillaWraps", "returnFromANestedBootstrapBeforeItsTail", "letBothEcosystemsSetBurnTime", "letMinecraftForgeSeeSpawnerMobs", "letMinecraftForgeAddPackFinders", "giveForgeEventsTheConstructorTheEventBusWants", "readASelfDependencyAsACycle", "routeForeignEntityDataSerializersToNeoForge", "restoreTheRawColourKeysAndRebindTheColourMixins");
 
 	private static final String NEO_EVENT_HOOKS_BINARY = "net.neoforged.neoforge.event.EventHooks";
 
@@ -288,6 +288,13 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 						+ "NeoForge's caller-identity guard — Cobblemon's Fabric entrypoint aborts in preInitialize, "
 						+ "so 0 of its 43 custom registries load and 86 worldgen/processor_list files fail to parse "
 						+ "behind the missing STRUCTURE_PROCESSOR entries"));
+		out.add(scanned("restoreTheRawColourKeysAndRebindTheColourMixins",
+				"net.minecraft.client.color.block.BlockColors and ...item.ItemColors, plus fabric-rendering-v1's "
+						+ "BlockColorsMixin/ItemColorsMixin when present: the merge kept NeoForge's raw-key register "
+						+ "and Forge's delegate-key getColor, so every vanilla block/item colour lookup misses and "
+						+ "falls back to MapColor (grass, water, foliage, leather all lose their colour) and the "
+						+ "Fabric ColorProviderRegistry registers into a map the renderer reads wrongly. Client-only: "
+						+ "a dedicated server never loads the classes"));
 		return List.copyOf(out);
 	}
 
@@ -384,6 +391,7 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 			changed |= claim(reporter, "giveForgeEventsTheConstructorTheEventBusWants", giveForgeEventsTheConstructorTheEventBusWants(node));
 			changed |= claim(reporter, "readASelfDependencyAsACycle", readASelfDependencyAsACycle(node));
 			changed |= claim(reporter, "routeForeignEntityDataSerializersToNeoForge", routeForeignEntityDataSerializersToNeoForge(node));
+			changed |= claim(reporter, "restoreTheRawColourKeysAndRebindTheColourMixins", restoreTheRawColourKeysAndRebindTheColourMixins(node));
 			changed |= namedOldLoader && adoptInteropHooksTheBaseStillNamesAfterTheOldLoader(node);
 
 			byte[] result = classBytes;
@@ -677,6 +685,32 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 	private static final String ID_KEYED = "Lit/unimi/dsi/fastutil/ints/Int2ObjectMap;";
 	private static final String ID_KEYED_INTERNAL = "it/unimi/dsi/fastutil/ints/Int2ObjectMap";
 	private static final String KERNEL_PARTICLES = "net/forbric/kernel/runtime/KernelParticleProviders";
+
+	// --- the colour maps: the base keys them raw but reads them through a Forge registry delegate ------------------
+
+	/** 1.21.1's block-colour registry: the merge kept NeoForge's {@code IdentityHashMap}/{@code register} and Forge's {@code getColor}. */
+	private static final String BLOCK_COLORS = "net/minecraft/client/color/block/BlockColors";
+	private static final String ITEM_COLORS = "net/minecraft/client/color/item/ItemColors";
+	/** fabric-rendering-v1's two client mixins on those classes; each {@code @Shadow}s the colour field as an {@code IdMapper}. */
+	private static final String BLOCK_COLORS_MIXIN = "net/fabricmc/fabric/mixin/client/rendering/BlockColorsMixin";
+	private static final String ITEM_COLORS_MIXIN = "net/fabricmc/fabric/mixin/client/rendering/ItemColorsMixin";
+	private static final String FORGE_REGISTRIES = "net/minecraftforge/registries/ForgeRegistries";
+	private static final String FORGE_REGISTRY_DESC = "Lnet/minecraftforge/registries/IForgeRegistry;";
+	private static final String I_FORGE_REGISTRY = "net/minecraftforge/registries/IForgeRegistry";
+	private static final String GET_DELEGATE_OR_THROW = "getDelegateOrThrow";
+	private static final String GET_DELEGATE_OR_THROW_DESC = "(Ljava/lang/Object;)Lnet/minecraft/core/Holder$Reference;";
+	private static final String BLOCK_STATE = "net/minecraft/world/level/block/state/BlockState";
+	/** The descriptor the guests {@code @Shadow} and the merged base no longer declares — the whole reason for step 1. */
+	private static final String ID_MAPPER_DESC = "Lnet/minecraft/core/IdMapper;";
+	private static final String ID_MAPPER = "net/minecraft/core/IdMapper";
+	private static final String BY_ID = "byId";
+	private static final String BY_ID_DESC = "(I)Ljava/lang/Object;";
+	private static final String BUILT_IN_REGISTRIES = "net/minecraft/core/registries/BuiltInRegistries";
+	private static final String REGISTRY_GET_ID = "getId";
+	private static final String REGISTRY_GET_ID_DESC = "(Ljava/lang/Object;)I";
+	private static final String MAP_INTERNAL = "java/util/Map";
+	private static final String MAP_GET_DESC = "(Ljava/lang/Object;)Ljava/lang/Object;";
+
 	/** Old owner → the kernel class that now carries the method, for hooks the merged base still names. */
 	private static final Map<String, String> LEGACY_INTEROP_OWNERS = Map.of(
 			"net/forbric/loader/impl/compat/ForbricCustomPayloadInterop", "net/forbric/kernel/interop/PayloadInterop",
@@ -1648,6 +1682,155 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 				+ "provider field this base does not have — the @Accessor it shipped with cannot bind, and its "
 				+ "failure would have taken the two sprite accessors beside it down too. It is now a default method "
 				+ "over ParticleEngine." + PROVIDER_VIEW + "(ParticleEngine)");
+		return true;
+	}
+
+	/**
+	 * The colour maps the merge left half-rewritten, and Fabric's two readers of them — one repair because the two
+	 * halves are only useful together.
+	 *
+	 * <p>{@code BlockColors} and {@code ItemColors} carry the same defect twice. The byte-merge splices method by
+	 * method, and on each of these classes it kept NeoForge's field initializer ({@code IdentityHashMap}) and
+	 * NeoForge's {@code register} — which stores the RAW {@code Block}/{@code Item} — but MinecraftForge's
+	 * {@code getColor}, which looks the key up as
+	 * {@code ForgeRegistries.BLOCKS.getDelegateOrThrow(state.getBlock())} (a {@code Holder$Reference}, never equal to
+	 * a raw {@code Block} under an identity map). The two halves of the pair therefore never meet: every lookup
+	 * misses and falls back to {@code MapColor}, so vanilla's own grass, water, foliage, leather and leaves lose
+	 * their colour, and any registration behind that map — the colour-family Fabric API among them — is invisible.
+	 * {@link #stripTheForgeRegistryKey} makes each class NeoForge's own coherent pair again.
+	 *
+	 * <p>fabric-rendering-v1's {@code BlockColorsMixin}/{@code ItemColorsMixin} read the SAME field, and could not
+	 * be un-pinned without fixing them, because Mixin binds a {@code @Shadow} by NAME <b>and</b> DESCRIPTOR: the
+	 * guest declares {@code @Shadow IdMapper blockColors}, this base declares {@code Map blockColors}, so the shadow
+	 * resolves to nothing and Mixin discards the WHOLE mixin — including the {@code createDefault} injector that
+	 * fires {@code ColorProviderRegistry.initialize}. So the second half rewrites each guest mixin to read the live
+	 * map: see {@link #rebindTheColourMixinToTheRawMap}. The registration side was never the problem —
+	 * {@code ColorProviderRegistryImpl$1.registerUnderlying} already calls {@code register(provider, rawBlock)}.
+	 *
+	 * <p>One repair, not two, because either half alone is a working-looking dead end: the base half alone restores
+	 * vanilla and leaves the Fabric face registering into a map the renderer reads wrongly; the mixin half alone
+	 * reads a map nothing fills. Each half self-guards on the exact measured shape and stands the whole thing down
+	 * otherwise, and the two pins leave {@link MergedBaseMixinCompat#SUPPRESSED_MIXINS} with it.
+	 */
+	private static boolean restoreTheRawColourKeysAndRebindTheColourMixins(ClassNode node) {
+		if (BLOCK_COLORS.equals(node.name)) return stripTheForgeRegistryKey(node, "blockColors", 2, BLOCK_STATE, "getBlock");
+		if (ITEM_COLORS.equals(node.name)) return stripTheForgeRegistryKey(node, "itemColors", 1, ITEM_STACK, "getItem");
+		if (BLOCK_COLORS_MIXIN.equals(node.name)) return rebindTheColourMixinToTheRawMap(node, "blockColors");
+		if (ITEM_COLORS_MIXIN.equals(node.name)) return rebindTheColourMixinToTheRawMap(node, "itemColors");
+		return false;
+	}
+
+	/**
+	 * The base half: drop the Forge-registry delegate so the raw key the class STORES is the key it READS.
+	 *
+	 * <p>Each measured method reads {@code this.<field>.get(ForgeRegistries.<F>.getDelegateOrThrow(<stack>.<key>()))}
+	 * and must read {@code this.<field>.get(<stack>.<key>())} instead. The two instructions removed are the only
+	 * Forge-isms in the body, so the result is byte-for-byte NeoForge's own {@code getColor}. Requires EXACTLY
+	 * {@code expected} matching sites and refuses the class otherwise — a half-rewritten colour map is a lookup that
+	 * misses in a way no one can see.
+	 */
+	private static boolean stripTheForgeRegistryKey(ClassNode node, String fieldName, int expected, String keyOwner,
+			String keyMethod) {
+		if (!hasField(node, fieldName, NAME_KEYED)) return false;
+		List<MethodNode> methods = new ArrayList<>();
+		List<AbstractInsnNode> statics = new ArrayList<>();
+		List<AbstractInsnNode> delegates = new ArrayList<>();
+		for (MethodNode method : node.methods) {
+			for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+				if (!(insn instanceof MethodInsnNode call) || !I_FORGE_REGISTRY.equals(call.owner)
+						|| !GET_DELEGATE_OR_THROW.equals(call.name) || !GET_DELEGATE_OR_THROW_DESC.equals(call.desc)) {
+					continue;
+				}
+				AbstractInsnNode key = previousRealInsn(insn);
+				AbstractInsnNode load = previousRealInsn(key);
+				AbstractInsnNode registry = previousRealInsn(load);
+				if (!(key instanceof MethodInsnNode produced) || !keyOwner.equals(produced.owner)
+						|| !keyMethod.equals(produced.name) || produced.getOpcode() != Opcodes.INVOKEVIRTUAL
+						|| !(load instanceof VarInsnNode) || !(registry instanceof FieldInsnNode source)
+						|| source.getOpcode() != Opcodes.GETSTATIC || !FORGE_REGISTRIES.equals(source.owner)
+						|| !FORGE_REGISTRY_DESC.equals(source.desc)) {
+					return false; // a call to this method in a shape this repair did not measure: leave the class alone
+				}
+				methods.add(method);
+				statics.add(registry);
+				delegates.add(insn);
+			}
+		}
+		if (delegates.size() != expected) return false;
+		for (int i = 0; i < delegates.size(); i++) {
+			methods.get(i).instructions.remove(statics.get(i));
+			methods.get(i).instructions.remove(delegates.get(i));
+		}
+		ForbricLog.info("[Forbric/MergedBaseCompat] %s looked its colours up through a Forge registry delegate "
+				+ "while its own register stored the raw object, so every one missed and fell back to MapColor "
+				+ "(%d site(s) re-keyed to %s)", node.name.replace('/', '.'), delegates.size(), keyMethod);
+		return true;
+	}
+
+	/**
+	 * The Fabric half: the same map, read through the descriptor Mixin can actually bind on this base.
+	 *
+	 * <p>The guest {@code @Shadow}s the colour field as {@code IdMapper} and indexes it by
+	 * {@code BuiltInRegistries.<F>.getId(key)}; the merged base declares it as a raw {@code Map} keyed by the object.
+	 * So the field descriptor moves to {@code Map}, and the reader drops its two id steps and reads the map directly
+	 * — exactly the semantics the registration side already has. The {@code get} method is only recognised when it
+	 * has one {@code IdMapper.byId} and one {@code DefaultedRegistry.getId} and one {@code BuiltInRegistries}
+	 * {@code getstatic}; anything else stands the mixin down rather than bind a shadow that means something else.
+	 */
+	private static boolean rebindTheColourMixinToTheRawMap(ClassNode node, String fieldName) {
+		FieldNode shadow = null;
+		for (FieldNode field : node.fields) {
+			if (fieldName.equals(field.name) && ID_MAPPER_DESC.equals(field.desc)) shadow = field;
+		}
+		if (shadow == null) return false; // already re-bound, or a generation whose field was never an IdMapper
+		MethodNode get = null;
+		for (MethodNode method : node.methods) {
+			if (!"get".equals(method.name) || method.instructions == null) continue;
+			int byId = 0, getId = 0, registries = 0;
+			for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+				if (insn instanceof MethodInsnNode call && ID_MAPPER.equals(call.owner) && BY_ID.equals(call.name)
+						&& BY_ID_DESC.equals(call.desc)) byId++;
+				else if (insn instanceof MethodInsnNode id && REGISTRY_GET_ID.equals(id.name)
+						&& REGISTRY_GET_ID_DESC.equals(id.desc)) getId++;
+				else if (insn instanceof FieldInsnNode statics && statics.getOpcode() == Opcodes.GETSTATIC
+						&& BUILT_IN_REGISTRIES.equals(statics.owner)) registries++;
+			}
+			if (byId == 1 && getId == 1 && registries == 1) {
+				get = method;
+				break;
+			}
+			if (byId > 0 || getId > 0) return false; // a reader this repair did not measure: leave the mixin alone
+		}
+		if (get == null) return false;
+		MethodInsnNode byId = null;
+		for (AbstractInsnNode insn = get.instructions.getFirst(); insn != null; ) {
+			AbstractInsnNode next = insn.getNext();
+			if (insn instanceof FieldInsnNode field && field.getOpcode() == Opcodes.GETFIELD
+					&& fieldName.equals(field.name) && ID_MAPPER_DESC.equals(field.desc)) {
+				field.desc = NAME_KEYED;
+			} else if (insn instanceof FieldInsnNode statics && statics.getOpcode() == Opcodes.GETSTATIC
+					&& BUILT_IN_REGISTRIES.equals(statics.owner)) {
+				get.instructions.remove(insn);
+			} else if (insn instanceof MethodInsnNode id && REGISTRY_GET_ID.equals(id.name)
+					&& REGISTRY_GET_ID_DESC.equals(id.desc)) {
+				get.instructions.remove(insn);
+			} else if (insn instanceof MethodInsnNode lookup && ID_MAPPER.equals(lookup.owner) && BY_ID.equals(lookup.name)
+					&& BY_ID_DESC.equals(lookup.desc)) {
+				byId = lookup;
+			}
+			insn = next;
+		}
+		if (byId == null) return false;
+		byId.setOpcode(Opcodes.INVOKEINTERFACE);
+		byId.owner = MAP_INTERNAL;
+		byId.name = "get";
+		byId.desc = MAP_GET_DESC;
+		byId.itf = true;
+		shadow.desc = NAME_KEYED;
+		shadow.signature = null;
+		ForbricLog.info("[Forbric/MergedBaseCompat] %s's @Shadow %s is an IdMapper this base no longer has, so "
+				+ "Mixin could not bind it and discarded the whole mixin; it now reads the live Map by raw key",
+				node.name.replace('/', '.'), fieldName);
 		return true;
 	}
 

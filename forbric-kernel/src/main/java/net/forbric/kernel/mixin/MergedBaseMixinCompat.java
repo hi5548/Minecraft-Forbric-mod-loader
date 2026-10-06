@@ -238,33 +238,36 @@ public final class MergedBaseMixinCompat {
 			// silently discard their max checks too: a blast radius far wider than the one entry it would remove.
 			// So this stays a pin, by measurement rather than by omission.
 			"mixins.essential.json:events.Mixin_GuiDrawScreenEvent_Priority",
-			// Five CLIENT mixins that assert a @Shadow field the merge re-typed. fabric-registry-sync-v0's
-			// BlockColorsMixin/ItemColorsMixin/ParticleManagerMixin and fabric-rendering-v1's BlockColorsMixin/
-			// ItemColorsMixin all shadow the colour/particle handle of their target, and on the staged merged base
-			// the field is still THERE under the same name but is no longer an IdMapper: javap of
-			// patched-mc-merged-1.21.1.jar reads `private final java.util.Map<Block,BlockColor> blockColors`,
-			// `Map<Item,ItemColor> itemColors` and `Map<ResourceLocation,ParticleProvider<?>> providers`. Mixin
-			// binds a @Shadow field by name AND descriptor, so each of the five throws
-			// `InvalidMixinException: @Shadow field X was not located in the target class` and Mixin discards the
-			// WHOLE mixin -- including the handlers whose anchors are present. ShadowFieldAliases cannot bridge it:
-			// its rule is one target field of the SAME descriptor, and the descriptor is the thing that changed
-			// (IdMapper -> Map), so there is no candidate to alias to. Nor is the retarget a rename in the other
-			// direction: the two consumers want the IdMapper itself (registry-sync's IdListTracker.register takes
-			// one, rendering-v1's ColorMapperHolder.get indexes it by `BuiltInRegistries.BLOCK.getId`), and the
-			// merged base answers neither -- its own colour lookups were re-keyed to a Forge registry delegate
-			// (javap: `getColor` calls `ForgeRegistries.BLOCKS.getDelegateOrThrow(state.getBlock())` before
-			// `Map.get`, while its own `register` still stores the raw Block). Pinned rather than trimmed because
-			// the binding failure is the field itself, so there is nothing left for a trim to keep.
+			// Three CLIENT mixins that assert a @Shadow field the merge re-typed. fabric-registry-sync-v0's
+			// BlockColorsMixin/ItemColorsMixin/ParticleManagerMixin shadow the colour/particle handle of their
+			// target, and on the staged merged base the field is still THERE under the same name but is no longer
+			// an IdMapper: javap of patched-mc-merged-1.21.1.jar reads
+			// `private final java.util.Map<Block,BlockColor> blockColors`, `Map<Item,ItemColor> itemColors` and
+			// `Map<ResourceLocation,ParticleProvider<?>> providers`. Mixin binds a @Shadow field by name AND
+			// descriptor, so each of the three throws `InvalidMixinException: @Shadow field X was not located in the
+			// target class` and Mixin discards the WHOLE mixin -- including the handlers whose anchors are present.
+			// ShadowFieldAliases cannot bridge it: its rule is one target field of the SAME descriptor, and the
+			// descriptor is the thing that changed (IdMapper -> Map), so there is no candidate to alias to. Nor is
+			// the retarget a rename in the other direction: registry-sync's consumers want the IdMapper itself
+			// (IdListTracker.register takes it to keep a numeric id<->object table), and the merged base's Map is
+			// object-keyed with no such dimension -- a bridge, not an anchor. Pinned rather than trimmed because the
+			// binding failure is the field itself, so there is nothing left for a trim to keep.
 			//
-			// Cost, stated: on this base fabric-registry-sync-v0's client-side colour/particle ID tracking is inert,
-			// and fabric-rendering-v1's whole ColorProviderRegistry is -- `initialize` is fired from the same
-			// mixin's createDefault injector, so a Fabric mod's block/item colours are registered nowhere and read
-			// nowhere. Vanilla's own block/item colour path is untouched by the pin.
+			// fabric-rendering-v1's BlockColorsMixin/ItemColorsMixin USED to be pinned here too, on the same
+			// reading. They are off the list now: ForbricMergedBaseCompatTransformer's
+			// restoreTheRawColourKeysAndRebindTheColourMixins re-keys the base's own getColor to the raw Block/Item
+			// (its own `register` already stored the raw key, so the lookup was simply keyed the other way) and
+			// rewrites each guest @Shadow to a java.util.Map reader over that live map -- exactly what Mixin needs
+			// to bind. Those two mixins therefore apply, and their createDefault injector fires
+			// ColorProviderRegistry.initialize, so Fabric's ColorProviderRegistry works again. registry-sync-v0's
+			// two are NOT the same fix: they hand the map to IdListTracker for id<->object sync, which the base's
+			// object-keyed Map has no room for.
+			//
+			// Cost, stated: on this base fabric-registry-sync-v0's client-side colour/particle ID tracking is inert.
+			// (fabric-rendering-v1's ColorProviderRegistry is no longer a cost -- see above.)
 			"fabric-registry-sync-v0.client.mixins.json:BlockColorsMixin",
 			"fabric-registry-sync-v0.client.mixins.json:ItemColorsMixin",
 			"fabric-registry-sync-v0.client.mixins.json:ParticleManagerMixin",
-			"fabric-rendering-v1.mixins.json:BlockColorsMixin",
-			"fabric-rendering-v1.mixins.json:ItemColorsMixin",
 			// fabric-rendering-fluids-v1's single mixin, and the merge left it no site to bind to. javap of the
 			// staged merged LiquidBlockRenderer.tesselate shows NeoForge's own body: FluidSpriteCache.getFluidSprites,
 			// IClientFluidTypeExtensions.of(...).getTintColor and one BlockState.shouldDisplayFluidOverlay. The

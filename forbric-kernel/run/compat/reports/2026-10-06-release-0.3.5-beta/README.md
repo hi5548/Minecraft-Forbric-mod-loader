@@ -27,7 +27,7 @@ joined world via quick-play: W7Client
 
 **安装**：下载 `forbric-kernel-installer-0.3.5-beta.zip`，解压，双击 `Forbric-Installer.command`（macOS 首次右键→打开）/ `Forbric-Installer.bat`；确认 **Game directory** → **Install** → 启动器里选 **`1.21.1-forbric`**。不需要任何 JVM 参数。
 
-**发布结果**：见文末「发布结果回填」。
+**发布结果**：见文末「发布结果回填」（tag / 附件 sha / 安装校验）。
 
 ---
 
@@ -57,3 +57,31 @@ joined world via quick-play: W7Client
 - 二档各项只有字节/单测证据，**没有**在真客户端世界深度复跑。
 - 一档各项的上限是"这一次运行观测到"，不是"每个 mod 的每项功能都试过"。
 - 本版未测更长的游戏内行为。
+
+---
+
+## 发布结果回填（2026-10-06）
+
+- tag `v0.3.5-beta-1.21.1`（轻量 tag，指向发布提交 `327372f2`；其父 `80d13375` 为升版本提交）
+- 同一提交已快进 `fork/1.21.1-port`（`af399135` → `327372f2`）
+- Release `https://github.com/hi5548/Minecraft-Forbric-mod-loader/releases/tag/v0.3.5-beta-1.21.1`，附件：
+  - `forbric-kernel-installer-0.3.5-beta.jar` sha256 `9ae62afa88a72d47e036c75debc64ff860f48d325375232516d499972b2ae191`
+  - `forbric-kernel-installer-0.3.5-beta.zip` sha256 `9da990d2e6392dfe4c26a329b840313707bba306e38ec3c7698b102e432c90fc`
+- 本地构建产物：`forbric-kernel-installer/build/{libs,dist}/`，副本 `/private/tmp/rel035/artifacts/`
+- 安装器内嵌内核经逐字节校验 = 本次 gate 的 `a56bf626…`（`forbric/libs/net/forbric/forbric-kernel/0.3.5-beta/forbric-kernel-0.3.5-beta.jar`）
+- `v0.3.4-beta-1.21.1` 已按惯例标注"已被取代"并撤下附件
+
+### 安装校验（headless）
+
+`java -jar forbric-kernel-installer-0.3.5-beta.jar --dir /Applications/.minecraft`，exit 0；逐条证据 `evidence/install-verification.txt`：
+
+| 检查 | 结果 |
+|---|---|
+| 用户真实 12 mod（`versions/1.21.1-forbric/mods`）sha256 | 12/12 **逐字节不变** |
+| `versions/` 版本目录 | 前后一致（无版本丢失/新增） |
+| 全局 `mods/` 目录 | mtime 未变（2025-10-15），129 只 jar 原样 |
+| `options.txt` / `saves/` / `config/` / `.forbric-kernel/` | mtime 均未变（安装只写 profile 与 `libraries/`） |
+| 安装后的内核 | `libraries/net/forbric/forbric-kernel/0.3.5-beta/…jar` sha256 `a56bf626…`（= gate artifact） |
+| profile | `versions/1.21.1-forbric/1.21.1-forbric.json` 指向 0.3.5-beta 的 kernel/loader/runtime，20 条 libraries |
+
+（本次只做安装与文件级校验；**未**在安装实例上再启动一次游戏 —— 启动级读数以上面的 `strict` gate 为准。）

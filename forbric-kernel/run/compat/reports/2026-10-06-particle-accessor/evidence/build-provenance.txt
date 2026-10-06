@@ -1,0 +1,71 @@
+# Build provenance — the frozen arm
+
+REPORTED fix-arm kernel jar : /private/tmp/particle-lane/kernel-fix.jar
+sha256                      : ffdb6979f805da85d4af1d464872549413d47bc3ddfc350a8b37055a358a5de3
+source                      : forbric-kernel tree at de13d8ee + this lane's two files (see diff.patch)
+
+## Assembly
+
+Identical to 2026-10-06-bughunt-create and the 0.3.5-beta release capture. `energy-4.1.0-named.jar` is absent on
+this box and `/Volumes/ORICO` is unmounted, so the game side cannot be compiled here.
+
+1. boot half   `./gradlew --offline -q -Pforbric.stagedRoot=/private/tmp/particle-lane/run jar`
+                -> forbric-kernel/build/libs/forbric-kernel-0.1.0-SNAPSHOT.jar
+                sha256 d5469fd871f49631050c2b774ff14847ed393b575f18f3b0715f2098f9d5c528
+                (no staged game jars under that root, so the jar task wires in no runtime jar — by design)
+2. runtime half META-INF/jars/forbric-kernel-runtime.jar copied BYTE-FOR-BYTE out of the published 0.3.5-beta
+                jar (libraries/net/forbric/forbric-kernel/0.3.5-beta/forbric-kernel-0.3.5-beta.jar)
+                sha256 67c2a49b55c8ef860e552ec5b9e028d8836e68d46f5bb4595a40016debde8c6d
+3. `zip -q kernel-fix.jar META-INF/jars/forbric-kernel-runtime.jar`
+
+This lane touches only `src/main/java/.../ForbricMergedBaseCompatTransformer.java` and its test — both boot half —
+so the runtime half is irrelevant to the change and is reused rather than rebuilt.
+
+## Checks on the frozen jar
+
+- 735 entries: 734 boot + 1 nested runtime.
+- The boot half's entry set is **exactly** the released 0.3.5-beta boot jar's entry set — the only difference
+  between the two jars' name lists is the nested runtime jar (verified with `unzip -Z1 | sort | comm`).
+- 0 stale-numbered entries (`X 2.class`, `X 3.txt`, `META-INF/services/… 3.IMixinService`, …).
+- `META-INF/jars/{mixinextras-fabric.jar, forbric-kernel-runtime.jar}` both present.
+- the compiled transformer carries the new log text `SYNTHETIC default method over ParticleEngine`.
+- the W7Harness itself refuses a boot-only jar (`sweep.assert_game_side`); it did not refuse this one, and it
+  pinned and ran these bytes (`frozen/frozen-kernel-sha256.txt` in the run dir).
+
+## Artifact hygiene — why there is a superseded first run
+
+The first assembly of `kernel-fix.jar` (sha256
+`b4247eaebe75a2f42f52e19c39f7adf90cfde6639ab7189e847c4a3a193ba24b`) was packed from the same sources, but this
+working tree's `build/classes/java/main` and `build/resources/main` had accumulated **pre-existing stale duplicates**
+from earlier lanes on this machine:
+
+- 1413 `X N.class` files (e.g. `net/fabricmc/api/ClientModInitializer 2.class`), mostly dated 2026-10-04;
+- 7 `X 3.*` resources (`net/forbric/kernel/mixin/carrier-stubs 3.txt`,
+  `META-INF/services/org.spongepowered.asm.service 3.IMixinService`, …).
+
+Every sampled `X N.class` is **byte-identical** to its `X.class`, so the duplicates cannot change behaviour (the JVM
+resolves a class by its internal name, and both candidates carry the same bytes) — and that first run did read
+`run=PASS world=true frames=1 strict=TRUE` with the same marker counts. But the 0.3.5-beta release capture
+explicitly verifies "0 duplicate-name classes (' N.class') in the jar", so a jar carrying 1420 of them is not a
+valid stand-in for the tip bytes. The debris was deleted, the boot half rebuilt, and the run re-measured against the
+clean jar; the clean boot half's entry set is the released one exactly.
+
+Verified before the re-measure: deleting the debris and running `jar` again does **not** regenerate it — the
+duplicates were stale deposit, not a live build behaviour.
+
+Both runs are recorded in `evidence/gate-reading.txt` and `evidence/console-markers.txt` (the superseded one with
+its sha and reading). The pre-registered criteria were not touched.
+
+## The 'before' arm (not rebuilt; two records, both quoted)
+
+- The user's own installed kernel, `/Applications/.minecraft/libraries/net/forbric/forbric-kernel/0.3.5-beta/`
+  `forbric-kernel-0.3.5-beta.jar` sha256
+  `a56bf626e983b1dda81cf1b15f5c7f485eaec9c13cb099f1d96ef1d136a6e721` — their `latest.log` carries the rejection.
+- `2026-10-06-bughunt-create`'s control arm, the same kernel bytes on the 12 mods + Create.
+
+## Working-tree note
+
+The boot-half rebuild overwrote `forbric-kernel/build/libs/forbric-kernel-0.1.0-SNAPSHOT.jar` (the path the gradle
+`jar` task writes), and stale debris was deleted from `build/classes/java/main` and `build/resources/main`. `build/`
+is an untracked build output; the released artifact under `/Applications/.minecraft/libraries/net/forbric/` is
+untouched, and so are all 12 mods (`evidence/mod-set.txt`).

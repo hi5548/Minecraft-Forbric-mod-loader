@@ -1649,12 +1649,27 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 	}
 
 	/**
-	 * fabric-api half: {@code getFactories()} becomes a default method over the bridge.
+	 * fabric-api half: {@code getFactories()} becomes a SYNTHETIC default method over the bridge.
 	 *
 	 * <p>The {@code @Accessor} annotation is removed rather than left in place: Mixin would otherwise resolve it and
 	 * fail (see {@link #routeFabricParticleFactoriesThroughTheLiveMap}), and the method's declared
 	 * {@code Int2ObjectMap} face is exactly what the callers want — {@code DirectParticleFactoryRegistry.register}
 	 * {@code put(int, provider)}s into it, so the accessor cannot simply be widened to {@code Map}.
+	 *
+	 * <p>It is marked {@code ACC_SYNTHETIC} for a reason that is not about this method's own body.
+	 * {@code MixinInfo.getVariant} classifies an interface mixin by scanning its methods and answers
+	 * {@code Variant.INTERFACE} — whose {@code SubType.validateTarget} DEMANDS an interface target — as soon as one
+	 * method is neither an {@code @Accessor}/{@code @Invoker} nor synthetic. This class shipped as an accessor
+	 * mixin (three abstract {@code @Accessor}s, hence {@code Variant.ACCESSOR}, which accepts the class target
+	 * {@code ParticleEngine}); giving one of them a real body turns the whole config into the INTERFACE variant and
+	 * Mixin throws {@code @Mixin target type mismatch: … ParticleEngine is not an interface}, dropping every mixin
+	 * in {@code fabric-particles-v1.client.mixins.json}. The flag is the classification's own signal for "not a
+	 * real interface method": Mixin's classifier SKIPS synthetic methods, so the mixin goes back to
+	 * {@code Variant.ACCESSOR}, and its interface preprocessor merges a public synthetic default like any other
+	 * method — only a NON-public synthetic is set aside ({@code MixinPreProcessorInterface.prepareMethod}), and the
+	 * merge itself ({@code MixinApplicatorStandard.mergeMethod}) is unconditional. Measured, not inferred: see
+	 * {@code MergedBaseParticleProvidersTest.mixinClassifiesTheRewrittenAccessorAsAnAccessorMixin}, which asks
+	 * Mixin's own {@code getVariant} on these bytes.
 	 */
 	private static boolean readTheFactoriesThroughThatBridge(ClassNode node) {
 		MethodNode factories = findMethod(node, GET_FACTORIES, GET_FACTORIES_DESC);
@@ -1666,6 +1681,7 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 			factories.visibleAnnotations.removeIf(annotation -> MIXIN_ACCESSOR_ANNOTATION.equals(annotation.desc));
 		}
 		factories.access &= ~Opcodes.ACC_ABSTRACT;
+		factories.access |= Opcodes.ACC_SYNTHETIC;
 
 		InsnList body = factories.instructions;
 		body.clear();
@@ -1680,8 +1696,10 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 
 		ForbricLog.warn("[Forbric/MergedBaseCompat] fabric-api's ParticleManagerAccessor.getFactories() read a "
 				+ "provider field this base does not have — the @Accessor it shipped with cannot bind, and its "
-				+ "failure would have taken the two sprite accessors beside it down too. It is now a default method "
-				+ "over ParticleEngine." + PROVIDER_VIEW + "(ParticleEngine)");
+				+ "failure would have taken the two sprite accessors beside it down too. It is now a SYNTHETIC "
+				+ "default method over ParticleEngine." + PROVIDER_VIEW + "(ParticleEngine): without the flag the "
+				+ "interface mixin becomes Mixin's INTERFACE variant and is rejected against the class ParticleEngine, "
+				+ "losing every mixin in fabric-particles-v1.client.mixins.json");
 		return true;
 	}
 

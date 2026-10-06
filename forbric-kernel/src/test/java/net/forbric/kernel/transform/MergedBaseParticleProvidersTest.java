@@ -127,6 +127,10 @@ class MergedBaseParticleProvidersTest {
 				"()Lit/unimi/dsi/fastutil/ints/Int2ObjectMap;");
 		assertTrue((factories.access & Opcodes.ACC_ABSTRACT) == 0,
 				"getFactories must become a default method; Mixin cannot bind the field this base does not have");
+		assertTrue((factories.access & Opcodes.ACC_SYNTHETIC) != 0,
+				"getFactories must also be SYNTHETIC: a real default method makes Mixin read this interface mixin as "
+						+ "its INTERFACE variant, whose target must be an interface, and the class ParticleEngine is "
+						+ "not one — the whole config is then rejected");
 		assertTrue(factories.visibleAnnotations == null || factories.visibleAnnotations.stream()
 						.noneMatch(annotation -> "Lorg/spongepowered/asm/mixin/gen/Accessor;".equals(annotation.desc)),
 				"the @Accessor annotation must be gone, or Mixin resolves it again and throws");
@@ -159,6 +163,51 @@ class MergedBaseParticleProvidersTest {
 		}
 	}
 
+	/**
+	 * The probe the repair's own javadoc rests on: ask Mixin's own classifier what it makes of the rewritten bytes,
+	 * and of the same bytes with the SYNTHETIC flag cleared.
+	 *
+	 * <p>It is a PAIR on purpose. Asserting only that the rewritten mixin classifies as ACCESSOR would pass even if
+	 * this transformer did nothing at all — the shipped accessor has three {@code @Accessor} methods and is an
+	 * accessor mixin already. The load-bearing fact is the difference: clearing one flag is exactly the bug that
+	 * rejected the config in the 2026-10-06 Create boot ({@code @Mixin target type mismatch: … ParticleEngine is not
+	 * an interface}), so the control reproduces that classification from the same bytes.
+	 *
+	 * <p>{@code getVariant} is package-private in Mixin and there is no public equivalent; reflection is the only way
+	 * to ask the classifier itself rather than a re-implementation of it, and a re-implementation is what a probe
+	 * must never be. Two details are load-bearing: {@code getVariant} reads
+	 * {@code MixinEnvironment.getCurrentEnvironment()} through {@code ClassInfo}'s constructor, so Mixin's own
+	 * bootstrap has to have run; and {@code ClassInfo.fromClassNode} CACHES by class name, so each node is renamed
+	 * before it is asked — asking twice under one name would answer from the first node's leaves either way.
+	 */
+	@Test
+	void mixinClassifiesTheRewrittenAccessorAsAnAccessorMixin() throws Exception {
+		org.spongepowered.asm.launch.MixinBootstrap.init();
+		org.spongepowered.asm.mixin.MixinEnvironment.getDefaultEnvironment();
+
+		byte[] repaired = new ForbricMergedBaseCompatTransformer().transform(ACCESSOR, accessor(), null);
+		ClassNode after = parse(repaired);
+		after.name = after.name + "$RepairedProbe";
+		assertEquals("ACCESSOR", mixinVariant(after),
+				"the rewritten mixin must stay the ACCESSOR variant, the one that accepts the class target "
+						+ "ParticleEngine; the INTERFACE variant demands an interface target");
+
+		ClassNode control = parse(repaired);
+		control.name = control.name + "$ControlProbe";
+		method(control, "getFactories", "()Lit/unimi/dsi/fastutil/ints/Int2ObjectMap;").access &= ~Opcodes.ACC_SYNTHETIC;
+		assertEquals("INTERFACE", mixinVariant(control),
+				"without the flag the same bytes classify as the INTERFACE variant — this is the rejection the flag "
+						+ "exists to avoid, so the assertion above is not vacuous");
+	}
+
+	/** Mixin's own {@code MixinInfo.getVariant(ClassNode)}: the classifier whose answer decides the boot. */
+	private static String mixinVariant(ClassNode node) throws Exception {
+		Class<?> mixinInfo = Class.forName("org.spongepowered.asm.mixin.transformer.MixinInfo");
+		java.lang.reflect.Method getVariant = mixinInfo.getDeclaredMethod("getVariant", ClassNode.class);
+		getVariant.setAccessible(true);
+		return getVariant.invoke(null, node).toString();
+	}
+
 	@Test
 	void aSecondPassLeavesBothHalvesAlone() throws Exception {
 		ForbricMergedBaseCompatTransformer once = new ForbricMergedBaseCompatTransformer();
@@ -174,6 +223,7 @@ class MergedBaseParticleProvidersTest {
 
 	@Test
 	void anotherClassIsUntouched() throws Exception {
+		assumeTrue(TestFixtures.mergedBase() != null, "staged merged base absent");
 		byte[] other = read(TestFixtures.mergedBase(),
 				"net/minecraft/client/particle/ParticleProvider.class");
 		assumeTrue(other != null, "ParticleProvider absent from this base");

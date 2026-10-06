@@ -1,0 +1,36 @@
+== after: kernel ffdb6979f805da85d4af1d464872549413d47bc3ddfc350a8b37055a358a5de3 (the reported run), console.log ==
+   path /tmp/particle-lane/gate-clean/per-mod/run/000-modmenu__fabric/console.log
+
+grep -c '@Mixin target type mismatch'                    0
+grep -c 'ParticleEngine is not an interface'             0
+grep -c 'SYNTHETIC default method over ParticleEngine'   2
+grep -c 'InvalidAccessorException'                       0
+grep -c 'InvalidInterfaceMixinException'                 0
+crash-reports                                            0
+
+-- the repair marker, verbatim (main thread + Render thread):
+   170:[07:01:54] [main/WARN]: [Forbric/MergedBaseCompat] fabric-api's ParticleManagerAccessor.getFactories() read a provider field this base does not have — the @Accessor it shipped with cannot bind, and its failure would have taken the two sprite accessors beside it down too. It is now a SYNTHETIC default method over ParticleEngine.forbric$providerFactories(ParticleEngine): without the flag the interface mixin becomes Mixin's INTERFACE variant and is rejected against the class ParticleEngine, losing every mixin in fabric-particles-v1.client.mixins.json
+   1433:[07:02:04] [Render thread/WARN]: [Forbric/MergedBaseCompat] fabric-api's ParticleManagerAccessor.getFactories() read a provider field this base does not have — the @Accessor it shipped with cannot bind, and its failure would have taken the two sprite accessors beside it down too. It is now a SYNTHETIC default method over ParticleEngine.forbric$providerFactories(ParticleEngine): without the flag the interface mixin becomes Mixin's INTERFACE variant and is rejected against the class ParticleEngine, losing every mixin in fabric-particles-v1.client.mixins.json
+
+-- the fabric-particles-v1 [Forbric/Mixin] lines, verbatim:
+   263:[07:01:54] [main/INFO]: [Forbric/Mixin] guest accessor mixin fabric-particles-v1 (fabric-particles-v1.client.mixins.json):ParticleManagerAccessor cannot bind — @Accessor field ParticleEngine.textureAtlas:Lnet/minecraft/client/renderer/texture/TextureAtlas;:Lnet/minecraft/client/renderer/texture/TextureAtlas;, @Accessor field ParticleEngine.spriteSets:Ljava/util/Map;:Ljava/util/Map; (kept; the merge re-typed or removed the member, so the generated accessor will throw when called)
+   264:[07:01:54] [main/INFO]: [Forbric/Mixin] guest accessor mixin fabric-particles-v1 (fabric-particles-v1.client.mixins.json):ParticleManagerAccessor$SimpleSpriteProviderAccessor cannot bind — @Accessor field ParticleEngine$MutableSpriteSet.sprites:Ljava/util/List;:Ljava/util/List; (kept; the merge re-typed or removed the member, so the generated accessor will throw when called)
+   265:[07:01:54] [main/INFO]: [Forbric/Mixin] suppressed mixin BlockDustParticleMixin from fabric-particles-v1 (fabric-particles-v1.client.mixins.json)
+
+-- the same, on the SUPERSEDED first run (kernel b4247eae):
+   target type mismatch = 0 ; ParticleEngine is not an interface = 0 ; SYNTHETIC marker = 2
+
+== before: the user's installed 0.3.5-beta kernel (a56bf626), their real instance ==
+   path /Applications/.minecraft/versions/1.21.1-forbric/logs/latest.log  (jar forbric-kernel-0.3.5-beta.jar)
+   480-[07:24:24] [main/INFO]: [Forbric/Mixin] net.fabricmc.fabric.mixin.networking.PacketByteBufMixin.limitInitialCapacity: require 2 → 0 — if the merged game no longer has what it injects into, this one injector goes unattached and its mod is reported, instead of Mixin abandoning the target class for every mod
+   481:[07:24:24] [main/ERROR]: [Mixin/mixin] @Mixin target type mismatch: net.minecraft.client.particle.ParticleEngine is not an interface in org.spongepowered.asm.mixin.transformer.MixinInfo$SubType$Interface@5f1925d0
+   482:org.spongepowered.asm.mixin.transformer.throwables.InvalidMixinException: @Mixin target type mismatch: net.minecraft.client.particle.ParticleEngine is not an interface in org.spongepowered.asm.mixin.transformer.MixinInfo$SubType$Interface@5f1925d0
+   483-	at org.spongepowered.asm.mixin.transformer.MixinInfo$SubType.validateTarget(MixinInfo.java:533) ~[sponge-mixin-0.17.3+mixin.0.8.7.jar:0.17.3+mixin.0.8.7]
+   grep -c 'ParticleEngine is not an interface' latest.log = 2
+
+== before (second record): the 2026-10-06-bughunt-create control arm, kernel a56bf626 ==
+   ## control arm (kernel a56bf626) — the blocker
+     [07:54:01] [main/INFO]: [Forbric/Mixin] keeping guest mixin fabric-particles-v1 (fabric-particles-v1.client.mixins.json):ParticleManagerAccessor — no anchor resolves (@Accessor field ParticleEngine.textureAtlas:Lnet/minecraft/client/renderer/texture/TextureAtlas;:Lnet/minecraft/client/renderer/texture/TextureAtlas;, @Accessor field ParticleEngine.spriteSets:Ljava/util/Map;:Ljava/util/Map;), but another loaded mod's mixin targets the same class, so the missing member is that mod's to add (cross-mod compatibility layer, not dead weight)
+     [07:54:01] [main/ERROR]: [Mixin/mixin] @Mixin target type mismatch: net.minecraft.client.particle.ParticleEngine is not an interface in org.spongepowered.asm.mixin.transformer.MixinInfo$SubType$Interface@6828f588
+     org.spongepowered.asm.mixin.transformer.throwables.InvalidMixinException: @Mixin target type mismatch: net.minecraft.client.particle.ParticleEngine is not an interface in org.spongepowered.asm.mixin.transformer.MixinInfo$SubType$Interface@6828f588
+     [07:54:11] [Render thread/ERROR]: Exception caught during firing event: Render layers can only be set during client loading! This might ideally be done from `FMLClientSetupEvent`.

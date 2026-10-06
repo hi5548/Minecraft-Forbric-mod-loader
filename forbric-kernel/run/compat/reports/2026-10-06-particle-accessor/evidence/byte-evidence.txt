@@ -1,0 +1,149 @@
+# Byte-level chain — why the mixin was rejected, and why one flag is the whole repair
+
+Every line below is either a command's output or a source line quoted from the artifact named next to it. Nothing
+here is inferred; where a step IS an inference it says so.
+
+## 1. The shipped accessor (fabric-api 0.116.17, `META-INF/jars/fabric-particles-v1-0.116.17.jar`)
+
+`javap -p -v net/fabricmc/fabric/mixin/client/particle/ParticleManagerAccessor.class` (extracted from the real jar):
+
+```
+public interface ...ParticleManagerAccessor
+  flags: (0x0601) ACC_PUBLIC, ACC_INTERFACE, ACC_ABSTRACT
+  public abstract net.minecraft.class_1059 getParticleAtlasTexture();
+    RuntimeVisibleAnnotations: org.spongepowered.asm.mixin.gen.Accessor(value="particleAtlasTexture")
+  public abstract it.unimi.dsi.fastutil.ints.Int2ObjectMap<net.minecraft.class_707<?>> getFactories();
+    RuntimeVisibleAnnotations: org.spongepowered.asm.mixin.gen.Accessor(value="factories")
+  public abstract java.util.Map<net.minecraft.class_2960, net.minecraft.class_4002> getSpriteAwareFactories();
+    RuntimeVisibleAnnotations: org.spongepowered.asm.mixin.gen.Accessor(value="spriteAwareFactories")
+RuntimeInvisibleAnnotations: org.spongepowered.asm.mixin.Mixin(value=[class net.minecraft.class_702])
+```
+
+`fabric-particles-v1.client.mixins.json` is `"required": true` and lists `BlockDustParticleMixin`,
+`ParticleManagerMixin`, `ParticleManagerAccessor`, `ParticleManagerAccessor$SimpleSpriteProviderAccessor`.
+Its refmap maps `factories` → `field_3835:Lit/unimi/dsi/fastutil/ints/Int2ObjectMap;`.
+
+## 2. Why the kernel rewrites `getFactories` at all
+
+`javap -p -s -cp patched-mc-merged-1.21.1.jar net.minecraft.client.particle.ParticleEngine` — the merged base
+declares `providers` ONCE, as the ResourceLocation-keyed Map:
+
+```
+  private final java.util.Map<net.minecraft.resources.ResourceLocation, net.minecraft.client.particle.ParticleProvider<?>> providers;
+    descriptor: Ljava/util/Map;
+  private final java.util.Map<net.minecraft.resources.ResourceLocation, net.minecraft.client.particle.ParticleEngine$MutableSpriteSet> spriteSets;
+    descriptor: Ljava/util/Map;
+  private final net.minecraft.client.renderer.texture.TextureAtlas textureAtlas;
+    descriptor: Lnet/minecraft/client/renderer/texture/TextureAtlas;
+```
+
+`findField("providers", "Lit/unimi/dsi/fastutil/ints/Int2ObjectMap;")` finds nothing (the field is `Ljava/util/Map;`)
+— and `textureAtlas`/`spriteSets` DO exist with the descriptors the other two accessors name. So the repair touches
+`getFactories` only, and only because its declared face cannot bind.
+
+## 3. The remapped mixin Mixin actually reads (`/private/tmp/particle-lane/remap/fabric-particles-v1-0.116.17-…jar`)
+
+The kernel's guest remapper rewrites each `@Accessor` value into Mixin's member-selector form `name:desc`:
+
+```
+  #18 = Utf8   textureAtlas:Lnet/minecraft/client/renderer/texture/TextureAtlas;   (@Accessor on getParticleAtlasTexture)
+  #22 = Utf8   providers:Lit/unimi/dsi/fastutil/ints/Int2ObjectMap;               (@Accessor on getFactories)
+  #26 = Utf8   spriteSets:Ljava/util/Map;                                          (@Accessor on getSpriteAwareFactories)
+```
+
+Mixin parses these with its target-selector parser — `AccessorInfo.initTarget()` is
+`new MemberInfo(this.getTargetName(this.specifiedName), null, this.targetFieldType.getDescriptor())` and
+`AccessorInfo.getTargetName(String)` is `TargetSelector.parseName(name, this)` (Mixin, `gen/AccessorInfo.java:336,348`),
+so `name:desc` splits into name + descriptor. `ParticleEngine$MutableSpriteSet.sprites:Ljava/util/List;` also exists
+(`javap` above), so all THREE shipped accessors bind on this base.
+
+## 4. The variant classifier, from the Mixin that ran (`mixin 0.8.7`, `MixinInfo.getVariant`)
+
+`javap -p -c org/spongepowered/asm/mixin/transformer/MixinInfo.class`:
+
+```
+static Variant getVariant(ClassInfo);
+   0: aload_0 / invokevirtual ClassInfo.isInterface / ifne 11
+   7: getstatic Variant.STANDARD / areturn            // not an interface -> STANDARD
+  11: iconst_0; istore_1                               // interfaceVariant = false
+  13..64: for each ClassInfo.Method m:
+        iload_1 | m.isAccessor() | ifne 61 | m.isSynthetic() | ifne 61 | iconst_1 | goto 62 | iconst_0
+        ior | istore_1                                  // variant |= !isAccessor && !isSynthetic
+  67: iload_1 | ifeq 75 | getstatic Variant.INTERFACE / areturn
+  75: getstatic Variant.ACCESSOR / areturn
+```
+
+`ClassInfo$Method.isAccessor` is `Annotations.getSingleVisible(m, {Accessor, Invoker}) != null`; `isSynthetic` is
+`ACC_SYNTHETIC`. The shipped class has three `@Accessor` methods → `ACCESSOR`. Give `getFactories` a body and drop its
+`@Accessor` and the answer becomes `INTERFACE`.
+
+`MixinInfo$SubType.validateTarget` (the frame the error names, `SubType$Interface`):
+
+```
+   5: iload_3 (target.isInterface) | getfield targetMustBeInterface | if_icmpeq 83
+  26..82: new InvalidMixinException(mixin, annotationType + " target type mismatch: " + name + " is "
+          + (isInterface ? "" : "not") + " an interface in " + this) / athrow
+```
+
+`SubType$Interface` is `super(mixin, "@Mixin", true)` (targetMustBeInterface = TRUE); `SubType$Accessor` is
+`super(mixin, "@Mixin", false)`. `ParticleEngine` is a class → INTERFACE throws, and the config's other three mixins
+go with it.
+
+## 5. Why `ACC_SYNTHETIC` is the whole repair and not a side effect
+
+- Classifier: synthetic is skipped (§4), so the mixin is `ACCESSOR` again — the variant it shipped as.
+- Target check: `SubType$Accessor.validateTarget` only refuses an INTERFACE target, so the class is fine.
+- Merge: `MixinPreProcessorInterface.prepareMethod` early-returns only for a **non-public** synthetic
+  (`boolean isPublic = Bytecode.hasFlag(mixinMethod, ACC_PUBLIC)`, then `if (!isPublic && mixinMethod.isSynthetic())
+  { …; return; }`). Our method is public, so it falls through to `super.prepareMethod(...)`.
+  `MixinPreProcessorStandard.attachMethods` reaches `this.attachMethod(context, mixinMethod)` (no `@Accessor`
+  annotation is left to divert it), and `MixinApplicatorStandard.mergeMethod` merges unconditionally:
+  `this.targetClass.methods.add(method)`.
+- Interface list: `SubType$Accessor.getInterfaces()` returns the mixin's own ref, so `ParticleEngine` is declared to
+  implement `ParticleManagerAccessor` — which is what the shipped accessor mixin did, and what
+  `ParticleFactoryRegistryImpl$DirectParticleFactoryRegistry` casts to:
+  `checkcast ParticleManagerAccessor` / `invokeinterface getFactories:()Lit/unimi/dsi/fastutil/ints/Int2ObjectMap;`.
+
+## 6. The one thing this repair is NOT: a loss of the two sprite accessors
+
+This boot's console carries, 56 times across the fabric modules, an INFO line of the form
+
+```
+[Forbric/Mixin] guest accessor mixin <config>:<Mixin> cannot bind — @Accessor field <Target>.<name>:<desc>:<desc> (kept; …)
+```
+
+For `ParticleManagerAccessor` it names `ParticleEngine.textureAtlas:L…TextureAtlas;:L…TextureAtlas;` and
+`ParticleEngine.spriteSets:Ljava/util/Map;:Ljava/util/Map;`, and for `$SimpleSpriteProviderAccessor`
+`ParticleEngine$MutableSpriteSet.sprites:Ljava/util/List;:Ljava/util/List;`. **That line is a false positive**, and the
+bytes say so twice over:
+
+1. The anchor it prints is MixinFit's `Anchor.describe`: `kind + " " + simpleName(target) + "." + detail`
+   (`MixinFit.java`), with `detail` produced by `accessorAnchor` as `name + ":" + desc` where
+   `name = asString(value(a,"value"))` — i.e. the WHOLE `name:desc` member-selector string (§3), fed straight into
+   `findField(target, name, desc, …)`, which compares `f.name.equals(name)` exactly. No field is named
+   `textureAtlas:Lnet/minecraft/client/renderer/texture/TextureAtlas;`, so the lookup cannot ever succeed for an
+   accessor whose value carries a descriptor (i.e. every remapped guest accessor).
+2. Mixin itself parses the same string with its target-selector parser (`AccessorInfo.getTargetName` →
+   `TargetSelector.parseName`, §3). If it did not bind, `required: true` means `InvalidAccessorException` during
+   application would abort the boot — `grep -c InvalidAccessorException console.log` = 0 and the run is
+   `strict=TRUE`.
+
+The finding is pre-existing (the control arm's log carries the same two anchors under the general-path wording), it
+is reported and never used to suppress (`KernelGuestMixinAdapter` keeps every pure accessor mixin), and this lane
+does not touch it.
+
+## 7. The repair's classification proof
+
+`evidence/probe-output.txt` — the standalone probe runs the REAL `ForbricMergedBaseCompatTransformer` over the REAL
+fabric-api bytes and asks Mixin's OWN `MixinInfo.getVariant`:
+
+```
+shipped   getFactories flags = public=true abstract=true synthetic=false (0x401)  accessors={getParticleAtlasTexture,getFactories,getSpriteAwareFactories}  variant=ACCESSOR
+repaired  getFactories flags = public=true abstract=false synthetic=true (0x1001)  accessors={getParticleAtlasTexture,getSpriteAwareFactories}  variant=ACCESSOR
+control   (flag cleared)     = public=true abstract=false synthetic=false (0x1)     accessors={getParticleAtlasTexture,getSpriteAwareFactories}  variant=INTERFACE
+```
+
+The control is the same bytes with one flag cleared, and it reproduces the rejection's classification — so the pair
+is not vacuous. The same two assertions are in
+`MergedBaseParticleProvidersTest.mixinClassifiesTheRewrittenAccessorAsAnAccessorMixin`
+(`evidence/unit-test-reading.txt`).

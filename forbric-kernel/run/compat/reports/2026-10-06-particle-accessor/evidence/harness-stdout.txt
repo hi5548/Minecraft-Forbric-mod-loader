@@ -1,0 +1,6 @@
+[client-sweep] pinned kernel-fix.jar -> /private/tmp/particle-lane/gate-clean/frozen/forbric-kernel-client.jar
+[client-sweep] frozen kernel sha256=ffdb6979f805da85d4af1d464872549413d47bc3ddfc350a8b37055a358a5de3
+[client-sweep] 000 modmenu-11.0.5.jar (+11 dep)
+[client-sweep]   371% CPU busy across 8 cores (load 14.4) — this row is timing-suspect (rule 3)
+[client-sweep] STRICT PASS     world=True frames=1 mod=OK   32s cause=None
+[client-sweep] rows: /private/tmp/particle-lane/gate-clean/per-mod/results.jsonl

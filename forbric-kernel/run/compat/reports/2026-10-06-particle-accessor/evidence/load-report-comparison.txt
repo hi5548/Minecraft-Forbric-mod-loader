@@ -1,0 +1,16 @@
+== after: fabric-particles-v1 entry, the reported run (kernel ffdb6979f805da85d4af1d464872549413d47bc3ddfc350a8b37055a358a5de3) ==
+  Fabric Particles (v1)  (fabric-particles-v1)
+    fabric-particles-v1-0.116.17.jar
+    有一部分没有跑起来 — the kernel leaves out its mixin BlockDustParticleMixin on the merged game
+
+== before: fabric-particles-v1 entry, the 0.3.5-beta release gate (kernel a56bf626, same 12 mods) ==
+  Fabric Particles (v1)  (fabric-particles-v1)
+    fabric-particles-v1-0.116.17.jar
+    有一部分没有跑起来 — the kernel leaves out its mixin BlockDustParticleMixin on the merged game
+
+== verdict ==
+byte-identical: the only remaining loss for fabric-particles-v1 is the pre-existing BlockDustParticleMixin suppression; the accessor is not named
+
+== aggregate sentence ==
+  after : 这一次启动，9 个 mod 有一部分没有跑起来。
+  before: 这一次启动，9 个 mod 有一部分没有跑起来。

@@ -118,4 +118,13 @@ game-side 无法用 staged 属性重建。故按 `2026-10-04` / `2026-10-06` 车
 
 ## 发布结果回填（2026-10-07）
 
-见 `evidence/release-result.txt`（tag / 附件 sha / 分支 / 安装校验摘录）。
+- tag `v0.3.6-beta-1.21.1`（轻量 tag，指向发布提交 `7a7fea0c`；其父 `bf738f8b` 为升版本提交，`8079e5a9` 为
+  stub-table 车道的报告提交，发布源码尖端 `13e4ff3f`）
+- Release `https://github.com/hi5548/Minecraft-Forbric-mod-loader/releases/tag/v0.3.6-beta-1.21.1`（Latest），附件：
+  - `forbric-kernel-installer-0.3.6-beta.jar` sha256 `93830468cf5009d5d82bd3c9230432028d031bf325da49c56c4a739dfaf315f9`（8527980 B）
+  - `forbric-kernel-installer-0.3.6-beta.zip` sha256 `759319b0a0bbbb56981b22b2c4c066482e656913e86683b38909d6348563b4f9`（8522079 B）
+- 本地构建产物：`forbric-kernel-installer/build/{libs,dist}/`，副本 `/private/tmp/rel036/artifacts/`
+- 安装器内嵌内核逐字节 = 本次 gate 的 `16bcd602…`（= 装上的 `libraries/net/forbric/forbric-kernel/0.3.6-beta/…jar`）
+- 安装器 jar：105 条目、0 条陈旧重名条目（打包前删掉 34 条 `X N.class` 陈旧沉积并重建）
+- `v0.3.5-beta-1.21.1` 已按惯例标注"已被取代"并撤下两个附件
+- 逐条见 `evidence/release-result.txt`、`evidence/install-verification.txt`

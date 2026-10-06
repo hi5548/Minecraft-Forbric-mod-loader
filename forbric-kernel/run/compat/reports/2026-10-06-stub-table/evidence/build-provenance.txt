@@ -1,0 +1,18 @@
+kernel jar (boot half + injected game side) : /Users/charlescai/Desktop/dsh/实验/forbric/stubtable/kernel-stubtable.jar
+sha256                                      : 6c4831e1fc82c3cafa198d36be6efc8a815d3f4780a794e8aea6a1ab232afff3
+source                                      : worktree /Users/charlescai/Desktop/dsh/实验/forbric/stubtable-wt @ caf331e1
+
+Assembly (energy-4.1.0-named.jar absent on this box; /Volumes/ORICO unmounted):
+  1. ./gradlew --offline -q jar                      (boot half; no staged game jars -> no nested runtime)
+  2. game side taken from the 0.3.5 artifact's META-INF/jars/forbric-kernel-runtime.jar
+     (src/runtime unchanged between b1b90566 and HEAD: git diff --stat is empty)
+  3. injected as META-INF/jars/forbric-kernel-runtime.jar
+
+Verification:
+  - boot half compiled from the commit; carrier-stubs.txt inside the jar has 63 rows
+  - MixinStubRebind.class in the jar is the changed one (delegationCall has no same-name term):
+  - staged artifacts (sha256):
+      c92f9b0826c9d4d3c1933ccf417d045467ffd113f9bddfb4b2faefb64b92075d  /Applications/.minecraft/.forbric-build/client-official.jar
+      fbd531b08c34f430be851faf896410a8df9ae7e266e5cdb6eb376404b2427400  /Applications/.minecraft/libraries/net/forbric/patched-mc-merged/1.21.1/patched-mc-merged-1.21.1.jar
+      b67f13c3491210daa2c73594a24f7f52418326d800c946efef5b55e0017a3faa  /Applications/.minecraft/.forbric-build/out/patched-mc-forge-1.21.1.jar
+      0e1a2e52e489b0b9000c84e1f30f70204ac9c494ea38d80cc9628838ef0a9032  /Applications/.minecraft/.forbric-build/out/patched-mc-neoforge-1.21.1.jar

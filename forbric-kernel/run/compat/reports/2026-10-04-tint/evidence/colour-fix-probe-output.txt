@@ -1,0 +1,93 @@
+== step 2: merged base raw keys ==
+  ok   merged BlockColors starts with 2 Forge delegate lookups (was 2)
+  ok   repair reports a change on BlockColors
+  ok   BlockColors has 0 Forge delegate lookups after (was 0)
+--- BlockColors.getColor(BlockState,Level,BlockPos) ---
+  op     25 (VarInsnNode)
+  field  net/minecraft/client/color/block/BlockColors.blockColors:Ljava/util/Map; op=180
+  op     25 (VarInsnNode)
+  invoke net/minecraft/world/level/block/state/BlockState.getBlock()Lnet/minecraft/world/level/block/Block;
+  invoke java/util/Map.get(Ljava/lang/Object;)Ljava/lang/Object;
+  cast   net/minecraft/client/color/block/BlockColor
+  op     58 (VarInsnNode)
+  op     25 (VarInsnNode)
+  op     198 (JumpInsnNode)
+  op     25 (VarInsnNode)
+  op     25 (VarInsnNode)
+  op     1 (InsnNode)
+  op     1 (InsnNode)
+  op     3 (InsnNode)
+  invoke net/minecraft/client/color/block/BlockColor.getColor(Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/BlockAndTintGetter;Lnet/minecraft/core/BlockPos;I)I
+  op     172 (InsnNode)
+  op     25 (VarInsnNode)
+  op     25 (VarInsnNode)
+  op     25 (VarInsnNode)
+  invoke net/minecraft/world/level/block/state/BlockState.getMapColor(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/material/MapColor;
+  op     58 (VarInsnNode)
+  op     25 (VarInsnNode)
+  op     198 (JumpInsnNode)
+  op     25 (VarInsnNode)
+  field  net/minecraft/world/level/material/MapColor.col:I op=180
+  op     167 (JumpInsnNode)
+  op     2 (InsnNode)
+  op     172 (InsnNode)
+  ok   3-arg getColor now keys the map with the raw block
+  ok   3-arg StackMapTable frames unchanged
+  ok   4-arg StackMapTable frames unchanged
+  ok   repair reports a change on ItemColors
+--- ItemColors.getColor(ItemStack,int) ---
+  op     25 (VarInsnNode)
+  field  net/minecraft/client/color/item/ItemColors.itemColors:Ljava/util/Map; op=180
+  op     25 (VarInsnNode)
+  invoke net/minecraft/world/item/ItemStack.getItem()Lnet/minecraft/world/item/Item;
+  invoke java/util/Map.get(Ljava/lang/Object;)Ljava/lang/Object;
+  cast   net/minecraft/client/color/item/ItemColor
+  op     58 (VarInsnNode)
+  op     25 (VarInsnNode)
+  op     199 (JumpInsnNode)
+  op     2 (InsnNode)
+  op     167 (JumpInsnNode)
+  op     25 (VarInsnNode)
+  op     25 (VarInsnNode)
+  op     21 (VarInsnNode)
+  invoke net/minecraft/client/color/item/ItemColor.getColor(Lnet/minecraft/world/item/ItemStack;I)I
+  op     172 (InsnNode)
+  ok   ItemColors frames unchanged
+  ok   ItemColors has 0 Forge delegate lookups after
+  ok   both classes re-serialize
+  ok   second pass is a no-op (idempotent)
+  ok   NEGATIVE CONTROL: a non-Forge getstatic makes the repair decline
+  ok   NEGATIVE CONTROL: the declined class is left untouched
+== step 1: fabric-rendering-v1 guest mixins ==
+  ok   guest BlockColorsMixin starts with an IdMapper shadow (Lnet/minecraft/core/IdMapper;)
+  ok   repair reports a change on BlockColorsMixin
+  ok   BlockColorsMixin shadow is now java.util.Map (Ljava/util/Map;)
+--- BlockColorsMixin.get(Block) ---
+  op     25 (VarInsnNode)
+  field  net/fabricmc/fabric/mixin/client/rendering/BlockColorsMixin.blockColors:Ljava/util/Map; op=180
+  op     25 (VarInsnNode)
+  invoke java/util/Map.get(Ljava/lang/Object;)Ljava/lang/Object;
+  cast   net/minecraft/client/color/block/BlockColor
+  op     176 (InsnNode)
+  ok   BlockColorsMixin.get reads the live map by raw block
+  ok   BlockColorsMixin re-serializes
+  ok   repair reports a change on ItemColorsMixin
+  ok   ItemColorsMixin shadow is now java/util/Map (Ljava/util/Map;)
+--- ItemColorsMixin.get(ItemLike) ---
+  op     25 (VarInsnNode)
+  field  net/fabricmc/fabric/mixin/client/rendering/ItemColorsMixin.itemColors:Ljava/util/Map; op=180
+  op     25 (VarInsnNode)
+  invoke net/minecraft/world/level/ItemLike.asItem()Lnet/minecraft/world/item/Item;
+  invoke java/util/Map.get(Ljava/lang/Object;)Ljava/lang/Object;
+  cast   net/minecraft/client/color/item/ItemColor
+  op     176 (InsnNode)
+  ok   ItemColorsMixin.get reads the live map by item.asItem()
+  ok   second pass on the mixin is a no-op
+  ok   merged BlockColors declares Map blockColors (mixin binds)
+  ok   merged ItemColors declares Map itemColors (mixin binds)
+== verifier ==
+  ok   net/minecraft/client/color/block/BlockColors passes CheckClassAdapter.verify
+  ok   net/minecraft/client/color/item/ItemColors passes CheckClassAdapter.verify
+  ok   net/fabricmc/fabric/mixin/client/rendering/BlockColorsMixin passes CheckClassAdapter.verify
+  ok   net/fabricmc/fabric/mixin/client/rendering/ItemColorsMixin passes CheckClassAdapter.verify
+ALL CHECKS PASSED

@@ -1,0 +1,11 @@
+control (a56bf626): header + Create section
+
+Forbric 加载报告
+=================
+
+这一次启动，10 个 mod 有一部分没有跑起来。
+
+  Create  (create)
+    create-1.21.1-6.0.10.jar
+    有一部分没有跑起来 — it threw during client setup
+

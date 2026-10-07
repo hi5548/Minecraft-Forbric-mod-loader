@@ -1,0 +1,17 @@
+    Mixin injection enchantmentKey — A required MixinExtras injector has no attachment in the actual defined class; no audited replacement says whether its feature is lost
+    Mixin injection wrapInnerBake — A required MixinExtras injector has no attachment in the actual defined class; no audited replacement says whether its feature is lost
+    Mixin injection wrapCodec — A required MixinExtras injector has no attachment in the actual defined class; no audited replacement says whether its feature is lost
+    Mixin injection wrapConfigCodec — A required MixinExtras injector has no attachment in the actual defined class; no audited replacement says whether its feature is lost
+    Mixin injection wrapPlayCodec — A required MixinExtras injector has no attachment in the actual defined class; no audited replacement says whether its feature is lost
+    Mixin injection init — A required MixinExtras injector has no attachment in the actual defined class; no audited replacement says whether its feature is lost
+    Mixin injection allowNoneMinecraftId — A required MixinExtras injector has no attachment in the actual defined class; no audited replacement says whether its feature is lost
+    Mixin injection modifyId — A required MixinExtras injector has no attachment in the actual defined class; no audited replacement says whether its feature is lost
+    Mixin injection onRenderScreen — A required MixinExtras injector has no attachment in the actual defined class; no audited replacement says whether its feature is lost
+    Mixin injection sodium$beforeGenerateMipLevels — A required MixinExtras injector has no attachment in the actual defined class; no audited replacement says whether its feature is lost
+    mixin-injector:sodium-common.mixins.json:net.caffeinemc.mods.sodium.mixin.features.textures.mipmaps.SpriteContentsMixin#sodium$beforeGenerateMipLevels(Lnet/minecraft/client/renderer/texture/SpriteContents;Lcom/mojang/blaze3d/platform/NativeImage;Lcom/llamalad7/mixinextras/injector/wrapoperation/Operation;)V@net.minecraft.client.renderer.texture.SpriteContents
+    Mixin injection sodium$beforeGenerateMipLevels — A required MixinExtras injector has no attachment in the actual defined class; no audited replacement says whether its feature is lost
+    mixin-injector:sodium-common.mixins.json:net.caffeinemc.mods.sodium.mixin.features.textures.scan.SpriteContentsMixin#sodium$beforeGenerateMipLevels(Lnet/minecraft/client/renderer/texture/SpriteContents;Lcom/mojang/blaze3d/platform/NativeImage;Lcom/llamalad7/mixinextras/injector/wrapoperation/Operation;)V@net.minecraft.client.renderer.texture.SpriteContents
+    Mixin net.caffeinemc.mods.sodium.mixin.features.textures.mipmaps.SpriteContentsMixin — 2/3 anchors resolve, missing: @At(FIELD) SpriteContents.originalImage in <init>
+    mixin:sodium-common.mixins.json:net.caffeinemc.mods.sodium.mixin.features.textures.mipmaps.SpriteContentsMixin
+    Mixin net.caffeinemc.mods.sodium.mixin.features.textures.scan.SpriteContentsMixin — 2/3 anchors resolve, missing: @At(FIELD) SpriteContents.originalImage in <init>
+    mixin:sodium-common.mixins.json:net.caffeinemc.mods.sodium.mixin.features.textures.scan.SpriteContentsMixin

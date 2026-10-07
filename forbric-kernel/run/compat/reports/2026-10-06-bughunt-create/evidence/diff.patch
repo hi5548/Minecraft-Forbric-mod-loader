@@ -1,0 +1,66 @@
+diff --git a/forbric-kernel/src/main/java/net/forbric/kernel/boot/KernelLifecycle.java b/forbric-kernel/src/main/java/net/forbric/kernel/boot/KernelLifecycle.java
+index e641c8f5..ea3669fd 100644
+--- a/forbric-kernel/src/main/java/net/forbric/kernel/boot/KernelLifecycle.java
++++ b/forbric-kernel/src/main/java/net/forbric/kernel/boot/KernelLifecycle.java
+@@ -114,7 +114,23 @@ public final class KernelLifecycle {
+ 	 * {@code client} entrypoints rather than {@code server} ones, driven by {@code KernelFabricLoader}'s env type.
+ 	 */
+ 	public static void onClientModLoading() {
+-		driveNativeRegistration(Side.CLIENT);
++		ClassLoader cl = gameLoader != null ? gameLoader : Thread.currentThread().getContextClassLoader();
++		// NeoForge's client mod-loading window has a flag, and mods read it. Genuine NeoForge sets
++		// ClientModLoader.loading in begin() and clears it in finishModLoading, i.e. it is TRUE for the whole window
++		// in which FMLClientSetupEvent fires; ItemBlockRenderTypes.checkClientLoading() is NeoForge's own gate on
++		// exactly that flag, and Registrate's BlockBuilder.registerLayers — which is how Create registers the render
++		// layer of every one of its blocks — calls setRenderLayer from the side's setup event. This call site is the
++		// REDIRECT of begin(), so the genuine write does not happen and the flag stayed false: a `… / strict` boot
++		// then reports Create DEGRADED with "Render layers can only be set during client loading!". Publish what the
++		// window would have, around the window, and put it back where genuine NeoForge puts it — after the setup
++		// phases, which is the end of driveNativeRegistration, not before. Everything outside this window is exactly
++		// as it was on the released kernel, which is the state the 12-mod gate already passed in.
++		setClientModLoadingState(cl, true);
++		try {
++			driveNativeRegistration(Side.CLIENT);
++		} finally {
++			setClientModLoadingState(cl, false);
++		}
+ 	}
+ 
+ 	/**
+@@ -915,6 +931,36 @@ public final class KernelLifecycle {
+ 		}
+ 	}
+ 
++	/** {@code off} leaves the carrier's client mod-loading flag alone, as the released kernel did. */
++	static final String CLIENT_MOD_LOADING_STATE = "forbric.clientModLoadingState";
++
++	/**
++	 * Publishes each Forge-family client loader's own {@code loading} flag around the kernel's client mod-loading
++	 * window — see {@link #onClientModLoading()}. Only the field is written, never a replacement getter: a mod that
++	 * wants the answer calls {@code ClientModLoader.isLoading()}, so the carrier's getter is what has to answer,
++	 * exactly as in {@link #setForgeLoadingState}.
++	 *
++	 * <p>Both loaders declare it identically on 1.21.1 (javap of neoforge-runtime.jar 21.1.252 and the interop
++	 * carrier: {@code private static boolean loading}, {@code isLoading()Z} reading it). Whichever family's
++	 * {@code begin} the merged base calls is the one present, so an absent sibling is expected, not a fault.
++	 */
++	static void setClientModLoadingState(ClassLoader cl, boolean loading) {
++		if ("off".equalsIgnoreCase(System.getProperty(CLIENT_MOD_LOADING_STATE, "on"))) return;
++		for (Ecosystem ecosystem : new Ecosystem[] {Ecosystem.NEOFORGE, Ecosystem.FORGE}) {
++			String name = ForeignType.CLIENT_MOD_LOADER.binary(ecosystem);
++			try {
++				Class<?> loader = Class.forName(name, false, cl);
++				Field state = loader.getDeclaredField("loading");
++				state.setAccessible(true);
++				state.setBoolean(null, loading);
++			} catch (ClassNotFoundException absent) {
++				// The other family's client loader is not on this instance.
++			} catch (ReflectiveOperationException failed) {
++				ForbricLog.warn("[Forbric/Lifecycle] could not publish the client mod-loading state of " + name, failed);
++			}
++		}
++	}
++
+ 	/** {@code off} leaves MinecraftForge's completed-state set empty, which is what it always was before. */
+ 	static final String FORGE_LOADING_STATES = "forbric.forgeLoadingStates";
+ 

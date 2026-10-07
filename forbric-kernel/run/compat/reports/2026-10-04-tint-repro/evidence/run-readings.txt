@@ -1,0 +1,18 @@
+-- val4-control
+{"kernel_sha256": "bf56012d7bf6f025dba3628e43c303bf54970ce81142fa41b3833fb1dd8e21f4", "java": "/usr/bin/java — java version \"25.0.1\" 2025-10-21 LTS", "compatibility_policy": "strict", "run": "PASS", "exit": 0, "world": true, "frames": 1, "confirmed_required": 0, "loaded": true, "strict": true, "seconds": 30, "contended": true, "cause": null}
+  frozen: bf56012d7bf6f025dba3628e43c303bf54970ce81142fa41b3833fb1dd8e21f4
+-- val4-fix
+{"kernel_sha256": "b50c95b09506f11079f84da8a0ac21f9fec0067951747a45e06998d854abca21", "java": "/usr/bin/java — java version \"25.0.1\" 2025-10-21 LTS", "compatibility_policy": "strict", "run": "PASS", "exit": 0, "world": true, "frames": 1, "confirmed_required": 0, "loaded": true, "strict": true, "seconds": 30, "contended": true, "cause": null}
+  frozen: b50c95b09506f11079f84da8a0ac21f9fec0067951747a45e06998d854abca21
+-- val5-control
+{"kernel_sha256": "bf56012d7bf6f025dba3628e43c303bf54970ce81142fa41b3833fb1dd8e21f4", "java": "/usr/bin/java — java version \"25.0.1\" 2025-10-21 LTS", "compatibility_policy": "strict", "run": "PASS", "exit": 0, "world": true, "frames": 1, "confirmed_required": 0, "loaded": true, "strict": true, "seconds": 30, "contended": true, "cause": null}
+  frozen: bf56012d7bf6f025dba3628e43c303bf54970ce81142fa41b3833fb1dd8e21f4
+-- val7-control
+{"kernel_sha256": "bf56012d7bf6f025dba3628e43c303bf54970ce81142fa41b3833fb1dd8e21f4", "java": "/usr/bin/java — java version \"25.0.1\" 2025-10-21 LTS", "compatibility_policy": "strict", "run": "PASS", "exit": 0, "world": true, "frames": 1, "confirmed_required": 0, "loaded": true, "strict": true, "seconds": 29, "contended": true, "cause": null}
+  frozen: bf56012d7bf6f025dba3628e43c303bf54970ce81142fa41b3833fb1dd8e21f4
+-- val8-probe
+{"kernel_sha256": "bf56012d7bf6f025dba3628e43c303bf54970ce81142fa41b3833fb1dd8e21f4", "java": "/usr/bin/java — java version \"25.0.1\" 2025-10-21 LTS", "compatibility_policy": "strict", "run": "PASS", "exit": 0, "world": true, "frames": 1, "confirmed_required": 0, "loaded": true, "strict": true, "seconds": 29, "contended": true, "cause": null}
+  frozen: bf56012d7bf6f025dba3628e43c303bf54970ce81142fa41b3833fb1dd8e21f4
+-- val9-control
+{"kernel_sha256": "bf56012d7bf6f025dba3628e43c303bf54970ce81142fa41b3833fb1dd8e21f4", "java": "/usr/bin/java — java version \"25.0.1\" 2025-10-21 LTS", "compatibility_policy": "strict", "run": "PASS", "exit": 0, "world": true, "frames": 1, "confirmed_required": 0, "loaded": true, "strict": true, "seconds": 29, "contended": false, "cause": null}
+  frozen: bf56012d7bf6f025dba3628e43c303bf54970ce81142fa41b3833fb1dd8e21f4

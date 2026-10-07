@@ -1,0 +1,213 @@
+# 逐字节普查 —— Sodium cutout 降级链与它断掉的那一环
+
+工具: JDK 21 `javap -p -c -v`。被读的字节:
+- **合并基底** `/private/tmp/tint-stage/merged-base/patched-mc-merged-1.21.1.jar`(sha256 见 `run-readings.txt` 同源 stage;
+  与安装副本 `/Applications/.minecraft/.forbric-build/out/patched-mc-merged-1.21.1.jar` 一致)
+- **NeoForge patched** `/Applications/.minecraft/.forbric-build/out/patched-mc-neoforge-1.21.1.jar`
+- **guest Sodium** `sodium-neoforge-0.8.13+mc1.21.1.jar!/META-INF/jarjar/net.caffeinemc.sodium-neoforge-0.8.13+mc1.21.1-mod.jar`
+  (NeoForge mod,**不经 remap**;这就是 Mixin 读的那份字节)
+
+---
+
+## 1. 降级链(guest Sodium 自己的字节)
+
+### 1.1 `DefaultMaterials.forBlockState` → material bits
+
+```
+net.caffeinemc.mods.sodium.client.render.chunk.terrain.material.DefaultMaterials
+  forBlockState(BlockState):  invokestatic ItemBlockRenderTypes.getChunkRenderType(BlockState)
+                              invokestatic forRenderLayer(RenderType)
+  forRenderLayer(RenderType): if_acmpne RenderType.solid()          -> SOLID
+                              if_acmpne RenderType.cutout()         -> CUTOUT
+                              if_acmpne RenderType.cutoutMipped()   -> CUTOUT_MIPPED
+                              if_acmpne RenderType.tripwire()       -> TRIPWIRE
+                              if_acmpne RenderType.translucent()    -> TRANSLUCENT
+                              else new IllegalArgumentException
+
+MaterialParameters.pack(cutoff, mipped)  = (mipped?1:0)<<OFFSET_USE_MIP | cutoff.ordinal()<<OFFSET_ALPHA_CUTOFF
+AlphaCutoffParameter 序数: ZERO=0, ONE_TENTH=1, HALF=2, ONE=3
+```
+
+### 1.2 pass 决定 program,`USE_FRAGMENT_DISCARD` 只加在 CUTOUT
+
+```
+ChunkShaderOptions.constants(): ... pass.supportsFragmentDiscard() ? builder.add("USE_FRAGMENT_DISCARD") : ...
+DefaultTerrainRenderPasses.<clinit>:
+  SOLID       = new TerrainRenderPass(RenderType.solid(),        false, false)
+  CUTOUT      = new TerrainRenderPass(RenderType.cutoutMipped(), false, true)   <- fragmentDiscard=true
+  TRANSLUCENT = new TerrainRenderPass(RenderType.translucent(),  true,  false)
+```
+
+`assets/sodium/shaders/blocks/block_layer_opaque.fsh`(Sodium 唯一的地形片元着色器):
+
+```glsl
+vec4 color = texture(u_BlockTex, v_TexCoord, lodBias);
+color *= v_Color;
+#ifdef USE_FRAGMENT_DISCARD
+    if (color.a < _material_alpha_cutoff(v_Material)) discard;
+#endif
+fragColor = _linearFog(color, v_FragDistance, u_FogColor, u_FogStart, u_FogEnd);
+```
+`include/chunk_material.glsl`:
+```glsl
+const float[4] ALPHA_CUTOFF = float[4](0.0, 0.1, 0.1, 1.0);
+float _material_alpha_cutoff(uint material) { return ALPHA_CUTOFF[(material >> 1) & 3u]; }
+```
+⇒ **SOLID program 里根本没有 discard**:透明像素会被当真颜色写下去。
+
+### 1.3 断掉的一环:`BlockRenderer.getDowngradedPass`
+
+```
+net.caffeinemc.mods.sodium.client.render.chunk.compile.pipeline.BlockRenderer
+  private static TerrainRenderPass getDowngradedPass(TextureAtlasSprite sprite, TerrainRenderPass pass):
+     0: if (!(sprite instanceof TextureAtlasSpriteExtension)) goto 83      // 不缺就返回原 pass
+    12: if (ext.sodium$hasUnknownImageContents()) return pass;
+    29: if (!(sprite.contents() instanceof SpriteContentsExtension)) goto 83
+    43: if (pass == DefaultTerrainRenderPasses.TRANSLUCENT && !ext2.sodium$hasTranslucentPixels())
+    62:     pass = DefaultTerrainRenderPasses.CUTOUT;
+    63: if (pass == DefaultTerrainRenderPasses.CUTOUT && !ext2.sodium$hasTransparentPixels())
+    82:     pass = DefaultTerrainRenderPasses.SOLID;
+    83: return pass;
+
+  bufferQuad(...): ... attemptPassDowngrade(sprite, pass) -> 若非 null 则 pass 换成它
+                   MaterialParameters.pack(AlphaCutoffParameter.ONE_TENTH, mipped)  // 仅 TRANSLUCENT->CUTOUT 时重打
+                   ChunkModelBuilder.get(pass).getVertexBuffer(normalFace).push(vertices, materialBits)
+```
+⇒ **`sodium$hasTransparentPixels()` 返回 false ⇒ CUTOUT 全被降到 SOLID ⇒ 无 discard ⇒ 透明像素画黑。**
+
+`SpriteContentsExtension` 只有两个抽象方法,是 guest 自己声明的**纯 mixin 旗标**:
+
+```
+interface net.caffeinemc.mods.sodium.client.render.chunk.compile.pipeline.SpriteContentsExtension {
+  boolean sodium$hasTransparentPixels();
+  boolean sodium$hasTranslucentPixels();
+}
+```
+
+### 1.4 旗标的唯一写者:两个 `SpriteContentsMixin`,注解逐字
+
+```
+net.caffeinemc.mods.sodium.mixin.features.textures.scan.SpriteContentsMixin
+  implements ...SpriteContentsExtension
+  private com.mojang.blaze3d.platform.NativeImage originalImage;   // @Mutable @Shadow @Final
+  public boolean sodium$hasTransparentPixels;  // 默认 false
+  public boolean sodium$hasTranslucentPixels;  // 默认 false
+  private void sodium$beforeGenerateMipLevels(SpriteContents, NativeImage, Operation<Void>)
+    RuntimeVisibleAnnotations:
+      com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation(
+        method=["<init>"]                                                    // 常量池 #5 = Utf8 "<init>"
+        at=[@org.spongepowered.asm.mixin.injection.At(
+              value="FIELD"
+              target="Lnet/minecraft/client/renderer/texture/SpriteContents;originalImage:Lcom/mojang/blaze3d/platform/NativeImage;"
+              opcode=181 )])                                                 // 181 = PUTFIELD
+    body: 0: scanSpriteContents(nativeImage)   // 扫全图,置两个旗标
+          5: original.call(new Object[]{instance, nativeImage})
+
+net.caffeinemc.mods.sodium.mixin.features.textures.mipmaps.SpriteContentsMixin
+  同名同形状的 @WrapOperation(method=["<init>"], at=FIELD ...originalImage... opcode=181)
+  + sodium$fillInTransparentPixelColors(NativeImage)
+```
+config `sodium-common.mixins.json` 的 `client` 列表里两条都在。
+
+## 2. 为什么它断**在合并基底上**(合并基底 vs NeoForge 的 `SpriteContents`)
+
+合并基底 `net.minecraft.client.renderer.texture.SpriteContents` 有**两个**构造器:
+
+```
+public SpriteContents(ResourceLocation, FrameSize, NativeImage, ResourceMetadata);                       // 4 参
+public SpriteContents(ResourceLocation, FrameSize, NativeImage, ResourceMetadata, ForgeTextureMetadata); // 5 参(Forge)
+```
+两个实体的逐字节:
+
+```
+ 4 参:
+   0: aload_0
+   1: aload_1 ... aload 4
+   6: aconst_null
+   7: invokespecial #62  // Method "<init>":(Lnet/minecraft/resources/ResourceLocation;
+                          //   Lnet/minecraft/client/resources/metadata/animation/FrameSize;
+                          //   Lcom/mojang/blaze3d/platform/NativeImage;
+                          //   Lnet/minecraft/server/packs/resources/ResourceMetadata;
+                          //   Lnet/minecraftforge/client/textures/ForgeTextureMetadata;)V
+  10: return                                    <-- 纯委托 stub,方法体里 0 个 PUTFIELD
+
+ 5 参:
+   ...
+  52: aload_0 ... createAnimatedTexture(...) -> putfield animatedTexture
+  71: aload_0
+  72: aload_3
+  73: putfield #73  // Field originalImage:Lcom/mojang/blaze3d/platform/NativeImage;   <-- 唯一的 PUTFIELD 在这里
+  76: aload_0 ... putfield byMipLevel
+  91: aload_0
+  92: aload 5
+  94: putfield #491 // Field forgeMeta:Lnet/minecraftforge/client/textures/ForgeTextureMetadata;
+  97: return
+```
+
+`SpriteContents` 上 `originalImage` 只有这一处 `PUTFIELD`(全类常量池核对)。NeoForge/Forge 两个 patched jar 里都一样存在 4 参/5 参这对,
+差别只在**哪个实体装着方法体**:合并基底把 body 放在 **5 参**(Forge 的),把 4 参(vanilla 的签名)留成一行 `aconst_null` + 委托。
+
+Mixin 对**不带描述符**的选择器(`method=["<init>"]`)绑定**第一个声明**的同名方法 —— 也就是那个 4 参 stub。
+于是 `@At(FIELD … originalImage … opcode=181)` 在 4 参里**搜不到**,`@WrapOperation` 整条不附着。
+
+内核自己的读数逐字(控制臂 `load-report.txt`,见 `load-report-sodium.txt`):
+
+```
+Sodium  (sodium)
+  Mixin injection sodium$beforeGenerateMipLevels — A required MixinExtras injector has no attachment in the
+  actual defined class; no audited replacement says whether its feature is lost
+  mixin-injector:sodium-common.mixins.json:...features.textures.mipmaps.SpriteContentsMixin#sodium$beforeGenerateMipLevels(...)
+Sodium  (sodium)
+  Mixin net.caffeinemc.mods.sodium.mixin.features.textures.scan.SpriteContentsMixin — 2/3 anchors resolve,
+  missing: @At(FIELD) SpriteContents.originalImage in <init>
+```
+
+运行期探针(装置在**被测物之外**,`evidence/Probe.java`,-javaagent,反射读同一批实体的运行值):
+
+```
+[probe] renderCutout=true
+[probe] GRASS_BLOCK getChunkRenderType=RenderType[cutout_mipped:...]  identity(rt==cutoutMipped)=true
+        | pass=TerrainRenderPass@c90b041 cutoff=HALF mipped=true
+[probe] DANDELION   getChunkRenderType=RenderType[cutout:...]          | pass=TerrainRenderPass@c90b041 cutoff=ONE_TENTH mipped=false
+[probe] GLASS       getChunkRenderType=RenderType[cutout:...]          | pass=TerrainRenderPass@c90b041 cutoff=ONE_TENTH mipped=false
+[probe] STONE       getChunkRenderType=RenderType[solid:...]           | pass=TerrainRenderPass@7293b25c cutoff=ZERO      mipped=true
+[probe] OAK_PLANKS  getChunkRenderType=RenderType[solid:...]           | pass=TerrainRenderPass@7293b25c cutoff=ZERO      mipped=true
+[probe] TYPE_BY_BLOCK size=309   BLOCK_RENDER_TYPES size=309
+```
+⇒ `ItemBlockRenderTypes` **本身是好的**(309 条、grass→cutout_mipped、身份相等)。缺陷不在它,
+而在 Sodium 那两处 injector 没附着、旗标恒 false、`getDowngradedPass` 把 CUTOUT 降成 SOLID。
+
+## 3. 为什么**不影响物品栏图标**(两个症状是两条路径)
+
+物品/手持走 vanilla `ItemRenderer.renderQuadList`(合并基底,与 NeoForge 逐字节相同):
+它按 quad 的 `tintIndex` 直接取 `ItemColors.getColor(stack, tintIndex)`,渲染类型取 `Sheets.cutoutBlockSheet()`
+——**不经过 Sodium 的 chunk pass,也不经过 `getDowngradedPass`**。所以:
+
+- 图标之所以"发灰",是 `ItemColors.getColor`/`BlockColors.getColor` 的 **Forge 委托键 vs NeoForge 原始键**失配(miss → `-1` → 白 → 灰),
+  即 `ad9d5615` 修的那条;
+- 世界之所以"泥土发黑",是 **Sodium cutout 降级**那条,`ad9d5615` 修不到。
+
+两条在同一帧里就能分开:见 `frame-control__icon-grey.png` / `frame-fix__icon-green.png`
+(同一确定性场景,图标灰→绿,而世界像素逐字节不变)。
+
+## 4. 修复的形状(按内核既有约定,写在运行前)
+
+内核已有**正好这一条**通用规则,只是没有命中 Sodium:
+
+```
+MixinStubRebind —— "Moves a mod's injector off a merge-added delegating stub onto the method that carries the body"
+  触发面: 只沿 `carrier-stubs.txt` 的行;并且
+          "A MinecraftForge or NeoForge mod moves only where its carrier's own patched class has vanilla's
+           signature as the body (or, for a name-only selector, only the widened overload) — the row's forge=/neo= column"
+```
+`SpriteContents.<init>` 这一对**没有进 `carrier-stubs.txt`**(表里没有该行),所以 Sodium(NeoForge 家族)的选择器
+没被搬家。修复即:把这一行按表格式补进 `carrier-stubs.txt`(stub = 4 参 `<init>`,delegate = 5 参 `<init>`,
+`neo=` 按 NeoForge patched 的事实填),`MixinStubRebind` 就会把两个 `@WrapOperation.method` 从 `<init>` 绑到装 body 的 5 参重载,
+`PUTFIELD originalImage` 锚点于是存在,旗标被扫出来,CUTOUT 不再被降到 SOLID。
+
+替代(更窄)做法:像 `FabricSectionCompilerMixinAdapter` 之于 Indigo 的 `SectionCompiler.compile` 那样,
+写一条 Sodium 专用适配器,直接把两个 guest mixin 的 `method=["<init>"]` 改成 5 参描述符。
+两种都守住同一条:**锚点搬到装 body 的那次调用上,不改 handler 语义。**
+
+> **本次未落地**:受本轮预算所限,修复本身**尚未写进内核、也尚未跑过读数**。本文件给的是机制与修复形状,
+> 不是已完成的修复。下一车道按上面任一条实现后,判据即本目录 `preregistration.md` §3/§4 的 P3/P4。

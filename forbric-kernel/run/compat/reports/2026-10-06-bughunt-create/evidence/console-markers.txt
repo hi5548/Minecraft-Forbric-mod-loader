@@ -1,0 +1,12 @@
+## control arm (kernel a56bf626) — the blocker
+  [07:54:01] [main/INFO]: [Forbric/Mixin] keeping guest mixin fabric-particles-v1 (fabric-particles-v1.client.mixins.json):ParticleManagerAccessor — no anchor resolves (@Accessor field ParticleEngine.textureAtlas:Lnet/minecraft/client/renderer/texture/TextureAtlas;:Lnet/minecraft/client/renderer/texture/TextureAtlas;, @Accessor field ParticleEngine.spriteSets:Ljava/util/Map;:Ljava/util/Map;), but another loaded mod's mixin targets the same class, so the missing member is that mod's to add (cross-mod compatibility layer, not dead weight)
+  [07:54:01] [main/ERROR]: [Mixin/mixin] @Mixin target type mismatch: net.minecraft.client.particle.ParticleEngine is not an interface in org.spongepowered.asm.mixin.transformer.MixinInfo$SubType$Interface@6828f588
+  org.spongepowered.asm.mixin.transformer.throwables.InvalidMixinException: @Mixin target type mismatch: net.minecraft.client.particle.ParticleEngine is not an interface in org.spongepowered.asm.mixin.transformer.MixinInfo$SubType$Interface@6828f588
+  [07:54:11] [Render thread/ERROR]: Exception caught during firing event: Render layers can only be set during client loading! This might ideally be done from `FMLClientSetupEvent`.
+  java.lang.IllegalStateException: Render layers can only be set during client loading! This might ideally be done from `FMLClientSetupEvent`.
+  [07:54:11] [Render thread/WARN]: [Forbric/Lifecycle] create failed during client setup
+  java.lang.IllegalStateException: Render layers can only be set during client loading! This might ideally be done from `FMLClientSetupEvent`.
+
+## fix arm (kernel 988357cb) — the blocker absent
+  grep -c 'create failed during client setup' = 0
+  grep -c 'Render layers can only be set'          = 0

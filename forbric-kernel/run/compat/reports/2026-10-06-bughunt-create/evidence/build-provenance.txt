@@ -1,0 +1,9 @@
+# kernel fix-arm artifact
+source change: forbric-kernel/src/main/java/net/forbric/kernel/boot/KernelLifecycle.java (BOOT half)
+  boot half rebuilt:  JAVA_HOME=jdk-21 ./gradlew --offline -q -Pforbric.stagedRoot=/private/tmp/create-bughunt/empty-stage jar
+                      (no staged game jars -> boot-only jar; game side not rebuilt, as in the 2026-10-04 lanes)
+  game half injected: META-INF/jars/forbric-kernel-runtime.jar taken byte-for-byte from the released 0.3.5-beta jar
+                      (unchanged: this lane touched no src/runtime/java file)
+artifact: /private/tmp/create-bughunt/kernel-fix.jar
+sha256:   988357cbb676e1097c375aedfe4fc6a8c47669e79e7279d37d5ca76dde54c5b4
+layout check: META-INF/jars/{mixinextras-fabric.jar,forbric-kernel-runtime.jar} both present (assert_game_side passes)

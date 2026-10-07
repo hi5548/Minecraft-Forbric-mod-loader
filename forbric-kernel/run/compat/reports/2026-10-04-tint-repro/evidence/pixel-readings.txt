@@ -1,0 +1,34 @@
+== control (bf56012d) v4 icon frame  2026-10-06_10.24.04.png  1708x960
+  hotbar_icon: n=1200 mean_rgb=(89.4, 85.7, 73.1)
+    frac={'black': 0.1317, 'grass_green': 0.17, 'other': 0.3308, 'grey_tex': 0.2225, 'dirt_brown': 0.145}
+    top_rgb=[((48, 34, 23), 80), ((78, 55, 37), 78), ((43, 41, 18), 60), ((213, 232, 208), 50)]
+  held_item: n=18450 mean_rgb=(93.2, 92.5, 90.6)
+    frac={'black': 0.2374, 'grey_tex': 0.7197, 'other': 0.0235, 'grass_green': 0.0016, 'dirt_brown': 0.0178}
+    top_rgb=[((0, 0, 0), 4175), ((124, 124, 124), 397), ((119, 119, 119), 391), ((125, 125, 125), 382)]
+  wall_face: n=120000 mean_rgb=(124.8, 162.7, 232.1)
+    frac={'sky': 0.9844, 'black': 0.0078, 'other': 0.004, 'grass_green': 0.0038}
+    top_rgb=[((136, 178, 255), 1179), ((133, 176, 255), 1150), ((132, 175, 255), 1065), ((139, 180, 255), 1005)]
+== fix     (b50c95b0) v4 icon frame  2026-10-06_10.24.35.png  1708x960
+  hotbar_icon: n=1200 mean_rgb=(74.0, 78.0, 55.8)
+    frac={'black': 0.1367, 'grass_green': 0.3708, 'other': 0.3417, 'grey_tex': 0.0058, 'dirt_brown': 0.145}
+    top_rgb=[((48, 34, 23), 80), ((78, 55, 37), 78), ((43, 41, 18), 60), ((213, 232, 208), 50)]
+  held_item: n=18450 mean_rgb=(47.5, 69.4, 39.0)
+    frac={'black': 0.2374, 'grass_green': 0.6544, 'other': 0.0905, 'dirt_brown': 0.0178}
+    top_rgb=[((0, 0, 0), 4175), ((60, 92, 52), 380), ((53, 81, 46), 341), ((57, 87, 49), 273)]
+  wall_face: n=120000 mean_rgb=(124.8, 162.7, 232.1)
+    frac={'sky': 0.9844, 'black': 0.0078, 'other': 0.004, 'grass_green': 0.0038}
+    top_rgb=[((136, 178, 255), 1179), ((133, 176, 255), 1150), ((132, 175, 255), 1065), ((139, 180, 255), 1005)]
+== control (bf56012d) v7 cutout frame  2026-10-06_10.31.59.png  1708x960
+  hotbar_icon: n=1200 mean_rgb=(90.1, 86.5, 73.9)
+    frac={'black': 0.1242, 'grass_green': 0.17, 'other': 0.3383, 'grey_tex': 0.2225, 'dirt_brown': 0.145}
+    top_rgb=[((48, 34, 23), 80), ((78, 55, 37), 78), ((213, 232, 208), 50), ((96, 69, 47), 49)]
+
+== control (bf56012d) frame-control__cutout-specimens.png — the (B2)/(B3) ROIs, step=1
+  grass_side    box=(1180,455,1240,725) mean_rgb=(6.3, 6.8, 5.7)
+    frac={'grass_green': 0.0328, 'black': 0.9327, 'grey_tex': 0.0346}
+  dandelion_cell box=(640,440,860,690) mean_rgb=(21.6, 24.6, 7.4)
+    frac={'black': 0.8516, 'sky': 0.0014, 'other': 0.0041, 'dirt_brown': 0.0753, 'grass_green': 0.0676}
+  leaves_cell   box=(1290,420,1450,560) mean_rgb=(17.8, 23.0, 11.0)
+    frac={'grass_green': 0.2114, 'other': 0.1607, 'black': 0.6279}
+  verdict: (B2) black 0.9327 >= 0.50 MET on the control arm; (B3) black 0.85 / 0.63 >= 0.30 MET.
+           Neither has a fix-arm counterpart: see (B4), the world half is byte-identical on both kernels.

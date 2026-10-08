@@ -130,6 +130,15 @@ harness 的 `strict` 判据包含"subject 与每一只依赖状态 `OK`"，而 s
 
 ---
 
-## 发布结果回填
+## 发布结果回填（2026-10-08）
 
-_（本节的 tag / 附件 sha / 安装校验在报告提交后回填；见 `evidence/release-result.txt`。）_
+- tag `v0.3.7-beta-1.21.1`（轻量 tag，指向发布提交 `8fb95fdf`；其父 `4f4935b9` 为升版本提交，祖父 `f9d4719b` 为
+  shooting-star-disconnect 车道的修复提交，发布源码尖端）
+- Release `https://github.com/hi5548/Minecraft-Forbric-mod-loader/releases/tag/v0.3.7-beta-1.21.1`，附件：
+  - `forbric-kernel-installer-0.3.7-beta.jar` sha256 `e7728df29ab8b57358356308dc7750e963bf3a2c0f89ba7d0363a8d326da8b74`（8531076 B）
+  - `forbric-kernel-installer-0.3.7-beta.zip` sha256 `1293ef8f80dc00a8b4193629483a287cdffe0b7579493e0491880a47997b2891`（8525244 B）
+- 本地构建产物：`forbric-kernel-installer/build/{libs,dist}/`，副本 `/private/tmp/rel037/artifacts/`
+- 安装器内嵌内核逐字节 = 本次 gate 的 `48df3d2b…`（= 装上的 `libraries/net/forbric/forbric-kernel/0.3.7-beta/…jar`）
+- 安装器 jar：105 条目、0 条陈旧重名条目
+- `v0.3.6-beta-1.21.1` 已按惯例标注"已被取代"并撤下两个附件
+- 逐条见 `evidence/release-result.txt`、`evidence/install-verification.txt`

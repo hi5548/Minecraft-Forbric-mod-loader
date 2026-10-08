@@ -1,0 +1,21 @@
+tag                : v0.3.7-beta-1.21.1 (lightweight) -> 8fb95fdf29ec8e5d2ea20592aa582ec31545648f
+                     (the report commit; its parent 4f4935b9 is the version bump, grandparent f9d4719b
+                      is the shooting-star-disconnect lane's fix commit — the release source tip)
+release            : https://github.com/hi5548/Minecraft-Forbric-mod-loader/releases/tag/v0.3.7-beta-1.21.1
+assets             :
+  forbric-kernel-installer-0.3.7-beta.jar  sha256 e7728df29ab8b57358356308dc7750e963bf3a2c0f89ba7d0363a8d326da8b74  8531076 B
+  forbric-kernel-installer-0.3.7-beta.zip  sha256 1293ef8f80dc00a8b4193629483a287cdffe0b7579493e0491880a47997b2891  8525244 B
+local artifacts    : forbric-kernel-installer/build/{libs,dist}/ ; copies /private/tmp/rel037/artifacts/
+release kernel     : /private/tmp/rel037/release-kernel.jar
+                     sha256 48df3d2b90dfec3926fbfcee92dc6bd8a441760f27560fd7d168169d81e2fa97
+embedded kernel    : forbric/libs/net/forbric/forbric-kernel/0.3.7-beta/forbric-kernel-0.3.7-beta.jar
+                     sha256 48df3d2b90dfec3926fbfcee92dc6bd8a441760f27560fd7d168169d81e2fa97
+                     (byte-identical to this gate's kernel and to the copy the headless install put under
+                      /Applications/.minecraft/libraries/net/forbric/forbric-kernel/0.3.7-beta/)
+installer hygiene  : 105 entries, 0 stale-numbered ('X N.class' / 'X 2.jar') entries
+install            : java -jar forbric-kernel-installer-0.3.7-beta.jar --dir /Applications/.minecraft
+                     exit 0; user's 14 mods 14/14 sha256 IDENTICAL; versions/ unchanged; global mods/
+                     (129 jars) and options.txt/saves/config/.forbric-kernel/log4j2.xml mtimes untouched;
+                     the only intended change is 1.21.1-forbric.json (0.3.6 -> 0.3.7)
+                     (evidence/install-verification.txt)
+v0.3.6-beta        : annotated superseded and its two assets withdrawn on 2026-10-08

@@ -1,0 +1,56 @@
+# The kernel's play-payload fall-through, run over the REAL merged class (offline)
+# injector: /Users/charlescai/Desktop/dsh/实验/forbric/Minecraft-Forbric-mod-loader/forbric-kernel/src/main/java/net/forbric/kernel/transform/CommonNetworkInteropInjector.java (class CommonNetworkInteropInjector)
+# probe:    /private/tmp/cannotfire/probe/FallThroughProbe.java (source at the end)
+# class:    net.minecraft.server.network.ServerGamePacketListenerImpl
+# jar:      /Users/charlescai/Desktop/dsh/实验/forbric/stubtable/stage/merged-base/patched-mc-merged-1.21.1.jar
+
+merged jar        = /Users/charlescai/Desktop/dsh/实验/forbric/stubtable/stage/merged-base/patched-mc-merged-1.21.1.jar
+-Dforbric.playPayloadFallThrough = off
+input  bytes=105420 sha256=27ccfef8f2ce4673be34bb2d2ac535c235cfa8e9501732d3efe47f9e54692ae7
+output bytes=105420 sha256=27ccfef8f2ce4673be34bb2d2ac535c235cfa8e9501732d3efe47f9e54692ae7
+byte-identical to input = true
+net.minecraft.server.network.ServerGamePacketListenerImpl.handleCustomPayload(Lnet/minecraft/network/protocol/common/ServerboundCustomPayloadPacket;)V  (12 insns)
+    INSN 182 net/minecraft/network/protocol/common/ServerboundCustomPayloadPacket.payload()Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;
+    INSN 184 net/minecraftforge/common/ForgeHooks.onCustomPayload(Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;Lnet/minecraft/network/Connection;)Z
+
+[Forbric/INFO] [Forbric/Net] net.minecraft.server.network.ServerGamePacketListenerImpl.handleCustomPayload now falls through to NeoForge's dispatcher when MinecraftForge does not take the payload — it is Forge's override and never called super, so a NeoForge mod's play-phase packet to the server reached nobody
+merged jar        = /Users/charlescai/Desktop/dsh/实验/forbric/stubtable/stage/merged-base/patched-mc-merged-1.21.1.jar
+-Dforbric.playPayloadFallThrough = on
+input  bytes=105420 sha256=27ccfef8f2ce4673be34bb2d2ac535c235cfa8e9501732d3efe47f9e54692ae7
+output bytes=105534 sha256=48fa33e76221800e51d6be5e70671798eeb33f1b004e7de5c269ce9326fc5e25
+byte-identical to input = false
+net.minecraft.server.network.ServerGamePacketListenerImpl.handleCustomPayload(Lnet/minecraft/network/protocol/common/ServerboundCustomPayloadPacket;)V  (20 insns)
+    INSN 182 net/minecraft/network/protocol/common/ServerboundCustomPayloadPacket.payload()Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;
+    INSN 184 net/minecraftforge/common/ForgeHooks.onCustomPayload(Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;Lnet/minecraft/network/Connection;)Z
+    INSN 182 net/minecraft/network/protocol/common/ServerboundCustomPayloadPacket.payload()Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;
+    INSN 184 net/forbric/kernel/interop/PayloadInterop.neoForgeWillHandle(Ljava/lang/Object;)Z
+    INSN 183 net/minecraft/server/network/ServerCommonPacketListenerImpl.handleCustomPayload(Lnet/minecraft/network/protocol/common/ServerboundCustomPayloadPacket;)V
+
+########## the gate itself, verbatim (CommonNetworkInteropInjector.java:144) ##########
+	private static final String ON_CUSTOM_PAYLOAD = "onCustomPayload";
+	/**
+	 * {@code -Dforbric.playPayloadFallThrough=on} enables the play-phase fall-through. DEFAULT OFF, and the
+	 * default is the point.
+	 *
+	 * <p>The defect it addresses is real and measured: the merged
+	 * {@code ServerGamePacketListenerImpl.handleCustomPayload} is MinecraftForge's override, its whole body asks
+	 * {@code ForgeHooks.onCustomPayload}, POPs the answer and returns, and it never calls {@code super} — where
+	 * NeoForge's dispatcher lives. So a NeoForge mod's play-phase packet to the server reached nobody, in
+	 * singleplayer too.
+	 *
+	 * <p>The fall-through fixes that and uncovers something bigger. fabric-api mixes into the SUPER
+	 * ({@code ServerCommonPacketListenerImpl.handleCustomPayload}), so the fall-through is the first time
+	 * fabric-api's server-play handler has ever been reached on this base — and it immediately threw
+	 * {@code IllegalStateException: Unknown addon} and ended the connection, taking gate-m9's world join with it.
+	 * That is not a reason to think the fall-through is wrong; it is evidence that Fabric's own server-play
+	 * receive is shadowed by the same override and has never run either, which is a second defect sitting under
+	 * this one and needs its own fix.
+	 *
+	 * <p>Until that is understood, the default stays at the old behaviour: a NeoForge mod's upward packet is
+	 * silently dropped. Silently dropping a packet is smaller than disconnecting the player, and the switch keeps
+	 * the work reachable for whoever picks the Fabric half up.
+	 */
+	static boolean playFallThroughEnabled() {
+		return "on".equalsIgnoreCase(System.getProperty("forbric.playPayloadFallThrough", "off"));
+	}
+

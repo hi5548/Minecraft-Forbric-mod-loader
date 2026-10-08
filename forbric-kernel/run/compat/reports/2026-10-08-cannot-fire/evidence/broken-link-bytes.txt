@@ -1,0 +1,47 @@
+# the broken link, in the merged base's own bytes (patched-mc-merged-1.21.1.jar)
+# sha256 of the staged merged base:
+46af05299bafd3140321b25246138def88dd4f938b9ae9451f976b57bd1c587f  /Users/charlescai/Desktop/dsh/实验/forbric/stubtable/stage/merged-base/patched-mc-merged-1.21.1.jar
+
+## ServerGamePacketListenerImpl.handleCustomPayload — the whole method (javap -c)
+  public void handleCustomPayload(net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket);
+    Code:
+       0: aload_1
+       1: invokevirtual #3607               // Method net/minecraft/network/protocol/common/ServerboundCustomPayloadPacket.payload:()Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;
+       4: aload_0
+       5: getfield      #510                // Field connection:Lnet/minecraft/network/Connection;
+       8: invokestatic  #3613               // Method net/minecraftforge/common/ForgeHooks.onCustomPayload:(Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;Lnet/minecraft/network/Connection;)Z
+      11: pop
+      12: return
+
+
+## ServerCommonPacketListenerImpl.handleCustomPayload — where NeoForge's dispatch lives (tail only)
+      71: checkcast     #172                // class net/neoforged/neoforge/network/payload/CommonVersionPayload
+      74: astore_2
+      75: aload_0
+      76: aload_2
+      77: invokestatic  #176                // Method net/neoforged/neoforge/network/registration/NetworkRegistry.checkCommonVersion:(Lnet/neoforged/neoforge/common/extensions/ICommonPacketListener;Lnet/neoforged/neoforge/network/payload/CommonVersionPayload;)V
+      80: return
+      81: aload_1
+      82: invokevirtual #146                // Method net/minecraft/network/protocol/common/ServerboundCustomPayloadPacket.payload:()Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;
+      85: astore_3
+      86: aload_3
+      87: instanceof    #178                // class net/neoforged/neoforge/network/payload/CommonRegisterPayload
+      90: ifeq          104
+      93: aload_3
+      94: checkcast     #178                // class net/neoforged/neoforge/network/payload/CommonRegisterPayload
+      97: astore_2
+      98: aload_0
+      99: aload_2
+     100: invokestatic  #182                // Method net/neoforged/neoforge/network/registration/NetworkRegistry.onCommonRegister:(Lnet/neoforged/neoforge/common/extensions/ICommonPacketListener;Lnet/neoforged/neoforge/network/payload/CommonRegisterPayload;)V
+     103: return
+     104: aload_1
+     105: invokevirtual #146                // Method net/minecraft/network/protocol/common/ServerboundCustomPayloadPacket.payload:()Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;
+     108: invokestatic  #186                // Method net/neoforged/neoforge/network/registration/NetworkRegistry.isModdedPayload:(Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;)Z
+     111: ifeq          120
+     114: aload_0
+     115: aload_1
+     116: invokestatic  #190                // Method net/neoforged/neoforge/network/registration/NetworkRegistry.handleModdedPayload:(Lnet/minecraft/network/protocol/common/ServerCommonPacketListener;Lnet/minecraft/network/protocol/common/ServerboundCustomPayloadPacket;)V
+     119: return
+     120: return
+
+  public void handleResourcePackResponse(net.minecraft.network.protocol.common.ServerboundResourcePackPacket);

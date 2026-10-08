@@ -149,7 +149,7 @@ class CommonNetworkInteropInjectorTest {
 	}
 
 	/**
-	 * The play-phase server handler must fall through to NeoForge when MinecraftForge does not take the payload.
+	 * The play-phase server handler must hand a declined NeoForge payload to NeoForge's dispatcher.
 	 *
 	 * <p>The merged {@code ServerGamePacketListenerImpl.handleCustomPayload} is MinecraftForge's override and its
 	 * whole body is: ask {@code ForgeHooks.onCustomPayload}, {@code POP} the answer, {@code RETURN}. It never
@@ -161,9 +161,8 @@ class CommonNetworkInteropInjectorTest {
 	@Test
 	void thePlayServerHandlerFallsThroughToNeoForge() throws Exception {
 		assumeTrue(Files.isRegularFile(MERGED_BASE), "staged merged base absent — skipping real-bytecode check");
-		// The rewrite is behind a switch that defaults OFF — see playFallThroughEnabled for why — so the test
-		// turns it on for itself. What is asserted is the SHAPE of the rewrite when it does run, which is what a
-		// future edit could break without anyone noticing.
+		// The rewrite is off when -Dforbric.playPayloadFallThrough=off; the shape under test is the enabled one, so
+		// the test asks for it explicitly rather than depending on the default.
 		String previous = System.getProperty("forbric.playPayloadFallThrough");
 		System.setProperty("forbric.playPayloadFallThrough", "on");
 		try {
@@ -174,13 +173,18 @@ class CommonNetworkInteropInjectorTest {
 		}
 	}
 
-	/** The default must be the old behaviour: a disconnected player is worse than a dropped packet. */
+	/** The default is still the old behaviour: a disconnected player is worse than a dropped packet. */
 	@Test
 	void thePlayFallThroughIsOffByDefault() {
-		assertFalse(CommonNetworkInteropInjector.playFallThroughEnabled(),
-				"the fall-through reaches fabric-api's own server-play handler for the first time on this base, and "
-						+ "that handler throws \"Unknown addon\" and ends the connection — until the Fabric half is "
-						+ "fixed, the default stays at the silent drop");
+		String previous = System.getProperty("forbric.playPayloadFallThrough");
+		System.clearProperty("forbric.playPayloadFallThrough");
+		try {
+			assertFalse(CommonNetworkInteropInjector.playFallThroughEnabled(),
+					"the rewrite stops the \"Unknown addon\" disconnect, but opening the default is its own decision "
+							+ "and its own commit — this one keeps the switch off");
+		} finally {
+			if (previous != null) System.setProperty("forbric.playPayloadFallThrough", previous);
+		}
 	}
 
 	private void assertFallThroughShape() throws Exception {
@@ -192,6 +196,7 @@ class CommonNetworkInteropInjectorTest {
 		boolean popsTheAnswer = false;
 		boolean callsSuper = false;
 		boolean branches = false;
+		MethodInsnNode dispatch = null;
 		for (AbstractInsnNode insn : handler.instructions) {
 			if (insn.getOpcode() == Opcodes.POP) popsTheAnswer = true;
 			if (insn.getOpcode() == Opcodes.IFNE) branches = true;
@@ -200,14 +205,34 @@ class CommonNetworkInteropInjectorTest {
 					&& "handleCustomPayload".equals(call.name)) {
 				callsSuper = true;
 			}
+			if (insn instanceof MethodInsnNode call && call.getOpcode() == Opcodes.INVOKESTATIC
+					&& NEO_NETWORK_REGISTRY_SLASHED.equals(call.owner) && "handleModdedPayload".equals(call.name)) {
+				dispatch = call;
+			}
 		}
 
 		assertFalse(popsTheAnswer,
 				"the hook's answer must be branched on, not discarded — discarding it is the whole defect");
 		assertTrue(branches, "MinecraftForge taking the payload must skip the fall-through");
-		assertTrue(callsSuper,
-				"and not taking it must reach ServerCommonPacketListenerImpl.handleCustomPayload, which is where "
-						+ "NeoForge's dispatcher lives");
+		// NOT super. That shared body is also the configuration listener's, fabric-api's HEAD mixin there throws
+		// "Unknown addon" for any non-configuration addon, and a PLAY listener's addon is a ServerPlayNetworkAddon
+		// — routing through it is exactly the disconnect this fix removes.
+		assertFalse(callsSuper,
+				"the fall-through must NOT route through ServerCommonPacketListenerImpl.handleCustomPayload: "
+						+ "fabric-api's HEAD mixin there throws \"Unknown addon\" for a PLAY addon and kicks the player");
+		assertNotNull(dispatch, "the fall-through must call NeoForge's own dispatch tail");
+		assertEquals(NEO_MODDED_DISPATCH_DESC, dispatch.desc,
+				"the dispatch takes the listener and the packet — the descriptor the merged super body itself uses");
+
+		// The call must be the one NeoForge's own body makes, or a NeoForge rename moves the failure into the game
+		// as a NoSuchMethodError raised from packet handling.
+		MethodInsnNode neoForgeOwn = null;
+		for (AbstractInsnNode insn : mergedSuperDispatch()) {
+			neoForgeOwn = (MethodInsnNode) insn;
+		}
+		assertNotNull(neoForgeOwn, "the merged super body must still call handleModdedPayload — the anchor moved");
+		assertEquals(neoForgeOwn.desc, dispatch.desc,
+				"the fall-through must call handleModdedPayload with the descriptor the merged base itself calls");
 
 		// GATED. Falling through unconditionally was measured to be worse than the bug: NeoForge's dispatcher is
 		// strict about ids it does not know, so a Fabric mod's play payload arriving here ended the connection
@@ -226,6 +251,28 @@ class CommonNetworkInteropInjectorTest {
 		// The frame authored at the branch target has to be right, or the class fails verification at link time
 		// and every play-phase packet on the server becomes a VerifyError instead.
 		new Analyzer<>(new BasicVerifier()).analyze(node.name, handler);
+	}
+
+	private static final String NEO_NETWORK_REGISTRY_SLASHED =
+			"net/neoforged/neoforge/network/registration/NetworkRegistry";
+	private static final String NEO_MODDED_DISPATCH_DESC =
+			"(Lnet/minecraft/network/protocol/common/ServerCommonPacketListener;"
+					+ "Lnet/minecraft/network/protocol/common/ServerboundCustomPayloadPacket;)V";
+
+	/** The {@code handleModdedPayload} call inside the merged {@code ServerCommonPacketListenerImpl.handleCustomPayload}. */
+	private static List<AbstractInsnNode> mergedSuperDispatch() throws Exception {
+		ClassNode node = parse(readClass("net/minecraft/server/network/ServerCommonPacketListenerImpl.class"));
+		List<AbstractInsnNode> found = new java.util.ArrayList<>();
+		for (MethodNode m : node.methods) {
+			if (!"handleCustomPayload".equals(m.name)) continue;
+			for (AbstractInsnNode insn : m.instructions) {
+				if (insn instanceof MethodInsnNode call && "handleModdedPayload".equals(call.name)
+						&& NEO_NETWORK_REGISTRY_SLASHED.equals(call.owner)) {
+					found.add(call);
+				}
+			}
+		}
+		return found;
 	}
 
 	@Test

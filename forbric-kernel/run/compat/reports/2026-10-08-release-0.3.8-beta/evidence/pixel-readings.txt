@@ -1,0 +1,40 @@
+Pixel sub-readings — classifier = reports/2026-10-08-release-0.3.7-beta/evidence/sampler.py (verbatim,
+committed in-repo) with the same three ROIs the 0.3.6/0.3.7 gates used.
+Pre-registered criterion: pure black (0,0,0) fraction = 0.0000 in all three ROIs in every arm.
+
+== arm A — the user's real 12
+   /tmp/rel038/gate12/per-mod/run/000-modmenu__fabric/screenshots/2026-10-08_11.19.19.png  (1708x960)
+   grass_side  box=(1180, 455, 1240, 725) n=16200  pure_black(0,0,0)=0.0000  max(R,G,B)<10=0.0000  max(R,G,B)<40=0.0000  (pure=0)
+   dandelion   box=(640, 440, 860, 690) n=55000  pure_black(0,0,0)=0.0000  max(R,G,B)<10=0.0000  max(R,G,B)<40=0.0024  (pure=0)
+   leaves      box=(1290, 420, 1450, 560) n=22400  pure_black(0,0,0)=0.0000  max(R,G,B)<10=0.0000  max(R,G,B)<40=0.0013  (pure=0)
+   0.3.7 (same arm/ROI): 2026-10-08_08.48.45.png
+   grass_side  pure_black(0,0,0)=0.0000  max(R,G,B)<40=0.0000  (pure=0)
+   dandelion   pure_black(0,0,0)=0.0000  max(R,G,B)<40=0.0017  (pure=0)
+   leaves      pure_black(0,0,0)=0.0000  max(R,G,B)<40=0.0000  (pure=0)
+
+== arm B — the same 12 + Create 6.0.10
+   /tmp/rel038/gate13/per-mod/run/000-create__neoforge/screenshots/2026-10-08_11.20.05.png  (1708x960)
+   grass_side  box=(1180, 455, 1240, 725) n=16200  pure_black(0,0,0)=0.0000  max(R,G,B)<10=0.0000  max(R,G,B)<40=0.0031  (pure=0)
+   dandelion   box=(640, 440, 860, 690) n=55000  pure_black(0,0,0)=0.0000  max(R,G,B)<10=0.0000  max(R,G,B)<40=0.0056  (pure=0)
+   leaves      box=(1290, 420, 1450, 560) n=22400  pure_black(0,0,0)=0.0000  max(R,G,B)<10=0.0000  max(R,G,B)<40=0.0017  (pure=0)
+   0.3.7 (same arm/ROI): 2026-10-08_08.50.03.png
+   grass_side  pure_black(0,0,0)=0.0000  max(R,G,B)<40=0.0056  (pure=0)
+   dandelion   pure_black(0,0,0)=0.0000  max(R,G,B)<40=0.0023  (pure=0)
+   leaves      pure_black(0,0,0)=0.0000  max(R,G,B)<40=0.0025  (pure=0)
+
+== arm C — the same 12 + the two Shooting Star jars
+   /tmp/rel038/gate14/per-mod/run/000-shooting_star_demo__neoforge/screenshots/2026-10-08_11.20.48.png  (1708x960)
+   grass_side  box=(1180, 455, 1240, 725) n=16200  pure_black(0,0,0)=0.0000  max(R,G,B)<10=0.0000  max(R,G,B)<40=0.0000  (pure=0)
+   dandelion   box=(640, 440, 860, 690) n=55000  pure_black(0,0,0)=0.0001  max(R,G,B)<10=0.0001  max(R,G,B)<40=0.0005  (pure=6)
+   leaves      box=(1290, 420, 1450, 560) n=22400  pure_black(0,0,0)=0.0000  max(R,G,B)<10=0.0000  max(R,G,B)<40=0.0055  (pure=0)
+   0.3.7 (same arm/ROI): 2026-10-08_08.50.55.png
+   grass_side  pure_black(0,0,0)=0.0000  max(R,G,B)<40=0.0320  (pure=0)
+   dandelion   pure_black(0,0,0)=0.0000  max(R,G,B)<40=0.0001  (pure=0)
+   leaves      pure_black(0,0,0)=0.0000  max(R,G,B)<40=0.0004  (pure=0)
+
+NOTE: the world fixture's spawn is not fixed run to run (the 0.3.7 gate recorded the same); the
+absolute per-class fractions are not comparable across versions. The pre-registered invariant is
+'no pure-black regression'. Arm A and arm B hold at 0.0000 in all three ROIs. Arm C's dandelion ROI
+reads 0.0001 (6/55000, a 2x3 block at (728,442)); the same arm/ROI in 0.3.7 carried 8 pixels in the
+max(R,G,B)<40 band. Recorded as a falsification of the literal criterion, attributed to fixture scene
+variation (arm C's subject is the pre-existing DEGRADED demo).

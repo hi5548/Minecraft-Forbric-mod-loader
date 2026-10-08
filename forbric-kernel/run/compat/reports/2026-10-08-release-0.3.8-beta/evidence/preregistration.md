@@ -120,3 +120,50 @@ NetworkRegistry.handleModdedPayload(ServerCommonPacketListener, ServerboundCusto
 ## §Adjudication
 
 *（在全部臂跑完之后追加；以上判据原文未改）*
+
+**§0 形状 —— 达成。** `release-kernel.jar` sha `97d894f5…`、3290882 B、736 条目、0 条 stale；入口集相对已发布
+0.3.7 恰 **1** 个类不同（`CommonNetworkInteropInjector.class`），added/removed 皆 0；与 `play-payload-dispatch`
+车道的 `kernel-playpay.jar` **逐字节相同**。逐条见 `build-provenance.txt`。
+
+**§1 共同 gate 行 —— 三臂全部达成。** 逐字行在 `gate-reading.txt`：
+
+| 臂 | run | exit | world | frames | stopped | killed | strict | confirmed_required | mod | cause | s |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| A | PASS | 0 | true | 1 | true | false | **TRUE** | 0 | OK | None | 31 |
+| B | PASS | 0 | true | 1 | true | false | **TRUE** | 0 | OK | None | 37 |
+| C | PASS | 0 | true | 1 | true | false | **FALSE**（预登记如此） | 0 | DEGRADED | mod-degraded | 32 |
+
+`compatibility_policy=strict`、`mixin_fit=default`、`catalog_failures` 空（C 除外，见 §5）、0 份 crash-report、
+闭包依赖全 `OK`、`joined world via quick-play` / `client-ready` / `clean disconnect observed` 三臂各 1。
+**三臂的 `load-report.txt` 与 0.3.7-beta 发布 gate 的同一文件逐字节相同**（md5 `68ae1f74…` / `581e8128…` /
+`f3e18886…`），见 `load-report-comparison.txt`。
+
+**§2 本版改动 —— 按预登记"运行里观察不到"达成。** 三臂 `handing the play payload to its dispatcher` = 0、
+`Unknown addon` = 0、`lost connection` = 0（`console-markers.txt`）。该修复的功能证明在 sibling 车道，非本次运行；
+本次能证明的是：**新默认（开关打开、走新路径）在三臂上没有引入它要消除的那个失败面**。
+
+**§3 已发布形状不回归 —— 达成。** 三臂各 `created 9 custom registr(ies) via NewRegistryEvent` = 1；
+`could not reach` = 0、`Failed to apply some object holders` = 0、`Unable to find registry with key forge:` = 0。
+Sodium：`now targets … SpriteContents.<init>(…ForgeTextureMetadata;)V` 恰 2、`applies only partially … originalImage`
+**同行 0**。颜色：`is an IdMapper` 2（两个 `@Shadow`）、`2 site(s) re-keyed to getBlock`、`1 site(s) re-keyed to getItem`。
+`@Mixin target type mismatch` = 0、`ParticleEngine is not an interface` = 0、`SYNTHETIC default method over ParticleEngine` = 2。
+加载报告聚合句在（A/B `9 个 mod`、C `10 个 mod`）。
+
+**§4 arm B —— 达成。** `mod=OK`、`cause=None`、`catalog_failures=[]`、12 只依赖全 `OK`、0 崩溃；
+`create failed during client setup` = 0、`Render layers can only be set` = 0。
+
+**§5 arm C —— 按预登记达成。** `mod=DEGRADED`、`cause=mod-degraded`、`catalog_failures=['shooting_star_demo']`、
+`loaded=false`、`strict=FALSE`，与 0.3.7 基线逐字段相同（`row-compare.txt`）；addition 与其余 12 只全 `OK`。
+
+**§6 被证伪的一条（如实记）：像素不变量。** 预登记写"三个 ROI 纯黑 `(0,0,0)` = 0.0000"。
+**arm C 的蒲公英 ROI 读到 0.0001（6/55000，一团 2×3 像素，位于 (728,442)）—— 该条被证伪。**
+arm A、arm B 三个 ROI 全部 0.0000。归因（不是改判据）：世界夹具的出生点逐次不同（0.3.7 车道的 fixture note 已记录
+"spawn positions differ … a future comparison that depends on world state should reset the fixture explicitly"），
+且**同一臂/同一 ROI 在 0.3.7 上也有 8 个 `max(R,G,B)<40` 的暗像素**（纯黑 0）；三臂的像素绝对值本就不跨版本可比。
+这是夹具场景差异，不是内核回归；`pixel-readings.txt` 里逐像素列出。
+
+**其余：** 三臂各 1 次 `handleServerStopped forward failed`（预登记的第三条独立缺陷，符合）；
+三臂都带 rule 3 负载提示（314–334% CPU，load 3.9–8.3），本车道无时限判据。
+
+**决定：不撤回，发布。** 唯一的证伪项是夹具场景的像素读数（6 个像素），不涉及任何判定字段；三条 gate 行、
+本版要消除的失败面、以及所有已发布形状全部达成。

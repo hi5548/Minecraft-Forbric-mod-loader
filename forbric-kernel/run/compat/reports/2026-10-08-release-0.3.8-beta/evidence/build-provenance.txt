@@ -1,0 +1,82 @@
+# Build provenance — the released candidate kernel jar
+
+REPORTED release kernel jar : /private/tmp/rel038/release-kernel.jar
+sha256                     : 97d894f5946829d46a163e179cc71508424bb8d4bf21ae2534acafa555d6780d
+bytes                      : 3290882
+entries                    : 736 (735 boot + 1 nested runtime); 0 stale-numbered ('X N.class', 'X 3.txt', …)
+
+## Source
+
+Clean git worktree /private/tmp/rel038/wt, detached at `2a9e6938` — the version-bump commit whose
+parent is the release source tip `66200a3e` ("默认打开 play 载荷 fall-through —— 直接分发已安全"), whose
+parent `dbd6a859` is the `play-payload-dispatch` lane's mechanism commit. Nothing built in the main
+tree; no peer tree touched.
+
+The release source tip is one file different from the published 0.3.7-beta:
+`git diff --stat v0.3.7-beta-1.21.1 HEAD -- forbric-kernel/src/main` names exactly
+`forbric-kernel/src/main/java/net/forbric/kernel/transform/CommonNetworkInteropInjector.java` (62+/22-);
+the whole tracked tree differs by that file plus its test
+(`CommonNetworkInteropInjectorTest.java`, 87+/…). `src/runtime` is untouched by both.
+
+## The build JDK (recorded, because it decides the bytes)
+
+This box's default `java` is now 25.0.1; the *published* 0.3.6/0.3.7-beta boot halves were compiled
+with **JDK 25** (0.3.7 recorded: re-running `13e4ff3f` with `JAVA_HOME=jdk-25.jdk` reproduces 0.3.6's
+boot-half sha `30cef190…` byte for byte, while JDK 21 differs in 121 classes). This release is
+therefore built with JDK 25 (`/Library/Java/JavaVirtualMachines/jdk-25.jdk`, 25.0.1) so the entry-set
+delta below is *source*, not compiler, noise.
+
+## Assembly
+
+`/Volumes/ORICO` is unmounted and the staged game fixtures named in 0.3.5+ are absent, so the game side
+cannot be compiled here (the same limit 0.3.5 / 0.3.6 / 0.3.7 and the sibling 2026-10-06 lanes
+recorded). Same assembly as 0.3.7, in a clean worktree:
+
+1. boot half  `./gradlew --offline -q jar` (JDK 25) -> forbric-kernel-0.1.0-SNAPSHOT.jar
+              sha256 b9e19aa30ab9e7fde2ab06d6caf404141e052ad2bf549e25813d989bdd5e3e01
+              735 entries, no nested runtime (no staged game jars -> the jar task wires in none, by design)
+2. runtime half  `META-INF/jars/forbric-kernel-runtime.jar` copied BYTE-FOR-BYTE out of the
+              published 0.3.7-beta jar (`/Applications/.minecraft/libraries/net/forbric/forbric-kernel/0.3.7-beta/`
+              == /private/tmp/rel037/release-kernel.jar, sha 48df3d2b…)
+              sha256 67c2a49b55c8ef860e552ec5b9e028d8836e68d46f5bb4595a40016debde8c6d
+              (identical to 0.3.6's; `git diff --stat b1b90566 HEAD -- forbric-kernel/src/runtime` is EMPTY)
+3. `pack.py` injects the runtime half into the boot half (zip -X; fixed 1980-02-01 timestamps).
+
+`97d894f5…` reproduces the sibling `2026-10-08-play-payload-dispatch` lane's `kernel-playpay.jar`
+BYTE FOR BYTE (same sha) — that lane built it by replacing the single `CommonNetworkInteropInjector.class`
+in the published 0.3.7 kernel; this one built it from source. Two constructions, one result.
+
+## Entry-set comparison, release vs the published 0.3.7-beta jar (name -> sha256 of decompressed bytes)
+
+```
+entry sets equal: True (736 vs 736)
+added  : []
+removed: []
+differing: 1
+    net/forbric/kernel/transform/CommonNetworkInteropInjector.class
+```
+
+Exactly the class of the one edited source file. Every other boot entry is byte-identical, including
+the whole `src/runtime` game side.
+
+## Checks on the frozen jar
+
+- 736 entries; 0 stale-numbered entries.
+- `META-INF/jars/forbric-kernel-runtime.jar` present (the W7Harness's `assert_game_side` accepted it);
+  all three arms ran these exact bytes (`frozen/frozen-kernel-sha256.txt` = this sha in every run dir).
+- `net/forbric/kernel/transform/CommonNetworkInteropInjector.class` is the only differing entry;
+  `carrier-stubs.txt` and the rest are byte-identical to 0.3.7.
+
+## Installer provenance
+
+- `forbric-kernel-installer-0.3.8-beta.jar` embedded kernel
+  `forbric/libs/net/forbric/forbric-kernel/0.3.8-beta/forbric-kernel-0.3.8-beta.jar`
+  sha256 `97d894f5…` — byte-identical to this gate's kernel.
+- Installer has 105 entries, 0 stale-numbered entries; built in the same clean worktree
+  (`./gradlew --offline jar releaseZip -x buildForbricJars`, after placing this exact kernel at
+  `forbric-kernel/build/libs/forbric-kernel-0.1.0-SNAPSHOT.jar`), JDK 21 (installer targets release 17).
+- The `fabric-loader/` substrate is a sibling checkout (gitignored, untracked); it was symlinked into
+  the worktree so `buildLoaderJars` / `buildMergeTools` ran against the same substrate. The loader
+  source is unchanged since v0.3.6-beta-1.21.1
+  (`git diff --stat v0.3.6-beta-1.21.1 HEAD -- forbric-loader/src` empty), which is why the installed
+  loader/runtime jar shas equal 0.3.7's (`412944e9…`, `cea81430…`).

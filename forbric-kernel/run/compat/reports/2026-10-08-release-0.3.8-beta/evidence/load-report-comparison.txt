@@ -1,0 +1,24 @@
+load-report.txt: the kernel's per-run aggregate of which injectors/mixins did not run.
+Compared byte-for-byte against the 0.3.7-beta release gate (its run dirs are /private/tmp/rel037/gate{12,13,14}).
+
+===== arm A — the user's real 12 =====
+  0.3.8 /tmp/rel038/gate12/per-mod/run/000-modmenu__fabric/.forbric-kernel/load-report.txt md5 68ae1f74f2606768561176ebe6ef005e  sha256 c55c7756cea13c91fce498bfd7a706691d26131a439ccd2e5e4a17e1a8820d58  (19427 B)
+  0.3.7 /tmp/rel037/gate12/per-mod/run/000-modmenu__fabric/.forbric-kernel/load-report.txt md5 68ae1f74f2606768561176ebe6ef005e  sha256 c55c7756cea13c91fce498bfd7a706691d26131a439ccd2e5e4a17e1a8820d58  (19427 B)
+  byte-identical to the 0.3.7-beta arm: True
+  aggregate sentence: 这一次启动，9 个 mod 有一部分没有跑起来。
+  non-strict owner lines: 38
+
+===== arm B — the same 12 + Create 6.0.10 =====
+  0.3.8 /tmp/rel038/gate13/per-mod/run/000-create__neoforge/.forbric-kernel/load-report.txt md5 581e8128dbb16813321d00b04a4942ff  sha256 53f20d4563aba0e2b0c12a48ae1c9848849a31b97c4a6bd183899482adbb2151  (24429 B)
+  0.3.7 /tmp/rel037/gate13/per-mod/run/000-create__neoforge/.forbric-kernel/load-report.txt md5 581e8128dbb16813321d00b04a4942ff  sha256 53f20d4563aba0e2b0c12a48ae1c9848849a31b97c4a6bd183899482adbb2151  (24429 B)
+  byte-identical to the 0.3.7-beta arm: True
+  aggregate sentence: 这一次启动，9 个 mod 有一部分没有跑起来。
+  non-strict owner lines: 46
+
+===== arm C — the same 12 + the two Shooting Star jars =====
+  0.3.8 /tmp/rel038/gate14/per-mod/run/000-shooting_star_demo__neoforge/.forbric-kernel/load-report.txt md5 f3e1888600b24a1e85511206b297fcaf  sha256 b073f455a4c1012bf1ae6256106154f7d1dfcc79039e50c8c3326bef50fd210d  (19756 B)
+  0.3.7 /tmp/rel037/gate14/per-mod/run/000-shooting_star_demo__neoforge/.forbric-kernel/load-report.txt md5 f3e1888600b24a1e85511206b297fcaf  sha256 b073f455a4c1012bf1ae6256106154f7d1dfcc79039e50c8c3326bef50fd210d  (19756 B)
+  byte-identical to the 0.3.7-beta arm: True
+  aggregate sentence: 这一次启动，10 个 mod 有一部分没有跑起来。
+  non-strict owner lines: 39
+

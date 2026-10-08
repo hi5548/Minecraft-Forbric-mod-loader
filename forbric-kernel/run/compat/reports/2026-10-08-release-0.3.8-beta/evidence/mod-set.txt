@@ -1,0 +1,74 @@
+# The sets these arms ran (byte for byte), and the arms themselves
+
+# arm A's 12 = /Applications/.minecraft/versions/1.21.1-forbric/mods (the user's own instance);
+# Create from /Applications/.minecraft/versions/1.21.1-NeoForge/mods; the two Shooting Star jars from
+# the user's instance. Identical to the 0.3.7-beta gate corpora (manifest sha256 74f33c52… / 375fed43… / 014c68a1…).
+
+## arm A — corpus12 (the user's real 12)
+15bf9bd6d8e3ae8ad35c5a4d90680424b534d9762d698c0a466965afcab5dd78  ImmediatelyFast-NeoForge-1.6.14+1.21.1.jar
+38b48dd6231341c9f964ce6e42c57ec866c6cc8f72bec938390a59bafb3922df  appleskin-neoforge-mc1.21-3.0.9.jar
+65e722e0d98431a07c45f8bdd8d529a217cc8c175fde1740248bd5c1b4f3c0d4  cloth-config-15.0.140-neoforge.jar
+3983b981da4a0583c7e58184a8631a23e56cc3b81f4cb53491ca600382879b82  entityculling-neoforge-1.11.2-mc1.21.1.jar
+79ac44b40780acbd884b34c50be1e39af682847e5f5cb3b1fddeeaa768dce800  fabric-api-0.116.17+1.21.1.jar
+d87ea28262715ebff45b8a82d493e6b468e7a4521bc021df5d88302196d030a8  ferritecore-7.0.3-neoforge.jar
+238b20c943bb7c1e4ed387b2d1bc463c656f44ab7c388da1eee148f54d383b52  jei-1.21.1-neoforge-19.57.0.450.jar
+488f33216030c1cb0baa33e59de3d657d08d5795a6c2080c8c8bbbc133fc8757  lithium-neoforge-0.15.4+mc1.21.1.jar
+e6e9446890f0feb3aab3f6e73ae18cb17575c370f232179fef7baa30e61538fe  modernfix-neoforge-5.27.24+mc1.21.1.jar
+afa55fe4e7c48560126dbe654fa9647f141bc6ffd3ce35525b65dd65d88251b5  modmenu-11.0.5.jar
+c0187ee299527ac7a3e0b1e83601dcdc0de631e286fe41e6be1a75958ea8e443  placeholder-api-2.4.2+1.21.jar
+575d187b15328d7bddd8a9b1bee64333c22c14735f5780ec49eac0cd5503c08d  sodium-neoforge-0.8.13+mc1.21.1.jar
+
+## arm B — corpus13 (the same 12 + Create 6.0.10)
+15bf9bd6d8e3ae8ad35c5a4d90680424b534d9762d698c0a466965afcab5dd78  ImmediatelyFast-NeoForge-1.6.14+1.21.1.jar
+38b48dd6231341c9f964ce6e42c57ec866c6cc8f72bec938390a59bafb3922df  appleskin-neoforge-mc1.21-3.0.9.jar
+65e722e0d98431a07c45f8bdd8d529a217cc8c175fde1740248bd5c1b4f3c0d4  cloth-config-15.0.140-neoforge.jar
+ef87fe5709f1ba1f5b8bb20a2925b5afb4669e178fd6d8bf10c167759eefe37a  create-1.21.1-6.0.10.jar
+3983b981da4a0583c7e58184a8631a23e56cc3b81f4cb53491ca600382879b82  entityculling-neoforge-1.11.2-mc1.21.1.jar
+79ac44b40780acbd884b34c50be1e39af682847e5f5cb3b1fddeeaa768dce800  fabric-api-0.116.17+1.21.1.jar
+d87ea28262715ebff45b8a82d493e6b468e7a4521bc021df5d88302196d030a8  ferritecore-7.0.3-neoforge.jar
+238b20c943bb7c1e4ed387b2d1bc463c656f44ab7c388da1eee148f54d383b52  jei-1.21.1-neoforge-19.57.0.450.jar
+488f33216030c1cb0baa33e59de3d657d08d5795a6c2080c8c8bbbc133fc8757  lithium-neoforge-0.15.4+mc1.21.1.jar
+e6e9446890f0feb3aab3f6e73ae18cb17575c370f232179fef7baa30e61538fe  modernfix-neoforge-5.27.24+mc1.21.1.jar
+afa55fe4e7c48560126dbe654fa9647f141bc6ffd3ce35525b65dd65d88251b5  modmenu-11.0.5.jar
+c0187ee299527ac7a3e0b1e83601dcdc0de631e286fe41e6be1a75958ea8e443  placeholder-api-2.4.2+1.21.jar
+575d187b15328d7bddd8a9b1bee64333c22c14735f5780ec49eac0cd5503c08d  sodium-neoforge-0.8.13+mc1.21.1.jar
+
+## arm C — corpus14 (the same 12 + the two Shooting Star jars)
+15bf9bd6d8e3ae8ad35c5a4d90680424b534d9762d698c0a466965afcab5dd78  ImmediatelyFast-NeoForge-1.6.14+1.21.1.jar
+38b48dd6231341c9f964ce6e42c57ec866c6cc8f72bec938390a59bafb3922df  appleskin-neoforge-mc1.21-3.0.9.jar
+65e722e0d98431a07c45f8bdd8d529a217cc8c175fde1740248bd5c1b4f3c0d4  cloth-config-15.0.140-neoforge.jar
+3983b981da4a0583c7e58184a8631a23e56cc3b81f4cb53491ca600382879b82  entityculling-neoforge-1.11.2-mc1.21.1.jar
+79ac44b40780acbd884b34c50be1e39af682847e5f5cb3b1fddeeaa768dce800  fabric-api-0.116.17+1.21.1.jar
+d87ea28262715ebff45b8a82d493e6b468e7a4521bc021df5d88302196d030a8  ferritecore-7.0.3-neoforge.jar
+238b20c943bb7c1e4ed387b2d1bc463c656f44ab7c388da1eee148f54d383b52  jei-1.21.1-neoforge-19.57.0.450.jar
+488f33216030c1cb0baa33e59de3d657d08d5795a6c2080c8c8bbbc133fc8757  lithium-neoforge-0.15.4+mc1.21.1.jar
+e6e9446890f0feb3aab3f6e73ae18cb17575c370f232179fef7baa30e61538fe  modernfix-neoforge-5.27.24+mc1.21.1.jar
+afa55fe4e7c48560126dbe654fa9647f141bc6ffd3ce35525b65dd65d88251b5  modmenu-11.0.5.jar
+c0187ee299527ac7a3e0b1e83601dcdc0de631e286fe41e6be1a75958ea8e443  placeholder-api-2.4.2+1.21.jar
+9b2ce1b10449eb6dcb640eec83c50666c52043f1b47b76cdaa49aba39c24f760  shooting_star_addition-1.1.0.jar
+575d187b15328d7bddd8a9b1bee64333c22c14735f5780ec49eac0cd5503c08d  sodium-neoforge-0.8.13+mc1.21.1.jar
+8b972bcef153eb78d4ef89f9d3bb2cc3a744e1d830a6a3e54bd120056a1762b0  the-shooting-star-demo-1.3.1-neoforge.jar
+
+# Arms (three; each frozen by the harness into <out>/frozen/forbric-kernel-client.jar,
+#  sha recorded in <out>/frozen-kernel-sha256.txt — all three = the release candidate)
+97d894f5946829d46a163e179cc71508424bb8d4bf21ae2534acafa555d6780d  release-kernel.jar  /private/tmp/rel038/release-kernel.jar
+48df3d2b90dfec3926fbfcee92dc6bd8a441760f27560fd7d168169d81e2fa97  (published 0.3.7-beta kernel, /private/tmp/rel037/release-kernel.jar — the falsifier-baseline input)
+
+# Instrument
+java     = /Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home/bin/java — "21.0.7" 2025-04-15 LTS (W7_JAVA)
+harness  = w7/harness/sweep_client.py (client surface, quick-play into W7Client, -Dforbric.compatibilityPolicy=strict,
+           -Dforbric.mixinFit=default); WINDOW HIDING AGENT ON (W7_SHOW_WINDOW unset: the javaagent injects and reads
+           forbric.hideWindow=true; the OS-level hide is also requested)
+stage    = stubtable/stage  (merged-base/patched-mc-merged-1.21.1.jar sha256 46af05299bafd3140321b25246138def88dd4f938b9ae9451f976b57bd1c587f
+           = the installed instance's .forbric-build/out/patched-mc-merged-1.21.1.jar; forge-runtime-interop.jar sha 0f53e530…,
+           neoforge-runtime/neoforge-runtime.jar sha 3d862fd9…)
+mc root  = stubtable/mc  (libraries -> the instance's, assets -> the instance's, .forbric/mappings, versions/1.21.1 + 1.21.1-natives)
+corpus   = /private/tmp/rel038/corpus12 | corpus13 | corpus14 (each with client-world/W7Client)
+remap    = /private/tmp/rel038/remap (a copy of /private/tmp/rel037/remap = the instance's .forbric-kernel/remap, 49 entries), shared
+timeouts = --boot-timeout 600 --boot-stall 300 (only the timeouts widened, no criterion changed)
+order    = arm A, arm B, arm C — one client window at a time; each row carries its own load note
+
+NOTE (recorded, not a criterion): the 0.3.7-beta gate ran on merged-base fbd531b0… (the then-contents of
+stubtable/stage); this gate ran on 46af0529… (= stubtable/stage now = the installed instance's .forbric-build/out,
+and the base the cannot-fire / play-payload-dispatch lanes used). The merged base is not the kernel's input, and all
+three arm load-reports came back byte-identical to 0.3.7's (see load-report-comparison.txt).

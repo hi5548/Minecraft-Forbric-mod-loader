@@ -1,0 +1,74 @@
+0.3.7-beta gate row vs 0.3.8-beta gate row, field by field (same corpus, same harness settings;
+the 0.3.7 kernel was 48df3d2b…, the 0.3.8 kernel 97d894f5…).
+
+===== arm A — the user's real 12 =====
+  field                  0.3.7                                    0.3.8                                   
+  subject                modmenu-11.0.5.jar                       modmenu-11.0.5.jar                      
+  loader                 fabric                                   fabric                                  
+  run                    PASS                                     PASS                                    
+  exit                   0                                        0                                       
+  world                  True                                     True                                    
+  frames                 1                                        1                                       
+  stopped                True                                     True                                    
+  killed                 False                                    False                                   
+  mod                    OK                                       OK                                      
+  status_source          catalog                                  catalog                                 
+  confirmed_required     0                                        0                                       
+  catalog_failures       []                                       []                                      
+  loaded                 True                                     True                                    
+  strict                 True                                     True                                    
+  cause                  None                                     None                                    
+  cpu_busy_pct           315.9                                    323.3                                      <-- differs
+  load_1m                4.94                                     3.91                                       <-- differs
+  seconds                33                                       31                                         <-- differs
+  load-report.txt byte-identical to 0.3.7: True
+  dep_status all-OK (0.3.8): True (11 deps)
+
+===== arm B — the same 12 + Create 6.0.10 =====
+  field                  0.3.7                                    0.3.8                                   
+  subject                create-1.21.1-6.0.10.jar                 create-1.21.1-6.0.10.jar                
+  loader                 neoforge                                 neoforge                                
+  run                    PASS                                     PASS                                    
+  exit                   0                                        0                                       
+  world                  True                                     True                                    
+  frames                 1                                        1                                       
+  stopped                True                                     True                                    
+  killed                 False                                    False                                   
+  mod                    OK                                       OK                                      
+  status_source          catalog                                  catalog                                 
+  confirmed_required     0                                        0                                       
+  catalog_failures       []                                       []                                      
+  loaded                 True                                     True                                    
+  strict                 True                                     True                                    
+  cause                  None                                     None                                    
+  cpu_busy_pct           257.8                                    333.7                                      <-- differs
+  load_1m                4.45                                     7.39                                       <-- differs
+  seconds                38                                       37                                         <-- differs
+  load-report.txt byte-identical to 0.3.7: True
+  dep_status all-OK (0.3.8): True (12 deps)
+
+===== arm C — the same 12 + the two Shooting Star jars =====
+  field                  0.3.7                                    0.3.8                                   
+  subject                the-shooting-star-demo-1.3.1-neoforge.jar the-shooting-star-demo-1.3.1-neoforge.jar
+  loader                 neoforge                                 neoforge                                
+  run                    PASS                                     PASS                                    
+  exit                   0                                        0                                       
+  world                  True                                     True                                    
+  frames                 1                                        1                                       
+  stopped                True                                     True                                    
+  killed                 False                                    False                                   
+  mod                    DEGRADED                                 DEGRADED                                
+  status_source          catalog                                  catalog                                 
+  confirmed_required     0                                        0                                       
+  catalog_failures       ['shooting_star_demo']                   ['shooting_star_demo']                  
+  loaded                 False                                    False                                   
+  strict                 False                                    False                                   
+  cause                  mod-degraded                             mod-degraded                            
+  cpu_busy_pct           294.1                                    314.4                                      <-- differs
+  load_1m                6.08                                     8.25                                       <-- differs
+  seconds                35                                       32                                         <-- differs
+  load-report.txt byte-identical to 0.3.7: True
+  dep_status all-OK (0.3.8): True (13 deps)
+
+Only the kernel sha, the wall-clock seconds, the cpu/load figures and (arm A) the scene-derived
+pixel fractions differ; every judged field is identical.

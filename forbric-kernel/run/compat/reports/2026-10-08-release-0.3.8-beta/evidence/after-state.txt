@@ -1,0 +1,49 @@
+== user's mods (versions/1.21.1-forbric/mods) ==
+15bf9bd6d8e3ae8ad35c5a4d90680424b534d9762d698c0a466965afcab5dd78  ImmediatelyFast-NeoForge-1.6.14+1.21.1.jar
+38b48dd6231341c9f964ce6e42c57ec866c6cc8f72bec938390a59bafb3922df  appleskin-neoforge-mc1.21-3.0.9.jar
+65e722e0d98431a07c45f8bdd8d529a217cc8c175fde1740248bd5c1b4f3c0d4  cloth-config-15.0.140-neoforge.jar
+3983b981da4a0583c7e58184a8631a23e56cc3b81f4cb53491ca600382879b82  entityculling-neoforge-1.11.2-mc1.21.1.jar
+79ac44b40780acbd884b34c50be1e39af682847e5f5cb3b1fddeeaa768dce800  fabric-api-0.116.17+1.21.1.jar
+d87ea28262715ebff45b8a82d493e6b468e7a4521bc021df5d88302196d030a8  ferritecore-7.0.3-neoforge.jar
+238b20c943bb7c1e4ed387b2d1bc463c656f44ab7c388da1eee148f54d383b52  jei-1.21.1-neoforge-19.57.0.450.jar
+488f33216030c1cb0baa33e59de3d657d08d5795a6c2080c8c8bbbc133fc8757  lithium-neoforge-0.15.4+mc1.21.1.jar
+e6e9446890f0feb3aab3f6e73ae18cb17575c370f232179fef7baa30e61538fe  modernfix-neoforge-5.27.24+mc1.21.1.jar
+afa55fe4e7c48560126dbe654fa9647f141bc6ffd3ce35525b65dd65d88251b5  modmenu-11.0.5.jar
+c0187ee299527ac7a3e0b1e83601dcdc0de631e286fe41e6be1a75958ea8e443  placeholder-api-2.4.2+1.21.jar
+9b2ce1b10449eb6dcb640eec83c50666c52043f1b47b76cdaa49aba39c24f760  shooting_star_addition-1.1.0.jar
+575d187b15328d7bddd8a9b1bee64333c22c14735f5780ec49eac0cd5503c08d  sodium-neoforge-0.8.13+mc1.21.1.jar
+8b972bcef153eb78d4ef89f9d3bb2cc3a744e1d830a6a3e54bd120056a1762b0  the-shooting-star-demo-1.3.1-neoforge.jar
+count: 14
+
+== instance files (mtimes) ==
+Oct  8 11:13:57 2026  /Applications/.minecraft/versions/1.21.1-forbric
+Oct  8 10:21:50 2026  /Applications/.minecraft/versions/1.21.1-forbric/mods
+Oct  8 11:15:34 2026  /Applications/.minecraft/versions/1.21.1-forbric/options.txt
+Oct  4 11:59:26 2026  /Applications/.minecraft/versions/1.21.1-forbric/saves
+Oct  8 11:14:12 2026  /Applications/.minecraft/versions/1.21.1-forbric/config
+Oct  8 11:17:03 2026  /Applications/.minecraft/versions/1.21.1-forbric/.forbric-kernel
+Oct  8 11:13:57 2026  /Applications/.minecraft/versions/1.21.1-forbric/log4j2.xml
+Oct  8 11:26:49 2026  /Applications/.minecraft/versions/1.21.1-forbric/1.21.1-forbric.json
+Oct  4 11:58:48 2026  /Applications/.minecraft/versions/1.21.1-forbric/resourcepacks
+Oct  4 08:14:35 2026  /Applications/.minecraft/versions/1.21.1-forbric/defaultconfigs
+Oct  4 08:14:44 2026  /Applications/.minecraft/versions/1.21.1-forbric/data
+Oct  4 08:14:43 2026  /Applications/.minecraft/versions/1.21.1-forbric/downloads
+Oct  8 11:14:17 2026  /Applications/.minecraft/versions/1.21.1-forbric/shooting_star.log
+Oct  8 11:13:58 2026  /Applications/.minecraft/versions/1.21.1-forbric/logs
+
+== global mods dir ==
+Oct 15 08:00:14 2025  /Applications/.minecraft/mods
+jar count: 129
+
+== libraries/net/forbric ==
+forbric-kernel: ['0.3.3-beta', '0.3.4-beta', '0.3.5-beta', '0.3.6-beta', '0.3.7-beta', '0.3.8-beta']
+forbric-loader: ['0.3.3-beta', '0.3.4-beta', '0.3.5-beta', '0.3.6-beta', '0.3.7-beta', '0.3.8-beta']
+forbricruntime: ['0.3.3-beta', '0.3.4-beta', '0.3.5-beta', '0.3.6-beta', '0.3.7-beta', '0.3.8-beta']
+forge-runtime: ['1.21.1']
+neoforge-runtime: ['1.21.1']
+patched-mc-merged: ['1.21.1']
+
+4af30f564994bfa06e70ff734b9e564cc1f8d3badb6667644f8eba632be6892c  /Applications/.minecraft/versions/1.21.1-forbric/1.21.1-forbric.json
+profile libraries: net.forbric:forbric-kernel:0.3.8-beta, net.forbric:forbric-loader:0.3.8-beta, net.forbric:forbricruntime:0.3.8-beta, net.fabricmc:sponge-mixin:0.17.3+mixin.0.8.7, net.fabricmc:class-tweaker:0.3.0-beta.2, net.fabricmc:tiny-remapper:0.14.0, org.ow2.asm:asm-commons:9.10.1, org.ow2.asm:asm-util:9.10.1, org.ow2.asm:asm-analysis:9.10.1, org.ow2.asm:asm-tree:9.10.1, org.ow2.asm:asm:9.10.1, org.ow2.sat4j:org.ow2.sat4j.pb:2.3.6, org.ow2.sat4j:org.ow2.sat4j.core:2.3.6, net.fabricmc:mapping-io:0.7.1, com.electronwill.night-config:toml:3.8.1, com.electronwill.night-config:json:3.8.1, com.electronwill.night-config:core:3.8.1, net.forbric:patched-mc-merged:1.21.1, net.forbric:forge-runtime:1.21.1, net.forbric:neoforge-runtime:1.21.1
+profile mainClass: net.forbric.kernel.boot.KernelClientLaunch
+profile id/version: 1.21.1-forbric

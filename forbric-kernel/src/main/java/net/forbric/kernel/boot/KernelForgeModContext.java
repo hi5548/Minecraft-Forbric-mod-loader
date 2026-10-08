@@ -288,10 +288,28 @@ public final class KernelForgeModContext {
 		return attempted;
 	}
 
-	static Method single(Class<?> cls, String name) {
-		for (Method m : cls.getMethods()) {
-			if (m.getName().equals(name)) return m;
+	/**
+	 * The one-argument {@code post(Event)} on a traditional-Forge bus, resolved by its parameter TYPE.
+	 *
+	 * <p>Not "the first method called post". EventBus 6's {@code IEventBus} declares two — {@code post(Event)} and
+	 * {@code post(Event, IEventBusInvokeDispatcher)} — and {@code Class.getMethods()} yields them in an order the
+	 * JVM does not specify; on this JVM it yielded the two-argument one, so {@code invoke(bus, event)} threw
+	 * {@code IllegalArgumentException: wrong number of arguments: 1 expected: 2} for EVERY handle.
+	 *
+	 * <p>The cost was not the one event that threw. {@code KernelForgeBaseline.fireNewRegistryEvent} is the only
+	 * caller, and it is where Forge's custom registries come into being: {@code event.fill()} builds and registers
+	 * exactly the builders the listeners collected, so with the post refused {@code fill()} had nothing, {@code
+	 * created 0 custom registr(ies)} went into the log, and {@code forge:fluid_type}, {@code forge:condition_codecs},
+	 * {@code forge:ingredient_serializers}, the modifier serializers and {@code forge:holder_set_type} never
+	 * existed. That reads as silence until a {@code RegistryObject} bound to one is applied, which is where it
+	 * surfaced: MinecraftForge's object-holder pass at world exit, "Failed to apply some object holders".
+	 */
+	static Method eventBusPost(Class<?> busClass, Class<?> eventType) {
+		try {
+			return busClass.getMethod("post", eventType);
+		} catch (NoSuchMethodException missing) {
+			throw new IllegalStateException("no post(" + eventType.getName() + ") on " + busClass.getName()
+					+ " — the traditional-Forge event bus changed shape and NewRegistryEvent can no longer be posted", missing);
 		}
-		throw new IllegalStateException("no method " + name + " on " + cls);
 	}
 }

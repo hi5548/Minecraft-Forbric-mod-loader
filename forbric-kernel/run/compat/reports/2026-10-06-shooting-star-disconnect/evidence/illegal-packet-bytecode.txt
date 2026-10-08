@@ -1,0 +1,102 @@
+# What raises 'Illegal packet received'
+
+The string exists in exactly ONE class of the shipped Forge carrier. grep -rl over the extracted
+forge-runtime-1.21.1.jar (sha c55ce232…):
+  net/minecraftforge/common/ForgeHooks.class
+
+## net.minecraftforge.common.ForgeHooks.onCustomPayload(CustomPayloadEvent) — the side check (javap -p -c)
+  public static boolean onCustomPayload(net.minecraftforge.event.network.CustomPayloadEvent);
+    Code:
+         0: aload_0
+         1: invokevirtual #1785               // Method net/minecraftforge/event/network/CustomPayloadEvent.getSource:()Lnet/minecraftforge/event/network/CustomPayloadEvent$Context;
+         4: invokevirtual #1789               // Method net/minecraftforge/event/network/CustomPayloadEvent$Context.getConnection:()Lnet/minecraft/network/Connection;
+         7: astore_1
+         8: aload_1
+         9: invokevirtual #1793               // Method net/minecraft/network/Connection.getReceiving:()Lnet/minecraft/network/protocol/PacketFlow;
+        12: getstatic     #1799               // Field net/minecraft/network/protocol/PacketFlow.CLIENTBOUND:Lnet/minecraft/network/protocol/PacketFlow;
+        15: if_acmpne     24
+        18: getstatic     #1805               // Field net/minecraftforge/fml/LogicalSide.CLIENT:Lnet/minecraftforge/fml/LogicalSide;
+        21: goto          27
+        24: getstatic     #1811               // Field net/minecraftforge/fml/LogicalSide.SERVER:Lnet/minecraftforge/fml/LogicalSide;
+        27: astore_2
+        28: aload_2
+        29: invokestatic  #1813               // Method net/minecraftforge/fml/util/thread/EffectiveSide.get:()Lnet/minecraftforge/fml/LogicalSide;
+        32: if_acmpeq     47
+        35: aload_1
+        36: ldc_w         #1818               // String Illegal packet received, terminating connection
+        39: invokestatic  #346                // InterfaceMethod net/minecraft/network/chat/Component.literal:(Ljava/lang/String;)Lnet/minecraft/network/chat/MutableComponent;
+        42: invokevirtual #1820               // Method net/minecraft/network/Connection.disconnect:(Lnet/minecraft/network/chat/Component;)V
+        45: iconst_0
+        46: ireturn
+        47: aload_0
+        48: invokevirtual #1824               // Method net/minecraftforge/event/network/CustomPayloadEvent.getChannel:()Lnet/minecraft/resources/ResourceLocation;
+        51: invokestatic  #1710               // Method net/minecraftforge/network/NetworkRegistry.findTarget:(Lnet/minecraft/resources/ResourceLocation;)Lnet/minecraftforge/network/NetworkInstance;
+        54: astore_3
+        55: aload_3
+        56: ifnull        69
+        59: aload_3
+        60: aload_0
+        61: invokevirtual #1827               // Method net/minecraftforge/network/NetworkInstance.dispatch:(Lnet/minecraftforge/event/network/CustomPayloadEvent;)Z
+        64: ifeq          69
+        67: iconst_1
+        68: ireturn
+        69: aload_0
+        70: invokevirtual #1785               // Method net/minecraftforge/event/network/CustomPayloadEvent.getSource:()Lnet/minecraftforge/event/network/CustomPayloadEvent$Context;
+        73: invokevirtual #1832               // Method net/minecraftforge/event/network/CustomPayloadEvent$Context.getPacketHandled:()Z
+        76: ifne          97
+        79: getstatic     #51                 // Field net/minecraftforge/common/MinecraftForge.EVENT_BUS:Lnet/minecraftforge/eventbus/api/IEventBus;
+        82: aload_0
+        83: invokeinterface #57,  2           // InterfaceMethod net/minecraftforge/eventbus/api/IEventBus.post:(Lnet/minecraftforge/eventbus/api/Event;)Z
+        88: pop
+        89: aload_0
+        90: invokevirtual #1785               // Method net/minecraftforge/event/network/CustomPayloadEvent.getSource:()Lnet/minecraftforge/event/network/CustomPayloadEvent$Context;
+        93: invokevirtual #1832               // Method net/minecraftforge/event/network/CustomPayloadEvent$Context.getPacketHandled:()Z
+        96: ireturn
+        97: iconst_0
+        98: ireturn
+
+
+## net.minecraftforge.fml.util.thread.EffectiveSide.get() — what the side is read from
+Compiled from "EffectiveSide.java"
+public class net.minecraftforge.fml.util.thread.EffectiveSide {
+  public net.minecraftforge.fml.util.thread.EffectiveSide();
+    Code:
+       0: aload_0
+       1: invokespecial #1                  // Method java/lang/Object."<init>":()V
+       4: return
+
+  public static net.minecraftforge.fml.LogicalSide get();
+    Code:
+       0: invokestatic  #7                  // Method java/lang/Thread.currentThread:()Ljava/lang/Thread;
+       3: invokevirtual #13                 // Method java/lang/Thread.getThreadGroup:()Ljava/lang/ThreadGroup;
+       6: astore_0
+       7: aload_0
+       8: instanceof    #17                 // class net/minecraftforge/fml/util/thread/SidedThreadGroup
+      11: ifeq          24
+      14: aload_0
+      15: checkcast     #17                 // class net/minecraftforge/fml/util/thread/SidedThreadGroup
+      18: invokevirtual #19                 // Method net/minecraftforge/fml/util/thread/SidedThreadGroup.getSide:()Lnet/minecraftforge/fml/LogicalSide;
+      21: goto          27
+      24: getstatic     #23                 // Field net/minecraftforge/fml/LogicalSide.CLIENT:Lnet/minecraftforge/fml/LogicalSide;
+      27: areturn
+}
+
+## net.minecraftforge.common.ForgeHooks.onCustomPayload(CustomPacketPayload, Connection) — Forge's 1.21.1 entry, builds the event
+  public static boolean onCustomPayload(net.minecraft.network.protocol.common.custom.CustomPacketPayload, net.minecraft.network.Connection);
+    Code:
+         0: new           #1736               // class net/minecraftforge/event/network/CustomPayloadEvent$Context
+         3: dup
+         4: aload_1
+         5: invokespecial #1738               // Method net/minecraftforge/event/network/CustomPayloadEvent$Context."<init>":(Lnet/minecraft/network/Connection;)V
+         8: astore_2
+         9: new           #1741               // class net/minecraftforge/event/network/CustomPayloadEvent
+        12: dup
+        13: aload_0
+        14: invokeinterface #1743,  1         // InterfaceMethod net/minecraft/network/protocol/common/custom/CustomPacketPayload.type:()Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload$Type;
+        19: invokevirtual #1749               // Method net/minecraft/network/protocol/common/custom/CustomPacketPayload$Type.id:()Lnet/minecraft/resources/ResourceLocation;
+        22: aload_0
+        23: aload_2
+        24: iconst_0
+        25: invokespecial #1754               // Method net/minecraftforge/event/network/CustomPayloadEvent."<init>":(Lnet/minecraft/resources/ResourceLocation;Ljava/lang/Object;Lnet/minecraftforge/event/network/CustomPayloadEvent$Context;I)V
+        28: invokestatic  #1757               // Method onCustomPayload:(Lnet/minecraftforge/event/network/CustomPayloadEvent;)Z
+        31: ireturn

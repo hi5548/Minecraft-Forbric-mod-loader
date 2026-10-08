@@ -197,6 +197,16 @@ public enum ForeignType {
 			"net.neoforged.neoforge.registries.RegistryManager"),
 	SERVER_LIFECYCLE_HOOKS("net.minecraftforge.server.ServerLifecycleHooks",
 			"net.neoforged.neoforge.server.ServerLifecycleHooks"),
+	/**
+	 * The thread group each family builds its server thread and its network event loops in — the thing both
+	 * {@code EffectiveSide} implementations read a thread's side off. Paired because the kernel's
+	 * {@code ForgeSidedThreads} must answer for BOTH: the merge kept NeoForge's half of
+	 * {@code MinecraftServer.spin} and {@code ServerConnectionListener}, and MinecraftForge matches on the
+	 * group's CLASS, so a half named inline is a side the merged base reports wrongly — which is how
+	 * {@code ForgeHooks.onCustomPayload} came to disconnect the player with "Illegal packet received".
+	 */
+	SIDED_THREAD_GROUPS("net.minecraftforge.fml.util.thread.SidedThreadGroups",
+			"net.neoforged.fml.util.thread.SidedThreadGroups"),
 	SERVER_MOD_LOADER("net.minecraftforge.server.loading.ServerModLoader",
 			"net.neoforged.neoforge.server.loading.ServerModLoader"),
 	SPAWN_PLACEMENT_EVENT("net.minecraftforge.event.entity.SpawnPlacementRegisterEvent",

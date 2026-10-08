@@ -1,0 +1,10 @@
+```
+[Forbric/INFO] [Forbric/MergedBaseCompat] MinecraftForge's EffectiveSide now reads the merged base's thread groups again (1 site(s)) — the merge kept NeoForge's half of MinecraftServer.spin and ServerConnectionListener, so every server-side thread sat in NeoForge's SERVER group and Forge answered CLIENT on it; ForgeHooks.onCustomPayload then kicked the player ("Illegal packet received") on the first custom payload a mod sent upward
+transformed (different bytes): true
+original names GETSTATIC LogicalSide.CLIENT: true
+transformed names GETSTATIC LogicalSide.CLIENT: false
+transformed calls ForgeSidedThreads.groupFor: true
+in NeoForge SERVER group  => before=CLIENT  after=SERVER
+on an unsided thread     => before=CLIENT  after=CLIENT
+VERDICT: fix works (was CLIENT on the server thread, now SERVER)
+```

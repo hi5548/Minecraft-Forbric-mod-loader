@@ -1,0 +1,60 @@
+# The merged-base divergence the disconnect rests on: which SidedThreadGroups the server-side threads are in
+
+## merge-conflicts.txt (written by the merge itself; /Applications/.minecraft/.forbric-build/out/)
+465:net/minecraft/server/MinecraftServer#spin(Ljava/util/function/Function;)Lnet/minecraft/server/MinecraftServer; (forge hook lost)
+540:net/minecraft/server/network/ServerConnectionListener#startTcpServerListener(Ljava/net/InetAddress;I)V (forge hook lost)
+541:net/minecraft/server/network/ServerConnectionListener#lambda$static$1()Lio/netty/channel/epoll/EpollEventLoopGroup; (forge hook lost)
+542:net/minecraft/server/network/ServerConnectionListener#lambda$static$0()Lio/netty/channel/nio/NioEventLoopGroup; (forge hook lost)
+1466:net/minecraft/server/MinecraftServer#spin(Ljava/util/function/Function;)Lnet/minecraft/server/MinecraftServer; DECLINED base changes vanilla operands, control flow or handlers
+1541:net/minecraft/server/network/ServerConnectionListener#startTcpServerListener(Ljava/net/InetAddress;I)V DECLINED paired hook site not composable: DualStackUtils.checkIPv6 result is discarded, not threaded back through a local it reads
+1542:net/minecraft/server/network/ServerConnectionListener#lambda$static$1()Lio/netty/channel/epoll/EpollEventLoopGroup; DECLINED base changes vanilla operands, control flow or handlers
+1543:net/minecraft/server/network/ServerConnectionListener#lambda$static$0()Lio/netty/channel/nio/NioEventLoopGroup; DECLINED base changes vanilla operands, control flow or handlers
+
+## MinecraftServer.spin — the unmerged bases vs the merged base
+### patched-mc-forge-1.21.1.jar (genuine MinecraftForge)
+       0: new           #288                // class java/util/concurrent/atomic/AtomicReference
+       8: new           #28                 // class java/lang/Thread
+      12: getstatic     #298                // Field net/minecraftforge/fml/util/thread/SidedThreadGroups.SERVER:Lnet/minecraftforge/fml/util/thread/SidedThreadGroup;
+      24: invokespecial #320                // Method java/lang/Thread."<init>":(Ljava/lang/ThreadGroup;Ljava/lang/Runnable;Ljava/lang/String;)V
+### patched-mc-neoforge-1.21.1.jar (genuine NeoForge)
+      12: getstatic     #311                // Field net/neoforged/fml/util/thread/SidedThreadGroups.SERVER:Lnet/neoforged/fml/util/thread/SidedThreadGroup;
+      24: invokespecial #333                // Method java/lang/Thread."<init>":(Ljava/lang/ThreadGroup;Ljava/lang/Runnable;Ljava/lang/String;)V
+      34: invokevirtual #347                // Method java/lang/Thread.setUncaughtExceptionHandler:(Ljava/lang/Thread$UncaughtExceptionHandler;)V
+      50: invokevirtual #361                // Method java/lang/Thread.setPriority:(I)V
+### patched-mc-merged-1.21.1.jar (the base under test, sha fbd531b0…)
+      12: getstatic     #311                // Field net/neoforged/fml/util/thread/SidedThreadGroups.SERVER:Lnet/neoforged/fml/util/thread/SidedThreadGroup;
+      24: invokespecial #333                // Method java/lang/Thread."<init>":(Ljava/lang/ThreadGroup;Ljava/lang/Runnable;Ljava/lang/String;)V
+      34: invokevirtual #347                // Method java/lang/Thread.setUncaughtExceptionHandler:(Ljava/lang/Thread$UncaughtExceptionHandler;)V
+      50: invokevirtual #361                // Method java/lang/Thread.setPriority:(I)V
+
+### ServerConnectionListener (the Netty event loops), same three jars
+--- mf
+      22: getstatic     #357                // Field net/minecraftforge/fml/util/thread/SidedThreadGroups.SERVER:Lnet/minecraftforge/fml/util/thread/SidedThreadGroup;
+      22: getstatic     #357                // Field net/minecraftforge/fml/util/thread/SidedThreadGroups.SERVER:Lnet/minecraftforge/fml/util/thread/SidedThreadGroup;
+--- mn
+      22: getstatic     #277                // Field net/neoforged/fml/util/thread/SidedThreadGroups.SERVER:Lnet/neoforged/fml/util/thread/SidedThreadGroup;
+      22: getstatic     #277                // Field net/neoforged/fml/util/thread/SidedThreadGroups.SERVER:Lnet/neoforged/fml/util/thread/SidedThreadGroup;
+--- mm
+      22: getstatic     #357                // Field net/neoforged/fml/util/thread/SidedThreadGroups.SERVER:Lnet/neoforged/fml/util/thread/SidedThreadGroup;
+      22: getstatic     #357                // Field net/neoforged/fml/util/thread/SidedThreadGroups.SERVER:Lnet/neoforged/fml/util/thread/SidedThreadGroup;
+
+### ServerLoginPacketListenerImpl — the third Forge group site, which SURVIVED the merge
+     151: getstatic     #429                // Field net/minecraftforge/fml/util/thread/SidedThreadGroups.SERVER:Lnet/minecraftforge/fml/util/thread/SidedThreadGroup;
+
+## The play-phase serverbound payload listener is MinecraftForge's override (patched-mc-merged-1.21.1.jar)
+  public void handleCustomPayload(net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket);
+    Code:
+       0: aload_1
+       1: invokevirtual #3607               // Method net/minecraft/network/protocol/common/ServerboundCustomPayloadPacket.payload:()Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;
+       4: aload_0
+       5: getfield      #510                // Field connection:Lnet/minecraft/network/Connection;
+       8: invokestatic  #3613               // Method net/minecraftforge/common/ForgeHooks.onCustomPayload:(Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;Lnet/minecraft/network/Connection;)Z
+      11: pop
+      12: return
+## …and the same method in the genuine NeoForge base (which delegates to super instead)
+  public void handleCustomPayload(net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket);
+    Code:
+       0: aload_0
+       1: aload_1
+       2: invokespecial #2900               // Method net/minecraft/server/network/ServerCommonPacketListenerImpl.handleCustomPayload:(Lnet/minecraft/network/protocol/common/ServerboundCustomPayloadPacket;)V
+       5: return

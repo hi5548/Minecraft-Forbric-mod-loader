@@ -135,11 +135,12 @@ public final class KernelForgeBaseline {
 			// keeps those. This is the same shape as the deferred-work drain in KernelNeoSetup: the failure is one
 			// mod's, and the cost should be too. One event instance across the buses, filled once: each
 			// DeferredRegister subscribes on exactly one bus, so each registry is created exactly once.
+			Class<?> eventType = Class.forName(ForeignType.EVENT.binary(Ecosystem.FORGE), false, cl);
 			boolean posted = true;
 			for (KernelForgeModContext.Handle handle : handles) {
 				Object bus = handle.busGroup();
 				try {
-					KernelForgeModContext.single(bus.getClass(), "post").invoke(bus, event);
+					KernelForgeModContext.eventBusPost(bus.getClass(), eventType).invoke(bus, event);
 				} catch (Throwable t) {
 					posted = false;
 					ForbricLog.warn("[Forbric/Forge] NewRegistryEvent could not reach %s's bus — the custom "

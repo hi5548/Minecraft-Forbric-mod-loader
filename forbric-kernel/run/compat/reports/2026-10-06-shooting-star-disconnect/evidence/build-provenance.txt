@@ -1,0 +1,67 @@
+# Build provenance — the arms, and what isolates them
+
+All builds on this box, JDK 21.0.7 (`/Library/Java/JavaVirtualMachines/jdk-21.jdk`). The game side is not
+rebuilt here (the Reborn Energy fixture is absent, so `compileRuntimeJava` is SKIPPED on this machine — the
+same limit the sibling lanes recorded), so each boot jar carries the published game side byte for byte.
+
+```
+$ ./gradlew --offline -q -Pforbric.stagedRoot=/private/tmp/ss-lane/empty jar   # boot half only
+$ python3 /private/tmp/ss-lane/pack.py build/libs/forbric-kernel-0.1.0-SNAPSHOT.jar <published> <out>
+```
+
+## Arms
+
+arm                  sha256                                                                 source
+before-published     16bcd60242c54890fda728e294ad41935619ff4b499f359f539d6e44dae45b74       /Applications/.minecraft/libraries/net/forbric/forbric-kernel/0.3.6-beta/forbric-kernel-0.3.6-beta.jar
+before               2f561650ca30f3a4fe70e176ac3f708551b1650fe9521ed9aac0c27637ed93a0       this tree HEAD rebuilt (5 files reverted, 3 new files removed)
+after                48df3d2b90dfec3926fbfcee92dc6bd8a441760f27560fd7d168169d81e2fa97       HEAD + this lane's two fixes
+before-published-repacked 15870f66f72c50dcb6fabacffdbc79d431578190d7a881c525d4331e4576b06c       the published jar, contents identical, re-zipped by this lane's packer
+
+## pack.py output (per arm)
+```
+out            arms/kernel-before.jar
+sha256         2f561650ca30f3a4fe70e176ac3f708551b1650fe9521ed9aac0c27637ed93a0
+bytes          3288418
+entries        735
+runtime sha256 67c2a49b55c8ef860e552ec5b9e028d8836e68d46f5bb4595a40016debde8c6d
+'X N.class'    0
+
+out            arms/kernel-after.jar
+sha256         48df3d2b90dfec3926fbfcee92dc6bd8a441760f27560fd7d168169d81e2fa97
+bytes          3290813
+entries        736
+runtime sha256 67c2a49b55c8ef860e552ec5b9e028d8836e68d46f5bb4595a40016debde8c6d
+'X N.class'    0
+
+before-published (as shipped): 3287792 bytes, 735 entries, nested runtime sha 67c2a49b55c8ef860e552ec5b9e028d8836e68d46f5bb4595a40016debde8c6d
+before-published-repacked:     3288277 bytes, 735 entries, same nested runtime
+```
+
+## Entry-set comparison, before vs after (name -> sha256 of the decompressed bytes)
+```
+entry sets equal: False 735 736
+added:   ['net/forbric/kernel/boot/ForgeSidedThreads.class']
+removed: []
+differing entries: 6
+    net/forbric/api/ForeignType$1.class
+    net/forbric/api/ForeignType.class
+    net/forbric/kernel/boot/KernelForgeBaseline.class
+    net/forbric/kernel/boot/KernelForgeModContext.class
+    net/forbric/kernel/transform/ForbricMergedBaseCompatTransformer$LostSwitchMap.class
+    net/forbric/kernel/transform/ForbricMergedBaseCompatTransformer.class
+```
+
+So the reported pair differs in ONE class added and SIX classes edited, all inside the files `git diff` lists
+(the nested `ForbricMergedBaseCompatTransformer$LostSwitchMap` and `ForeignType$1` shift with their owners).
+Every other entry is byte-identical — including the whole game side, which neither arm touched.
+
+## Reproducibility
+
+Re-running the boot-half build after the arms were packed produced the same packed sha256 for `after`
+(48df3d2b…), so the arm is content-derived, not timestamp-derived.
+
+## Artifact hygiene
+
+429 stale editor/Finder duplicates of the shape `X N.class` sat in `build/classes` (they made the Gradle
+`test` task try to execute `…Test 2`). They were deleted before any arm was built; both arms carry 0 such
+entries (see each pack.py output line "'X N.class' 0").

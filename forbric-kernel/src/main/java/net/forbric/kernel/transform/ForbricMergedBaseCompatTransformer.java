@@ -94,7 +94,7 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 	}
 
 	/** The repairs {@link #transform} runs, in its order; a test pins the two lists against each other. */
-	static final List<String> REPAIRS = List.of("repairLambdaBootstrapHandles", "addBlockStateModelConflictResolvers", "addBlockStateAppearanceResolver", "addMissingForgeFluidTypeBridge", "addMissingForgeKeyMappingLookupInitializer", "addMissingForgeKnownRegistriesInitializer", "addMissingIngredientInvalidationCounterInitializer", "routeKeyMappingClickToPopulatedLookup", "giveKeyMappingItsMinecraftForgeFace", "routeFabricParticleFactoriesThroughTheLiveMap", "giveFeaturesPerStepItsVanillaDescriptorBack", "letDungeonsGenerateWithoutTheDataMap", "restoreDoublePrecisionToTheRandomSources", "convertRadiansWithVanillasFoldedConstant", "saveTheHeightmapsVanillaSaves", "guardNeoForgesWorldModifierPass", "letForeignResourceConditionsThrough", "letForeignResourceConditionsThroughMinecraftForge", "letFabricResourceConditionsDecide", "translateAGuestsPrivateSkipMarker", "serveDefaultAttributesBothEcosystems", "restoreForgeClientInit", "restoreForgeGeometryReload", "nameTheReloadListenersNeoForgeRefusesToName", "dropInterfaceDefaultShadowingOverrides", "tolerateEmptyCreativeTabStacks", "routePlaceItemHookToNeoForge", "bridgeOrphanedPipRenderers", "keepForgeOutboundProtocolCurrent", "surviveTheMissingForgeModelDataManager", "dropTheWindowTitlesLoaderBrand", "keepTheSaveOffTheTeardownsFailurePath", "postNeoForgesItemTooltipEvent", "askNeoForgeWhatAnItemsAttributesAre", "readTheSpawnReasonThatIsActuallyWritten", "giveTheUnwrittenLoggerAValue", "addTheMissingCapabilityLifecycleStubs", "addTheMissingNbtBuilderFactory", "postMinecraftForgesReloadListenerEvent", "giveMinecraftForgesReloadEventItsConditionContext", "letMinecraftForgeIngredientTypesDecode", "letMinecraftForgeFluidsChooseTheirModel", "giveMinecraftForgesParticleLookupItsFirstVariant", "dropStubsThatBypassARealSuperclassMethod", "inlineTheSwitchMapTheMergeLost", "vetoUnjudgeableOverlayConditions", "hideTheLegacyLootModifierIndexFromTheDirectoryScan", "letModdedFeatureFlagsRegister", "dropTheKeyModifierSuffixBeforeParsingAKeyName", "letTheAtlasLowerItsMipLevelLikeVanilla", "wrapTheStreamsVanillaWraps", "returnFromANestedBootstrapBeforeItsTail", "letBothEcosystemsSetBurnTime", "letMinecraftForgeSeeSpawnerMobs", "letMinecraftForgeAddPackFinders", "giveForgeEventsTheConstructorTheEventBusWants", "readASelfDependencyAsACycle", "routeForeignEntityDataSerializersToNeoForge", "restoreTheRawColourKeysAndRebindTheColourMixins");
+	static final List<String> REPAIRS = List.of("repairLambdaBootstrapHandles", "addBlockStateModelConflictResolvers", "addBlockStateAppearanceResolver", "addMissingForgeFluidTypeBridge", "addMissingForgeKeyMappingLookupInitializer", "addMissingForgeKnownRegistriesInitializer", "addMissingIngredientInvalidationCounterInitializer", "routeKeyMappingClickToPopulatedLookup", "giveKeyMappingItsMinecraftForgeFace", "routeFabricParticleFactoriesThroughTheLiveMap", "giveFeaturesPerStepItsVanillaDescriptorBack", "letDungeonsGenerateWithoutTheDataMap", "restoreDoublePrecisionToTheRandomSources", "convertRadiansWithVanillasFoldedConstant", "saveTheHeightmapsVanillaSaves", "guardNeoForgesWorldModifierPass", "letForeignResourceConditionsThrough", "letForeignResourceConditionsThroughMinecraftForge", "letFabricResourceConditionsDecide", "translateAGuestsPrivateSkipMarker", "serveDefaultAttributesBothEcosystems", "restoreForgeClientInit", "restoreForgeGeometryReload", "nameTheReloadListenersNeoForgeRefusesToName", "dropInterfaceDefaultShadowingOverrides", "tolerateEmptyCreativeTabStacks", "routePlaceItemHookToNeoForge", "bridgeOrphanedPipRenderers", "keepForgeOutboundProtocolCurrent", "surviveTheMissingForgeModelDataManager", "dropTheWindowTitlesLoaderBrand", "keepTheSaveOffTheTeardownsFailurePath", "postNeoForgesItemTooltipEvent", "askNeoForgeWhatAnItemsAttributesAre", "readTheSpawnReasonThatIsActuallyWritten", "giveTheUnwrittenLoggerAValue", "addTheMissingCapabilityLifecycleStubs", "addTheMissingNbtBuilderFactory", "postMinecraftForgesReloadListenerEvent", "giveMinecraftForgesReloadEventItsConditionContext", "letMinecraftForgeIngredientTypesDecode", "letMinecraftForgeFluidsChooseTheirModel", "giveMinecraftForgesParticleLookupItsFirstVariant", "dropStubsThatBypassARealSuperclassMethod", "inlineTheSwitchMapTheMergeLost", "vetoUnjudgeableOverlayConditions", "hideTheLegacyLootModifierIndexFromTheDirectoryScan", "letModdedFeatureFlagsRegister", "dropTheKeyModifierSuffixBeforeParsingAKeyName", "letTheAtlasLowerItsMipLevelLikeVanilla", "wrapTheStreamsVanillaWraps", "returnFromANestedBootstrapBeforeItsTail", "letBothEcosystemsSetBurnTime", "letMinecraftForgeSeeSpawnerMobs", "letMinecraftForgeAddPackFinders", "giveForgeEventsTheConstructorTheEventBusWants", "readASelfDependencyAsACycle", "routeForeignEntityDataSerializersToNeoForge", "restoreTheRawColourKeysAndRebindTheColourMixins", "letMinecraftForgeReadTheMergedThreadGroups");
 
 	private static final String NEO_EVENT_HOOKS_BINARY = "net.neoforged.neoforge.event.EventHooks";
 
@@ -295,6 +295,12 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 						+ "falls back to MapColor (grass, water, foliage, leather all lose their colour) and the "
 						+ "Fabric ColorProviderRegistry registers into a map the renderer reads wrongly. Client-only: "
 						+ "a dedicated server never loads the classes"));
+		out.add(fixed("letMinecraftForgeReadTheMergedThreadGroups", "net/minecraftforge/fml/util/thread/EffectiveSide",
+				"every MinecraftForge side check answers CLIENT on a server-side thread, because the merge kept "
+						+ "NeoForge's half of MinecraftServer.spin and ServerConnectionListener and the two "
+						+ "SidedThreadGroups are different classes — ForgeHooks.onCustomPayload disconnects the player "
+						+ "(\"Illegal packet received, terminating connection\") on the first custom payload a mod "
+						+ "sends upward"));
 		return List.copyOf(out);
 	}
 
@@ -392,6 +398,7 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 			changed |= claim(reporter, "readASelfDependencyAsACycle", readASelfDependencyAsACycle(node));
 			changed |= claim(reporter, "routeForeignEntityDataSerializersToNeoForge", routeForeignEntityDataSerializersToNeoForge(node));
 			changed |= claim(reporter, "restoreTheRawColourKeysAndRebindTheColourMixins", restoreTheRawColourKeysAndRebindTheColourMixins(node));
+			changed |= claim(reporter, "letMinecraftForgeReadTheMergedThreadGroups", letMinecraftForgeReadTheMergedThreadGroups(node));
 			changed |= namedOldLoader && adoptInteropHooksTheBaseStillNamesAfterTheOldLoader(node);
 
 			byte[] result = classBytes;
@@ -2522,6 +2529,75 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 				+ "merged body rounded through float, which displaces every noise octave's origin and lets "
 				+ "nextDouble() return exactly 1.0",
 				node.name.replace('/', '.'), repaired, String.join(", ", methods));
+		return true;
+	}
+
+	private static final String EFFECTIVE_SIDE = "net/minecraftforge/fml/util/thread/EffectiveSide";
+	private static final String SIDED_THREAD_GROUP = "net/minecraftforge/fml/util/thread/SidedThreadGroup";
+	private static final String FORGE_SIDED_THREADS = "net/forbric/kernel/boot/ForgeSidedThreads";
+	private static final String EFFECTIVE_SIDE_DESC = "()Lnet/minecraftforge/fml/LogicalSide;";
+
+	/**
+	 * Lets MinecraftForge's {@code EffectiveSide} answer for the threads NeoForge built.
+	 *
+	 * <p>{@code EffectiveSide.get()} is four instructions: read the current thread's {@code ThreadGroup}, take the
+	 * side off it when it is a MinecraftForge {@code SidedThreadGroup}, and answer CLIENT for <em>everything
+	 * else</em>. Both ecosystems patch the same two places to put their threads in their own group —
+	 * {@code MinecraftServer.spin} (the "Server thread" and, through it, the whole server) and
+	 * {@code ServerConnectionListener} (the Netty event loops) — and the merge kept NeoForge's half of both; its
+	 * own ledger says so, {@code net/minecraft/server/MinecraftServer#spin … (forge hook lost)}. So on the merged
+	 * base every server-side thread is in {@code net.neoforged.fml.util.thread.SidedThreadGroups.SERVER}, which is
+	 * not the class Forge's check names, and Forge's {@code EffectiveSide.get()} answers <b>CLIENT</b> on the
+	 * server thread and on Netty. (Forge's third group site, the login thread in
+	 * {@code ServerLoginPacketListenerImpl}, survived the merge, so the base is internally inconsistent — proof
+	 * this is a merge artefact and not either ecosystem's behaviour.)
+	 *
+	 * <p>The cost is not a wrong log line. {@code ForgeHooks.onCustomPayload} is MinecraftForge's dispatcher for
+	 * EVERY serverbound custom payload in the play phase — the merged
+	 * {@code ServerGamePacketListenerImpl.handleCustomPayload} is Forge's override and calls it for NeoForge's
+	 * payloads too — and its first act is to compare {@code EffectiveSide.get()} with the connection's direction,
+	 * disconnecting the player on a mismatch. With the side read as CLIENT on the server, the first payload a mod
+	 * sent upward ended the connection: "Charles_cai_5332 lost connection: Illegal packet received, terminating
+	 * connection".
+	 *
+	 * <p>The threads are NOT moved into Forge's group. NeoForge keeps them in its own and only one ecosystem can
+	 * own a thread group; moving them would fix Forge by breaking NeoForge's own {@code EffectiveSide}, the same
+	 * swap the reader-side repair in {@code serveDefaultAttributesBothEcosystems} exists to avoid. The losing
+	 * <em>reader</em> is served instead: the CLIENT fallback becomes a call that returns the Forge group carrying
+	 * the side the thread is really on ({@code ForgeSidedThreads.groupFor}), so the {@code instanceof} branch and
+	 * the {@code getSide()} call above it are untouched and one stack slot still suffices — no frame, max-stack or
+	 * control-flow change, only the constant that used to be the answer.
+	 */
+	private static boolean letMinecraftForgeReadTheMergedThreadGroups(ClassNode node) {
+		if (!EFFECTIVE_SIDE.equals(node.name)) return false;
+		int repaired = 0;
+		for (MethodNode method : node.methods) {
+			if (!"get".equals(method.name) || !EFFECTIVE_SIDE_DESC.equals(method.desc)) continue;
+			AbstractInsnNode insn = method.instructions.getFirst();
+			while (insn != null) {
+				AbstractInsnNode next = insn.getNext();
+				if (insn.getOpcode() == Opcodes.GETSTATIC && insn instanceof FieldInsnNode field
+						&& "net/minecraftforge/fml/LogicalSide".equals(field.owner) && "CLIENT".equals(field.name)) {
+					InsnList injected = new InsnList();
+					injected.add(new LdcInsnNode(Type.getObjectType(EFFECTIVE_SIDE)));
+					injected.add(new MethodInsnNode(Opcodes.INVOKESTATIC, FORGE_SIDED_THREADS, "groupFor",
+							"(Ljava/lang/Class;)Ljava/lang/Object;", false));
+					injected.add(new TypeInsnNode(Opcodes.CHECKCAST, SIDED_THREAD_GROUP));
+					injected.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, SIDED_THREAD_GROUP, "getSide",
+							EFFECTIVE_SIDE_DESC, false));
+					method.instructions.insertBefore(insn, injected);
+					method.instructions.remove(insn);
+					repaired++;
+				}
+				insn = next;
+			}
+		}
+		if (repaired == 0) return false;
+		ForbricLog.info("[Forbric/MergedBaseCompat] MinecraftForge's EffectiveSide now reads the merged base's "
+				+ "thread groups again (%d site(s)) — the merge kept NeoForge's half of MinecraftServer.spin and "
+				+ "ServerConnectionListener, so every server-side thread sat in NeoForge's SERVER group and Forge "
+				+ "answered CLIENT on it; ForgeHooks.onCustomPayload then kicked the player (\"Illegal packet "
+				+ "received\") on the first custom payload a mod sent upward", repaired);
 		return true;
 	}
 

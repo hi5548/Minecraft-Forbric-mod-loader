@@ -82,11 +82,13 @@ class KernelRegistrationIsolationTest {
 		MethodNode fire = method("net/forbric/kernel/boot/KernelForgeBaseline", "fireNewRegistryEvent");
 		assumeTrue(fire != null, "KernelForgeBaseline not compiled yet");
 
-		// The post is reflective -- KernelForgeModContext.single(bus.getClass(), "post").invoke(...) -- so it is
-		// located by the resolver call, not by a method named "post", which does not exist in the bytecode.
-		int post = indexOfCall(fire, "single");
+		// The post is reflective -- KernelForgeModContext.eventBusPost(bus.getClass(), Event.class).invoke(...)
+		// -- so it is located by the resolver call, not by a method named "post", which does not exist in the
+		// bytecode. (The resolver itself is pinned by KernelForgeModContextPostTest; what matters here is that the
+		// post and the fill do not share a fate.)
+		int post = indexOfCall(fire, "eventBusPost");
 		int fill = indexOfCall(fire, "getDeclaredMethod");
-		assertTrue(post >= 0, "the event is still posted through KernelForgeModContext.single here");
+		assertTrue(post >= 0, "the event is still posted through KernelForgeModContext.eventBusPost here");
 		assertTrue(fill >= 0, "and fill is still resolved here");
 
 		assertTrue(guardedRange(fire, post), "the post needs a handler of its own, or one mod's listener takes "

@@ -1,0 +1,30 @@
+# Why the same 'post' resolution is not stable: Class.getMethods() order, measured from the SAME carrier jar
+
+net.minecraftforge.eventbus.EventBus declares BOTH overloads in one class file:
+  43:  public boolean post(net.minecraftforge.eventbus.api.Event);
+  44:  public boolean post(net.minecraftforge.eventbus.api.Event, net.minecraftforge.eventbus.api.IEventBusInvokeDispatcher);
+
+## probe A: direct load, then getMethods() (loader = the carrier jar + log4j only)
+```
+forge-runtime-interop.jar    post order: 2 1 
+eventbus-6.2.33.jar          post order: 2 1 
+```
+## probe B: the kernel's own path — BusBuilder.builder().markerType(IModBusEvent.class).build(), then bus.getClass().getMethods()
+```
+BusBuilder.builder().markerType(IModBusEvent).build() -> net.minecraftforge.eventbus.EventBus
+  bus.getClass().getMethods() post order: 2 1 
+  loader of that class: java.net.URLClassLoader@14ae5a5
+```
+
+Same jar, same JDK (21.0.7) — the order is not specified by the JVM and is not the same in the two processes.
+The harness's before-arm (local rebuild) landed on the 1-argument order twice; the published jar landed on
+the 2-argument order and reproduced the user's exception and the object-holder failure.
+
+## 12 identical invocations of probe B (same command, same classpath, same JDK), tallied
+```
+      6   bus.getClass().getMethods() post order: 1 2 
+      6   bus.getClass().getMethods() post order: 2 1 
+```
+So the selection is a per-process lottery; both orders came up in both tallies (10/2 and 6/6 across the two
+batches of twelve identical invocations) and there is no way to predict it from the call site. Measured for this lane: 'before-published' drew 2-arg (0 registries created, the object-holder
+failure; 1 run), 'before' drew 1-arg (9 created; 2 runs), 'after' cannot draw anything but 1-arg (2 runs).

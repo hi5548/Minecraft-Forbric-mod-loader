@@ -1,0 +1,41 @@
+net.forbric.api.ForeignTypeTest: org.opentest4j.AssertionFailedError: these concepts are written out under BOTH Forge families inline, so a change that updates one
+net.forbric.kernel.boot.KernelForgeGatherStatesTest: java.lang.NullPointerException
+net.forbric.kernel.boot.KernelHudBridgeTest: java.lang.NullPointerException: Cannot invoke "java.nio.file.Path.getFileSystem()" because "path" is null
+net.forbric.kernel.boot.KernelHudBridgeTest: java.lang.NullPointerException: Cannot invoke "java.nio.file.Path.getFileSystem()" because "path" is null
+net.forbric.kernel.boot.KernelRuntimeClassesTest: org.opentest4j.AssertionFailedError: boot-side code names game-side classes that KernelRuntimeClasses does not list, so nothing ch
+net.forbric.kernel.compat.CompatProtocolTest: org.opentest4j.AssertionFailedError: Missing operational documentation for run/compat/reports/2026-10-04-tint/evidence/sample-tint
+net.forbric.kernel.mixin.FinalMixinApplicationsTest: java.util.NoSuchElementException: No value present
+net.forbric.kernel.mixin.LootSupersessionProofTest: java.lang.NullPointerException: Cannot invoke "java.nio.file.Path.getFileSystem()" because "path" is null
+net.forbric.kernel.transform.LambdaSelectorRetargetTest: java.lang.NullPointerException: Cannot invoke "java.nio.file.Path.getFileSystem()" because "path" is null
+net.forbric.kernel.transform.LambdaSelectorRetargetTest: java.lang.NullPointerException: Cannot invoke "java.nio.file.Path.getFileSystem()" because "path" is null
+net.forbric.kernel.transform.LootTableEventBridgeInjectorTest: org.opentest4j.AssertionFailedError: staged merged base absent ==> expected: <true> but was: <false>
+net.forbric.kernel.transform.LootTableEventBridgeInjectorTest: org.opentest4j.AssertionFailedError: staged merged base absent ==> expected: <true> but was: <false>
+net.forbric.kernel.transform.LootTableEventBridgeInjectorTest: org.opentest4j.AssertionFailedError: staged merged base absent ==> expected: <true> but was: <false>
+net.forbric.kernel.transform.LootTableEventBridgeInjectorTest: org.opentest4j.AssertionFailedError: staged merged base absent ==> expected: <true> but was: <false>
+net.forbric.kernel.transform.ModsButtonRedirectorTest: java.lang.NullPointerException
+net.forbric.kernel.transform.ModsButtonRedirectorTest: java.lang.NullPointerException: Cannot invoke "java.nio.file.Path.getFileSystem()" because "path" is null
+net.forbric.kernel.transform.ModsButtonRedirectorTest: java.lang.NullPointerException: Cannot invoke "java.nio.file.Path.getFileSystem()" because "path" is null
+net.forbric.kernel.transform.ModsButtonRedirectorTest: java.lang.NullPointerException
+net.forbric.kernel.transform.ModsButtonRedirectorTest: java.lang.NullPointerException
+net.forbric.kernel.transform.ModsButtonRedirectorTest: java.lang.NullPointerException
+net.forbric.kernel.transform.ModsButtonRedirectorTest: java.lang.NullPointerException
+net.forbric.kernel.transform.ModsButtonRedirectorTest: java.lang.NullPointerException: Cannot invoke "java.nio.file.Path.getFileSystem()" because "path" is null
+net.forbric.kernel.transform.ModsButtonRedirectorTest: java.lang.NullPointerException
+net.forbric.kernel.transform.TransferTransactionHooksTest: java.lang.NullPointerException: Cannot invoke "java.nio.file.Path.getFileSystem()" because "path" is null
+net.forbric.kernel.transform.TransferTransactionHooksTest: java.lang.NullPointerException: Cannot invoke "java.nio.file.Path.getFileSystem()" because "path" is null
+net.forbric.kernel.transform.TransferTransactionHooksTest: java.lang.NullPointerException: Cannot invoke "java.nio.file.Path.getFileSystem()" because "path" is null
+net.forbric.kernel.transform.TransferTransactionHooksTest: java.lang.NullPointerException: Cannot invoke "java.nio.file.Path.getFileSystem()" because "path" is null
+net.forbric.kernel.transform.TransferTransactionHooksTest: java.lang.NullPointerException: Cannot invoke "java.nio.file.Path.getFileSystem()" because "path" is null
+net.forbric.kernel.transform.TransferTransactionHooksTest: java.lang.NullPointerException: Cannot invoke "java.nio.file.Path.getFileSystem()" because "path" is null
+
+1 net.forbric.api.ForeignTypeTest
+1 net.forbric.kernel.boot.KernelForgeGatherStatesTest
+2 net.forbric.kernel.boot.KernelHudBridgeTest
+1 net.forbric.kernel.boot.KernelRuntimeClassesTest
+1 net.forbric.kernel.compat.CompatProtocolTest
+1 net.forbric.kernel.mixin.FinalMixinApplicationsTest
+1 net.forbric.kernel.mixin.LootSupersessionProofTest
+2 net.forbric.kernel.transform.LambdaSelectorRetargetTest
+4 net.forbric.kernel.transform.LootTableEventBridgeInjectorTest
+9 net.forbric.kernel.transform.ModsButtonRedirectorTest
+6 net.forbric.kernel.transform.TransferTransactionHooksTest

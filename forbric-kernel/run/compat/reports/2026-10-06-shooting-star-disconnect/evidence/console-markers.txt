@@ -1,0 +1,71 @@
+# Console markers, verbatim, all four arms
+
+## out-before  (out-before/per-mod/run/000-shooting_star_demo__neoforge/console.log)
+```
+1081:[08:12:53] [Render thread/INFO]: [Forbric/Forge] constructed traditional-Forge baseline mod ForgeMod -> net.minecraftforge.common.ForgeMod@27a2300
+1083:[08:12:53] [Render thread/INFO]: [Forbric/Forge] created 9 custom registr(ies) via NewRegistryEvent + fired Forge RegisterEvent x90 on 1 bus(es) [baseline + 0 mod(s)]
+1669:[08:13:10] [Render thread/INFO]: [Forbric/ClientSmoke] joined world via quick-play: W7Client
+1702:[08:13:24] [Server thread/WARN]: [Forbric/EventMux] handleServerStopped forward failed; Forge-family mods won't observe this server-lifecycle event
+1703:java.lang.ClassCastException: class com.electronwill.nightconfig.core.SimpleCommentedConfig cannot be cast to class com.electronwill.nightconfig.core.file.CommentedFileConfig (com.electronwill.nightconfig.core.SimpleCommentedConfig and com.electronwill.nightconfig.core.file.CommentedFileConfig are in unnamed modul
+1725:[08:13:24] [Render thread/INFO]: [Forbric/ClientSmoke] clean disconnect observed; stopping client
+```
+
+## out-before-2  (out-before-2/per-mod/run/000-shooting_star_demo__neoforge/console.log)
+```
+1081:[08:22:28] [Render thread/INFO]: [Forbric/Forge] constructed traditional-Forge baseline mod ForgeMod -> net.minecraftforge.common.ForgeMod@3f6c4ac0
+1083:[08:22:28] [Render thread/INFO]: [Forbric/Forge] created 9 custom registr(ies) via NewRegistryEvent + fired Forge RegisterEvent x90 on 1 bus(es) [baseline + 0 mod(s)]
+1669:[08:22:43] [Render thread/INFO]: [Forbric/ClientSmoke] joined world via quick-play: W7Client
+1700:[08:22:56] [Server thread/WARN]: [Forbric/EventMux] handleServerStopped forward failed; Forge-family mods won't observe this server-lifecycle event
+1701:java.lang.ClassCastException: class com.electronwill.nightconfig.core.SimpleCommentedConfig cannot be cast to class com.electronwill.nightconfig.core.file.CommentedFileConfig (com.electronwill.nightconfig.core.SimpleCommentedConfig and com.electronwill.nightconfig.core.file.CommentedFileConfig are in unnamed modul
+1723:[08:22:56] [Render thread/INFO]: [Forbric/ClientSmoke] clean disconnect observed; stopping client
+```
+
+## out-published  (out-published/per-mod/run/000-shooting_star_demo__neoforge/console.log)
+```
+1086:[08:20:26] [Render thread/INFO]: [Forbric/Forge] constructed traditional-Forge baseline mod ForgeMod -> net.minecraftforge.common.ForgeMod@37a415c3
+1087:[08:20:26] [Render thread/WARN]: [Forbric/Forge] NewRegistryEvent could not reach forge's bus — the custom registries collected before it are still created below, the ones after it are not
+1088:java.lang.IllegalArgumentException: wrong number of arguments: 1 expected: 2
+1106:[08:20:26] [Render thread/WARN]: [Forbric/Forge] 0 Forge custom registr(ies) survived that failure
+1107:[08:20:26] [Render thread/INFO]: [Forbric/Forge] created 0 custom registr(ies) via NewRegistryEvent + fired Forge RegisterEvent x81 on 1 bus(es) [baseline + 0 mod(s)]
+1698:[08:20:38] [Render thread/INFO]: [Forbric/ClientSmoke] joined world via quick-play: W7Client
+1731:java.lang.RuntimeException: Failed to apply some object holders, see suppressed exceptions for details
+1746:	Suppressed: java.lang.IllegalStateException: Unable to find registry with key forge:structure_modifier_serializers for mod "forge". Check the 'caused by' to see further stack.
+1788:	Suppressed: java.lang.IllegalStateException: Unable to find registry with key forge:holder_set_type for mod "forge". Check the 'caused by' to see further stack.
+1830:	Suppressed: java.lang.IllegalStateException: Unable to find registry with key forge:condition_codecs for mod "forge". Check the 'caused by' to see further stack.
+1872:	Suppressed: java.lang.IllegalStateException: Unable to find registry with key forge:ingredient_serializers for mod "forge". Check the 'caused by' to see further stack.
+1914:	Suppressed: java.lang.IllegalStateException: Unable to find registry with key forge:holder_set_type for mod "forge". Check the 'caused by' to see further stack.
+1956:	Suppressed: java.lang.IllegalStateException: Unable to find registry with key forge:biome_modifier_serializers for mod "forge". Check the 'caused by' to see further stack.
+1998:	Suppressed: java.lang.IllegalStateException: Unable to find registry with key forge:ingredient_serializers for mod "forge". Check the 'caused by' to see further stack.
+2040:	Suppressed: java.lang.IllegalStateException: Unable to find registry with key forge:ingredient_serializers for mod "forge". Check the 'caused by' to see further stack.
+2082:	Suppressed: java.lang.IllegalStateException: Unable to find registry with key forge:condition_codecs for mod "forge". Check the 'caused by' to see further stack.
+2124:	Suppressed: java.lang.IllegalStateException: Unable to find registry with key forge:condition_codecs for mod "forge". Check the 'caused by' to see further stack.
+2166:	Suppressed: java.lang.IllegalStateException: Unable to find registry with key forge:biome_modifier_serializers for mod "forge". Check the 'caused by' to see further stack.
+2208:	Suppressed: java.lang.IllegalStateException: Unable to find registry with key forge:fluid_type for mod "minecraft". Check the 'caused by' to see further stack.
+2250:	Suppressed: java.lang.IllegalStateException: Unable to find registry with key forge:condition_codecs for mod "forge". Check the 'caused by' to see further stack.
+2292:	Suppressed: java.lang.IllegalStateException: Unable to find registry with key forge:holder_set_type for mod "forge". Check the 'caused by' to see further stack.
+2334:	Suppressed: java.lang.IllegalStateException: Unable to find registry with key forge:condition_codecs for mod "forge". Check the 'caused by' to see further stack.
+2376:	Suppressed: java.lang.IllegalStateException: Unable to find registry with key forge:condition_codecs for mod "forge". Check the 'caused by' to see further stack.
+2418:	Suppressed: java.lang.IllegalStateException: Unable to find registry with key forge:condition_codecs for mod "forge". Check the 'caused by' to see further stack.
+2460:	Suppressed: java.lang.IllegalStateException: Unable to find registry with key forge:condition_codecs for mod "forge". Check the 'caused by' to see further stack.
+2502:	Suppressed: java.lang.IllegalStateException: Unable to find registry with key forge:ingredient_serializers for mod "forge". Check the 'caused by' to see further stack.
+2544:	Suppressed: java.lang.IllegalStateException: Unable to find registry with key forge:biome_modifier_serializers for mod "forge". Check the 'caused by' to see further stack.
+2586:	Suppressed: java.lang.IllegalStateException: Unable to find registry with key forge:biome_modifier_serializers for mod "forge". Check the 'caused by' to see further stack.
+2628:	Suppressed: java.lang.IllegalStateException: Unable to find registry with key forge:biome_modifier_serializers for mod "forge". Check the 'caused by' to see further stack.
+2670:	Suppressed: java.lang.IllegalStateException: Unable to find registry with key forge:fluid_type for mod "minecraft". Check the 'caused by' to see further stack.
+2712:	Suppressed: java.lang.IllegalStateException: Unable to find registry with key forge:ingredient_serializers for mod "forge". Check the 'caused by' to see further stack.
+2754:	Suppressed: java.lang.IllegalStateException: Unable to find registry with key forge:holder_set_type for mod "forge". Check the 'caused by' to see further stack.
+2796:	Suppressed: java.lang.IllegalStateException: Unable to find registry with key forge:fluid_type for mod "minecraft". Check the 'caused by' to see further stack.
+2838:[08:20:50] [Server thread/WARN]: [Forbric/EventMux] handleServerStopped forward failed; Forge-family mods won't observe this server-lifecycle event
+2839:java.lang.ClassCastException: class com.electronwill.nightconfig.core.SimpleCommentedConfig cannot be cast to class com.electronwill.nightconfig.core.file.CommentedFileConfig (com.electronwill.nightconfig.core.SimpleCommentedConfig and com.electronwill.nightconfig.core.file.CommentedFileConfig are in unnamed modul
+2861:[08:20:50] [Render thread/INFO]: [Forbric/ClientSmoke] clean disconnect observed; stopping client
+```
+
+## out-after  (out-after/per-mod/run/000-shooting_star_demo__neoforge/console.log)
+```
+1081:[08:26:32] [Render thread/INFO]: [Forbric/Forge] constructed traditional-Forge baseline mod ForgeMod -> net.minecraftforge.common.ForgeMod@27a2300
+1083:[08:26:32] [Render thread/INFO]: [Forbric/Forge] created 9 custom registr(ies) via NewRegistryEvent + fired Forge RegisterEvent x90 on 1 bus(es) [baseline + 0 mod(s)]
+1668:[08:27:02] [Render thread/INFO]: [Forbric/ClientSmoke] joined world via quick-play: W7Client
+1699:[08:27:14] [Server thread/WARN]: [Forbric/EventMux] handleServerStopped forward failed; Forge-family mods won't observe this server-lifecycle event
+1700:java.lang.ClassCastException: class com.electronwill.nightconfig.core.SimpleCommentedConfig cannot be cast to class com.electronwill.nightconfig.core.file.CommentedFileConfig (com.electronwill.nightconfig.core.SimpleCommentedConfig and com.electronwill.nightconfig.core.file.CommentedFileConfig are in unnamed modul
+1722:[08:27:14] [Render thread/INFO]: [Forbric/ClientSmoke] clean disconnect observed; stopping client
+```

@@ -1,0 +1,74 @@
+# /Applications/.minecraft/versions/1.21.1-forbric/logs/latest.log lines 1690-1760, and the full object-holder ERROR block (1743-2849)
+
+## 1690-1760 (verbatim)
+[10:35:17] [Render thread/INFO]: Registering recipes: jei:internal took 56.46 milliseconds
+[10:35:17] [Render thread/INFO]: Registering recipes took 258.7 milliseconds
+[10:35:17] [Render thread/INFO]: Registering recipes transfer handlers...
+[10:35:17] [Render thread/INFO]: Registering recipes transfer handlers took 2.326 milliseconds
+[10:35:17] [Render thread/INFO]: Building runtime...
+[10:35:17] [Render thread/INFO]: [Forbric/Merge] net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen carried 3 duplicated lambda name(s) from the byte merge — dropped 3 orphaned bod(ies) so a mixin selecting by name cannot bind to the half that lost: lambda$updateVisibleTags$5(Ljava/util/function/Predicate;Lnet/minecraft/tags/TagKey;)Z, lambda$updateVisibleTags$4(Ljava/lang/String;Ljava/lang/String;Lnet/minecraft/resources/ResourceLocation;)Z, lambda$init$2(Lnet/minecraftforge/client/gui/CreativeTabsScreenPage;)Z
+[10:35:17] [Render thread/INFO]: Registering gui handlers...
+[10:35:17] [Render thread/INFO]: Registering gui handlers took 4.842 milliseconds
+[10:35:17] [Render thread/INFO]: Registering Runtime...
+[10:35:17] [Render thread/INFO]: Starting JEI GUI
+[10:35:17] [Render thread/INFO]: Building ingredient list...
+[10:35:17] [Render thread/INFO]: Building ingredient list took 19.97 milliseconds
+[10:35:17] [Render thread/INFO]: Building ingredient filter...
+[10:35:17] [Render thread/INFO]: Adding 1696 ingredients
+[10:35:17] [Render thread/INFO]: Added 1696 ingredients
+[10:35:17] [Render thread/INFO]: Building ingredient filter took 114.6 milliseconds
+[10:35:17] [Render thread/INFO]: Registering Runtime: jei:neoforge_gui took 200.9 milliseconds
+[10:35:17] [Render thread/INFO]: Registering Runtime took 201.2 milliseconds
+[10:35:17] [Render thread/INFO]: Building runtime took 216.7 milliseconds
+[10:35:17] [Render thread/INFO]: Sending Runtime...
+[10:35:17] [Render thread/INFO]: Sending Runtime took 116.5 microseconds
+[10:35:17] [Render thread/INFO]: Starting JEI took 654.7 milliseconds
+[10:35:17] [Render thread/INFO]: [Forbric/MergedBaseCompat] net.minecraft.world.entity.projectile.ProjectileUtil turns radians into degrees by vanilla's folded constant again (2 site(s)) — the merged body divided by pi at run time, which is a different number in the eighth digit and moves every angle computed from a vector
+[10:35:17] [Render thread/INFO]: Loaded 2 advancements
+[10:35:17] [Render thread/WARN]: [Forbric/Load] 10 mod(s) partly did not run: fabric-content-registries-v0, fabric-events-interaction-v0, fabric-item-api-v1, fabric-object-builder-api-v1, fabric-particles-v1, fabric-recipe-api-v1, fabric-registry-sync-v0, fabric-rendering-fluids-v1, modmenu, shooting_star_demo — details in .forbric-kernel/load-report.txt
+[10:35:17] [Server thread/INFO]: [Forbric/EventMux] bridged the first PlayerEvent.StartTracking to MinecraftForge — a Forge-family mod now sees entity tracking NeoForge won on the merged base
+[10:35:18] [Render thread/WARN]: Time from main menu to in-game was 1.9998989 seconds
+[10:35:18] [Render thread/WARN]: Total time to load game and open world was 23.3289 seconds
+[10:35:18] [Server thread/INFO]: [Forbric/EventMux] bridged the first PlayerEvent.StopTracking to MinecraftForge — a Forge-family mod now sees entity tracking NeoForge won on the merged base
+[10:35:18] [Server thread/INFO]: [Forbric/EventMux] bridged 20 ServerTickEvent.Pre to MinecraftForge — 1:1 from NeoForge (both game-event families tick in one loop)
+[10:35:18] [Server thread/INFO]: [Forbric/EventMux] bridged 20 ServerTickEvent.Post to MinecraftForge — 1:1 from NeoForge (both game-event families tick in one loop)
+[10:35:22] [Server thread/INFO]: [Forbric/Tick] 100 tick(s): mean 61.97ms (a server keeping up holds 50), max 1244.41ms, at twice the budget or worse 1 (1.0%), resumes after a pause 0
+[10:35:27] [Render thread/WARN]: Class com.mojang.blaze3d.vertex.VertexMultiConsumer$Double does not support optimized vertex writing code paths, which may cause reduced rendering performance
+[10:35:31] [Server thread/INFO]: Charles_cai_5332 lost connection: Illegal packet received, terminating connection
+[10:35:31] [Server thread/INFO]: Charles_cai_5332退出了游戏
+[10:35:31] [Server thread/INFO]: Stopping singleplayer server as player logged out
+[10:35:31] [Render thread/INFO]: Stopping JEI
+[10:35:31] [Render thread/INFO]: Sending Runtime Unavailable...
+[10:35:31] [Render thread/INFO]: Stopping JEI GUI
+[10:35:31] [Render thread/INFO]: Sending Runtime Unavailable took 2.500 milliseconds
+[10:35:31] [Render thread/INFO]: [Forbric/EventMux] bridged the first LevelEvent.Unload to MinecraftForge — a Forge-family mod now sees the level lifecycle NeoForge won on the merged base
+[10:35:31] [Server thread/INFO]: Stopping server
+[10:35:31] [Server thread/INFO]: Saving players
+[10:35:31] [Server thread/INFO]: Saving worlds
+[10:35:31] [Server thread/INFO]: Saving chunks for level 'ServerLevel[新的世界]'/minecraft:overworld
+[10:35:31] [Server thread/INFO]: [Forbric/EventMux] bridged the first LevelEvent.Save to MinecraftForge — a Forge-family mod now sees the level lifecycle NeoForge won on the merged base
+[10:35:31] [Server thread/INFO]: Saving chunks for level 'ServerLevel[新的世界]'/minecraft:the_end
+[10:35:31] [Server thread/INFO]: Saving chunks for level 'ServerLevel[新的世界]'/minecraft:the_nether
+[10:35:31] [Server thread/INFO]: ThreadedAnvilChunkStorage (新的世界): All chunks are saved
+[10:35:31] [Server thread/INFO]: ThreadedAnvilChunkStorage (DIM1): All chunks are saved
+[10:35:31] [Server thread/INFO]: ThreadedAnvilChunkStorage (DIM-1): All chunks are saved
+[10:35:31] [Server thread/INFO]: ThreadedAnvilChunkStorage: All dimensions are saved
+[10:35:31] [Server thread/ERROR]: 
+java.lang.RuntimeException: Failed to apply some object holders, see suppressed exceptions for details
+	at forbric/net.minecraftforge.registries.ObjectHolderRegistry.applyObjectHolders(ObjectHolderRegistry.java:226) ~[forge-runtime-1.21.1.jar:52.1.16]
+	at forbric/net.minecraftforge.registries.ObjectHolderRegistry.applyObjectHolders(ObjectHolderRegistry.java:215) ~[forge-runtime-1.21.1.jar:52.1.16]
+	at forbric/net.minecraftforge.registries.GameData.revertTo(GameData.java:304) ~[forge-runtime-1.21.1.jar:52.1.16]
+	at forbric/net.minecraftforge.registries.GameData.revertToFrozen(GameData.java:283) ~[forge-runtime-1.21.1.jar:52.1.16]
+	at forbric/net.minecraftforge.server.ServerLifecycleHooks.handleServerStopped(ServerLifecycleHooks.java:101) ~[forge-runtime-1.21.1.jar:52.1.16]
+	at forbric/net.forbric.kernel.runtime.KernelGameServerLifecycle.lambda$installStopped$4(KernelGameServerLifecycle.java:134) ~[forbric-kernel-runtime.jar:?]
+	at forbric/net.forbric.kernel.runtime.KernelGameServerLifecycle.lambda$subscribe$5(KernelGameServerLifecycle.java:162) ~[forbric-kernel-runtime.jar:?]
+	at forbric/net.neoforged.bus.ConsumerEventHandler.invoke(ConsumerEventHandler.java:27) ~[neoforge-runtime-1.21.1.jar:21.1.252]
+	at forbric/net.neoforged.bus.EventBus.post(EventBus.java:360) ~[neoforge-runtime-1.21.1.jar:21.1.252]
+	at forbric/net.neoforged.bus.EventBus.post(EventBus.java:328) ~[neoforge-runtime-1.21.1.jar:21.1.252]
+	at forbric/net.neoforged.neoforge.server.ServerLifecycleHooks.handleServerStopped(ServerLifecycleHooks.java:125) ~[neoforge-runtime-1.21.1.jar:21.1.252]
+	at forbric/net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:750) ~[patched-mc-merged-1.21.1.jar:?]
+	at forbric/net.minecraft.server.MinecraftServer.lambda$spin$2(MinecraftServer.java:267) ~[patched-mc-merged-1.21.1.jar:?]
+	at java.base/java.lang.Thread.run(Thread.java:1583) [?:?]
+	Suppressed: java.lang.IllegalStateException: Unable to find registry with key forge:condition_codecs for mod "forge". Check the 'caused by' to see further stack.
+		at forbric/net.minecraftforge.registries.RegistryObject$1.accept(RegistryObject.java:166) ~[forge-runtime-1.21.1.jar:52.1.16]
+		at forbric/net.minecraftforge.registries.RegistryObject$1.accept(RegistryObject.java:154) ~[forge-runtime-1.21.1.jar:52.1.16]

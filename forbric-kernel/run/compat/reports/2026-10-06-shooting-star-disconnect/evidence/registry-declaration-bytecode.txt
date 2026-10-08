@@ -1,0 +1,64 @@
+# Which registries the holders need, and where they are supposed to come from
+
+## net.minecraftforge.registries.ForgeRegistries$Keys.<clinit> — the keys (forge-runtime-1.21.1.jar)
+189:       232: ldc           #171                // String forge:entity_data_serializers
+192:       240: ldc           #176                // String forge:global_loot_modifier_serializers
+195:       248: ldc           #181                // String forge:biome_modifier_serializers
+198:       256: ldc           #186                // String forge:structure_modifier_serializers
+201:       264: ldc           #191                // String forge:fluid_type
+204:       272: ldc           #196                // String forge:holder_set_type
+207:       280: ldc           #201                // String forge:display_contexts
+210:       288: ldc           #206                // String forge:condition_codecs
+213:       296: ldc           #211                // String forge:ingredient_serializers
+216:       304: ldc           #216                // String forge:biome_modifier
+219:       312: ldc           #221                // String forge:structure_modifier
+
+## net.minecraftforge.common.ForgeMod.<clinit> — where the DeferredRegisters are created (the frame 'Caused by: Calling Site from mod: forge')
+78:         2: invokestatic  #9                  // Method net/minecraftforge/registries/DeferredRegister.create:(Lnet/minecraft/resources/ResourceKey;Ljava/lang/String;)Lnet/minecraftforge/registries/DeferredRegister;
+416:         7: getstatic     #410                // Field net/minecraftforge/registries/ForgeRegistries$Keys.SOUND_EVENTS:Lnet/minecraft/resources/ResourceKey;
+420:        19: getstatic     #422                // Field net/minecraftforge/registries/ForgeRegistries$Keys.FLUID_TYPES:Lnet/minecraft/resources/ResourceKey;
+425:        32: getstatic     #426                // Field net/minecraftforge/registries/ForgeRegistries$Keys.FLUIDS:Lnet/minecraft/resources/ResourceKey;
+434:         4: getstatic     #434                // Field net/minecraftforge/registries/ForgeRegistries$Keys.DISPLAY_CONTEXTS:Lnet/minecraft/resources/ResourceKey;
+592:         5: ldc_w         #585                // String minecraft
+682:         1: getstatic     #678                // Field net/minecraftforge/registries/ForgeRegistries$Keys.BIOME_MODIFIERS:Lnet/minecraft/resources/ResourceKey;
+686:        11: getstatic     #693                // Field net/minecraftforge/registries/ForgeRegistries$Keys.STRUCTURE_MODIFIERS:Lnet/minecraft/resources/ResourceKey;
+1000:        64: getstatic     #967                // Field net/minecraftforge/registries/ForgeRegistries$Keys.ATTRIBUTES:Lnet/minecraft/resources/ResourceKey;
+1013:       107: getstatic     #983                // Field net/minecraftforge/registries/ForgeRegistries$Keys.BIOME_MODIFIER_SERIALIZERS:Lnet/minecraft/resources/ResourceKey;
+1041:       191: getstatic     #1003               // Field net/minecraftforge/registries/ForgeRegistries$Keys.STRUCTURE_MODIFIER_SERIALIZERS:Lnet/minecraft/resources/ResourceKey;
+1049:       215: getstatic     #1009               // Field net/minecraftforge/registries/ForgeRegistries$Keys.HOLDER_SET_TYPES:Lnet/minecraft/resources/ResourceKey;
+1072:       292: getstatic     #422                // Field net/minecraftforge/registries/ForgeRegistries$Keys.FLUID_TYPES:Lnet/minecraft/resources/ResourceKey;
+1073:       295: ldc_w         #585                // String minecraft
+1104:       394: getstatic     #1069               // Field net/minecraftforge/registries/ForgeRegistries$Keys.CONDITION_SERIALIZERS:Lnet/minecraft/resources/ResourceKey;
+1147:       523: getstatic     #1092               // Field net/minecraftforge/registries/ForgeRegistries$Keys.RECIPE_SERIALIZERS:Lnet/minecraft/resources/ResourceKey;
+1155:       547: getstatic     #1100               // Field net/minecraftforge/registries/ForgeRegistries$Keys.INGREDIENT_SERIALIZERS:Lnet/minecraft/resources/ResourceKey;
+1197:       671: getstatic     #422                // Field net/minecraftforge/registries/ForgeRegistries$Keys.FLUID_TYPES:Lnet/minecraft/resources/ResourceKey;
+1199:       677: ldc_w         #585                // String minecraft
+
+## RegistryManager.postNewRegistryEvent — genuine Forge runs NewRegistryEvent listeners, then fills
+  public static void postNewRegistryEvent();
+    Code:
+         0: new           #208                // class net/minecraftforge/registries/NewRegistryEvent
+         3: dup
+         4: invokespecial #210                // Method net/minecraftforge/registries/NewRegistryEvent."<init>":()V
+         7: astore_0
+         8: new           #211                // class net/minecraftforge/registries/DataPackRegistryEvent$NewRegistry
+        11: dup
+        12: invokespecial #213                // Method net/minecraftforge/registries/DataPackRegistryEvent$NewRegistry."<init>":()V
+        15: astore_1
+        16: getstatic     #178                // Field net/minecraft/core/registries/BuiltInRegistries.REGISTRY:Lnet/minecraft/core/Registry;
+        19: invokeinterface #214,  1          // InterfaceMethod net/minecraft/core/Registry.keySet:()Ljava/util/Set;
+        24: invokestatic  #219                // InterfaceMethod java/util/Set.copyOf:(Ljava/util/Collection;)Ljava/util/Set;
+        27: putstatic     #84                 // Field vanillaRegistryKeys:Ljava/util/Set;
+        30: invokestatic  #223                // Method net/minecraftforge/fml/ModLoader.get:()Lnet/minecraftforge/fml/ModLoader;
+        33: aload_0
+        34: invokevirtual #228                // Method net/minecraftforge/fml/ModLoader.postEventWrapContainerInModOrder:(Lnet/minecraftforge/eventbus/api/Event;)V
+        37: invokestatic  #223                // Method net/minecraftforge/fml/ModLoader.get:()Lnet/minecraftforge/fml/ModLoader;
+        40: aload_1
+        41: invokevirtual #228                // Method net/minecraftforge/fml/ModLoader.postEventWrapContainerInModOrder:(Lnet/minecraftforge/eventbus/api/Event;)V
+        44: aload_0
+        45: invokevirtual #232                // Method net/minecraftforge/registries/NewRegistryEvent.fill:()V
+        48: aload_1
+        49: invokevirtual #235                // Method net/minecraftforge/registries/DataPackRegistryEvent$NewRegistry.process:()V
+        52: return
+
+  private void addLegacyName(net.minecraft.resources.ResourceLocation, net.minecraft.resources.ResourceLocation);

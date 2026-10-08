@@ -1,0 +1,74 @@
+# Unit tests, this tree
+
+$ ./gradlew --offline test          # JDK 25 gradle, toolchain 21
+test: 2955 tests, 924 skipped, 29 failed
+
+## Every failure, and why none is this lane's
+```
+net.forbric.api.ForeignTypeTest: org.opentest4j.AssertionFailedError: these concepts are written out under BOTH Forge families inline, so a change that updates one
+net.forbric.kernel.boot.KernelForgeGatherStatesTest: java.lang.NullPointerException
+net.forbric.kernel.boot.KernelHudBridgeTest: java.lang.NullPointerException: Cannot invoke "java.nio.file.Path.getFileSystem()" because "path" is null
+net.forbric.kernel.boot.KernelHudBridgeTest: java.lang.NullPointerException: Cannot invoke "java.nio.file.Path.getFileSystem()" because "path" is null
+net.forbric.kernel.boot.KernelRuntimeClassesTest: org.opentest4j.AssertionFailedError: boot-side code names game-side classes that KernelRuntimeClasses does not list, so nothing ch
+net.forbric.kernel.compat.CompatProtocolTest: org.opentest4j.AssertionFailedError: Missing operational documentation for run/compat/reports/2026-10-04-tint/evidence/sample-tint
+net.forbric.kernel.mixin.FinalMixinApplicationsTest: java.util.NoSuchElementException: No value present
+net.forbric.kernel.mixin.LootSupersessionProofTest: java.lang.NullPointerException: Cannot invoke "java.nio.file.Path.getFileSystem()" because "path" is null
+net.forbric.kernel.transform.LambdaSelectorRetargetTest: java.lang.NullPointerException: Cannot invoke "java.nio.file.Path.getFileSystem()" because "path" is null
+net.forbric.kernel.transform.LambdaSelectorRetargetTest: java.lang.NullPointerException: Cannot invoke "java.nio.file.Path.getFileSystem()" because "path" is null
+net.forbric.kernel.transform.LootTableEventBridgeInjectorTest: org.opentest4j.AssertionFailedError: staged merged base absent ==> expected: <true> but was: <false>
+net.forbric.kernel.transform.LootTableEventBridgeInjectorTest: org.opentest4j.AssertionFailedError: staged merged base absent ==> expected: <true> but was: <false>
+net.forbric.kernel.transform.LootTableEventBridgeInjectorTest: org.opentest4j.AssertionFailedError: staged merged base absent ==> expected: <true> but was: <false>
+net.forbric.kernel.transform.LootTableEventBridgeInjectorTest: org.opentest4j.AssertionFailedError: staged merged base absent ==> expected: <true> but was: <false>
+net.forbric.kernel.transform.ModsButtonRedirectorTest: java.lang.NullPointerException
+net.forbric.kernel.transform.ModsButtonRedirectorTest: java.lang.NullPointerException: Cannot invoke "java.nio.file.Path.getFileSystem()" because "path" is null
+net.forbric.kernel.transform.ModsButtonRedirectorTest: java.lang.NullPointerException: Cannot invoke "java.nio.file.Path.getFileSystem()" because "path" is null
+net.forbric.kernel.transform.ModsButtonRedirectorTest: java.lang.NullPointerException
+net.forbric.kernel.transform.ModsButtonRedirectorTest: java.lang.NullPointerException
+net.forbric.kernel.transform.ModsButtonRedirectorTest: java.lang.NullPointerException
+net.forbric.kernel.transform.ModsButtonRedirectorTest: java.lang.NullPointerException
+net.forbric.kernel.transform.ModsButtonRedirectorTest: java.lang.NullPointerException: Cannot invoke "java.nio.file.Path.getFileSystem()" because "path" is null
+net.forbric.kernel.transform.ModsButtonRedirectorTest: java.lang.NullPointerException
+net.forbric.kernel.transform.TransferTransactionHooksTest: java.lang.NullPointerException: Cannot invoke "java.nio.file.Path.getFileSystem()" because "path" is null
+net.forbric.kernel.transform.TransferTransactionHooksTest: java.lang.NullPointerException: Cannot invoke "java.nio.file.Path.getFileSystem()" because "path" is null
+net.forbric.kernel.transform.TransferTransactionHooksTest: java.lang.NullPointerException: Cannot invoke "java.nio.file.Path.getFileSystem()" because "path" is null
+net.forbric.kernel.transform.TransferTransactionHooksTest: java.lang.NullPointerException: Cannot invoke "java.nio.file.Path.getFileSystem()" because "path" is null
+net.forbric.kernel.transform.TransferTransactionHooksTest: java.lang.NullPointerException: Cannot invoke "java.nio.file.Path.getFileSystem()" because "path" is null
+net.forbric.kernel.transform.TransferTransactionHooksTest: java.lang.NullPointerException: Cannot invoke "java.nio.file.Path.getFileSystem()" because "path" is null
+
+1 net.forbric.api.ForeignTypeTest
+1 net.forbric.kernel.boot.KernelForgeGatherStatesTest
+2 net.forbric.kernel.boot.KernelHudBridgeTest
+1 net.forbric.kernel.boot.KernelRuntimeClassesTest
+1 net.forbric.kernel.compat.CompatProtocolTest
+1 net.forbric.kernel.mixin.FinalMixinApplicationsTest
+1 net.forbric.kernel.mixin.LootSupersessionProofTest
+2 net.forbric.kernel.transform.LambdaSelectorRetargetTest
+4 net.forbric.kernel.transform.LootTableEventBridgeInjectorTest
+9 net.forbric.kernel.transform.ModsButtonRedirectorTest
+6 net.forbric.kernel.transform.TransferTransactionHooksTest
+```
+Reading: 24 of the 29 fail before touching any transformer — they ask for a staged root this box does not
+have (`Files.isRegularFile(null)`, "staged merged base absent"). The five that do run are all PRE-EXISTING:
+the same five classes fail on HEAD with this lane's sources reverted (5 failed / 53 tests in the selection
+ForeignTypeTest+KernelForgeGatherStatesTest+KernelRuntimeClassesTest+CompatProtocolTest+FinalMixinApplicationsTest):
+  - KernelRuntimeClassesTest names net.forbric.kernel.runtime.KernelEntityDataSerializers (in
+    ForbricMergedBaseCompatTransformer.java) and KernelClientLifecycle (in LifecycleHookInjector.java) — neither
+    is authored here;
+  - ForeignTypeTest still lists ClientModLoader, Event and EventPriority as inline pairs in files this lane did
+    not touch. This lane's own SidedThreadGroups pair is GONE from that list because SIDED_THREAD_GROUPS was
+    added to ForeignType — the scanning test is what forced that row;
+  - CompatProtocolTest wants run/compat/reports/2026-10-04-tint/... documented in PROTOCOL.md (a sibling report);
+  - KernelForgeGatherStatesTest / FinalMixinApplicationsTest are fixture lookups (NPE / NoSuchElement on a
+    staged row that is absent).
+
+## This lane's tests
+```
+$ ./gradlew --offline test --tests '*KernelForgeModContextPostTest' --tests '*MergedBaseEffectiveSideTest' \
+        --tests '*TransformerAnchorCensusTest' --tests '*KernelRegistrationIsolationTest'
+test: 14 tests, 2 skipped, 0 failed
+```
+The 2 skips are MergedBaseEffectiveSideTest's real-bytecode cases: they read
+`FORBRIC_OLD/run/forge-runtime/forge-runtime.jar`, which does not exist on this box (the staged root is
+`stubtable/stage`, not `run`). They are exercised for real by effective-side-probe.txt instead.
+KernelForgeModContextPostTest (3) + TransformerAnchorCensusTest (6) + KernelRegistrationIsolationTest (3) pass;
+TransformerAnchorCensusTest is the one that holds REPAIRS, claims() and the transform() dispatch to one list.

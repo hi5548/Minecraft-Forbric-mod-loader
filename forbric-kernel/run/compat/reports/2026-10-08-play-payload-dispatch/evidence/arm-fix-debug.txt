@@ -1,0 +1,108 @@
+# arm FIX-DEBUG — kernel-playpay.jar + -Dforbric.debug=true -Dmixin.debug.export=true
+# console: /private/tmp/playpay/out-fix-debug/per-mod/run/000-shooting_star_demo__neoforge/console.log
+
+########## R1/R3 under debug ##########
+[10:50:52] [Render thread/INFO]: [STDOUT]: [CANNOTFIRE/PROBE] RESULT=CAST_ACCEPTED — the server took the cast; cooldown 1189 ticks came back over the mod's own payload
+  'Unknown addon' lines : 0
+
+########## F3 — Fabric's OWN receive actually ran (PayloadInterop.probe) ##########
+# 'addon <Addon> <- <payload>' is printed from handleFabricChannelRegistrationAddon, i.e. Fabric's addon body.
+      4 [10:50:50] [Netty Local Client IO #0/INFO]: [STDOUT]: [Forbric/Net] addon ClientConfigurationNetworkAddon <- neoforge:config_file [ConfigFilePayload]
+      3 [10:50:49] [Netty Local Client IO #0/INFO]: [STDOUT]: [Forbric/Net] addon ClientConfigurationNetworkAddon <- minecraft:register [MinecraftRegisterPayload]
+      2 [10:50:50] [Render thread/INFO]: [STDOUT]: [Forbric/Net] addon ClientConfigurationNetworkAddon <- minecraft:brand [BrandPayload]
+      2 [10:50:50] [Netty Server IO #1/INFO]: [STDOUT]: [Forbric/Net] addon ServerConfigurationNetworkAddon <- minecraft:register [MinecraftRegisterPayload]
+      2 [10:50:50] [Netty Server IO #1/INFO]: [STDOUT]: [Forbric/Net] addon ServerConfigurationNetworkAddon <- c:version [CommonVersionPayload]
+      2 [10:50:50] [Netty Server IO #1/INFO]: [STDOUT]: [Forbric/Net] addon ServerConfigurationNetworkAddon <- c:register [CommonRegisterPayload]
+      2 [10:50:50] [Netty Local Client IO #0/INFO]: [STDOUT]: [Forbric/Net] addon ClientConfigurationNetworkAddon <- neoforge:known_registry_data_maps [KnownRegistryDataMapsPayload]
+      2 [10:50:50] [Netty Local Client IO #0/INFO]: [STDOUT]: [Forbric/Net] addon ClientConfigurationNetworkAddon <- minecraft:brand [BrandPayload]
+      2 [10:50:50] [Netty Local Client IO #0/INFO]: [STDOUT]: [Forbric/Net] addon ClientConfigurationNetworkAddon <- fabric:custom_ingredient_sync [CustomIngredientPayloadS2C]
+      2 [10:50:50] [Netty Local Client IO #0/INFO]: [STDOUT]: [Forbric/Net] addon ClientConfigurationNetworkAddon <- fabric:accepted_attachments_v1 [RequestAcceptedAttachmentsPayloadS2C]
+      2 [10:50:50] [Netty Local Client IO #0/INFO]: [STDOUT]: [Forbric/Net] addon ClientConfigurationNetworkAddon <- c:version [CommonVersionPayload]
+      2 [10:50:50] [Netty Local Client IO #0/INFO]: [STDOUT]: [Forbric/Net] addon ClientConfigurationNetworkAddon <- c:register [CommonRegisterPayload]
+      2 [10:50:49] [Netty Server IO #1/INFO]: [STDOUT]: [Forbric/Net] addon ServerConfigurationNetworkAddon <- minecraft:register [MinecraftRegisterPayload]
+      1 [10:51:01] [Netty Local Client IO #0/INFO]: [STDOUT]: [Forbric/Net] addon ClientPlayNetworkAddon <- neoforge:custom_time_packet [ClientboundCustomSetTimePayload]
+      1 [10:51:00] [Netty Local Client IO #0/INFO]: [STDOUT]: [Forbric/Net] addon ClientPlayNetworkAddon <- neoforge:custom_time_packet [ClientboundCustomSetTimePayload]
+      1 [10:50:59] [Netty Local Client IO #0/INFO]: [STDOUT]: [Forbric/Net] addon ClientPlayNetworkAddon <- neoforge:custom_time_packet [ClientboundCustomSetTimePayload]
+      1 [10:50:58] [Netty Local Client IO #0/INFO]: [STDOUT]: [Forbric/Net] addon ClientPlayNetworkAddon <- neoforge:custom_time_packet [ClientboundCustomSetTimePayload]
+      1 [10:50:57] [Netty Local Client IO #0/INFO]: [STDOUT]: [Forbric/Net] addon ClientPlayNetworkAddon <- neoforge:custom_time_packet [ClientboundCustomSetTimePayload]
+      1 [10:50:56] [Netty Local Client IO #0/INFO]: [STDOUT]: [Forbric/Net] addon ClientPlayNetworkAddon <- neoforge:custom_time_packet [ClientboundCustomSetTimePayload]
+      1 [10:50:55] [Netty Local Client IO #0/INFO]: [STDOUT]: [Forbric/Net] addon ClientPlayNetworkAddon <- neoforge:custom_time_packet [ClientboundCustomSetTimePayload]
+      1 [10:50:54] [Netty Local Client IO #0/INFO]: [STDOUT]: [Forbric/Net] addon ClientPlayNetworkAddon <- neoforge:custom_time_packet [ClientboundCustomSetTimePayload]
+      1 [10:50:53] [Netty Local Client IO #0/INFO]: [STDOUT]: [Forbric/Net] addon ClientPlayNetworkAddon <- neoforge:custom_time_packet [ClientboundCustomSetTimePayload]
+      1 [10:50:52] [Netty Local Client IO #0/INFO]: [STDOUT]: [Forbric/Net] addon ClientPlayNetworkAddon <- neoforge:custom_time_packet [ClientboundCustomSetTimePayload]
+      1 [10:50:51] [Netty Server IO #1/INFO]: [STDOUT]: [Forbric/Net] addon ServerPlayNetworkAddon <- shooting_star_demo:cast [CastSkillPayload]
+      1 [10:50:51] [Netty Local Client IO #0/INFO]: [STDOUT]: [Forbric/Net] addon ClientPlayNetworkAddon <- shooting_star_demo:spell_fx [SpellFxPayload]
+      1 [10:50:51] [Netty Local Client IO #0/INFO]: [STDOUT]: [Forbric/Net] addon ClientPlayNetworkAddon <- shooting_star_demo:cooldowns [CooldownPayload]
+      1 [10:50:51] [Netty Local Client IO #0/INFO]: [STDOUT]: [Forbric/Net] addon ClientPlayNetworkAddon <- neoforge:custom_time_packet [ClientboundCustomSetTimePayload]
+      1 [10:50:51] [Netty Local Client IO #0/INFO]: [STDOUT]: [Forbric/Net] addon ClientPlayNetworkAddon <- appleskin:saturation [MessageSaturationSync]
+      1 [10:50:51] [Netty Local Client IO #0/INFO]: [STDOUT]: [Forbric/Net] addon ClientPlayNetworkAddon <- appleskin:exhaustion [MessageExhaustionSync]
+      1 [10:50:50] [Netty Server IO #1/INFO]: [STDOUT]: [Forbric/Net] addon ServerPlayNetworkAddon <- minecraft:register [MinecraftRegisterPayload]
+      1 [10:50:50] [Netty Server IO #1/INFO]: [STDOUT]: [Forbric/Net] addon ServerConfigurationNetworkAddon <- neoforge:known_registry_data_maps_reply [KnownRegistryDataMapsReplyPayload]
+      1 [10:50:50] [Netty Server IO #1/INFO]: [STDOUT]: [Forbric/Net] addon ServerConfigurationNetworkAddon <- minecraft:unregister [MinecraftUnregisterPayload]
+      1 [10:50:50] [Netty Server IO #1/INFO]: [STDOUT]: [Forbric/Net] addon ServerConfigurationNetworkAddon <- fabric:custom_ingredient_sync [CustomIngredientPayloadC2S]
+      1 [10:50:50] [Netty Server IO #1/INFO]: [STDOUT]: [Forbric/Net] addon ServerConfigurationNetworkAddon <- fabric:accepted_attachments_v1 [AcceptedAttachmentsPayloadC2S]
+      1 [10:50:50] [Netty Local Client IO #0/INFO]: [STDOUT]: [Forbric/Net] addon ClientPlayNetworkAddon <- shooting_star_demo:cooldowns [CooldownPayload]
+      1 [10:50:50] [Netty Local Client IO #0/INFO]: [STDOUT]: [Forbric/Net] addon ClientPlayNetworkAddon <- neoforge:registry_data_map_sync [RegistryDataMapSyncPayload]
+      1 [10:50:50] [Netty Local Client IO #0/INFO]: [STDOUT]: [Forbric/Net] addon ClientPlayNetworkAddon <- neoforge:custom_time_packet [ClientboundCustomSetTimePayload]
+      1 [10:50:50] [Netty Local Client IO #0/INFO]: [STDOUT]: [Forbric/Net] addon ClientPlayNetworkAddon <- modernfix:mark_client_load_finished [ClientLoadFinishedPayload]
+      1 [10:50:50] [Netty Local Client IO #0/INFO]: [STDOUT]: [Forbric/Net] addon ClientPlayNetworkAddon <- minecraft:unregister [MinecraftUnregisterPayload]
+      1 [10:50:50] [Netty Local Client IO #0/INFO]: [STDOUT]: [Forbric/Net] addon ClientPlayNetworkAddon <- minecraft:register [MinecraftRegisterPayload]
+      1 [10:50:50] [Netty Local Client IO #0/INFO]: [STDOUT]: [Forbric/Net] addon ClientPlayNetworkAddon <- mezz_config:server_identity [IdentityPacket]
+      1 [10:50:50] [Netty Local Client IO #0/INFO]: [STDOUT]: [Forbric/Net] addon ClientConfigurationNetworkAddon <- minecraft:register [MinecraftRegisterPayload]
+      1 [10:50:49] [Netty Server IO #1/INFO]: [STDOUT]: [Forbric/Net] addon ServerConfigurationNetworkAddon <- minecraft:brand [BrandPayload]
+      1 [10:50:49] [Netty Local Client IO #0/INFO]: [STDOUT]: [Forbric/Net] addon ClientConfigurationNetworkAddon <- minecraft:unregister [MinecraftUnregisterPayload]
+
+# ServerPlayNetworkAddon (Fabric's PLAY addon, from ServerPlayNetworkHandlerMixin.getAddon) received:
+[10:50:50] [Netty Server IO #1/INFO]: [STDOUT]: [Forbric/Net] addon ServerPlayNetworkAddon <- minecraft:register [MinecraftRegisterPayload]
+[10:50:51] [Netty Server IO #1/INFO]: [STDOUT]: [Forbric/Net] addon ServerPlayNetworkAddon <- shooting_star_demo:cast [CastSkillPayload]
+
+########## the gate, on the cast payload ##########
+[10:50:51] [Netty Server IO #1/INFO]: [STDOUT]: [Forbric/Net]   neo owns shooting_star_demo:cast — handing the play payload to its dispatcher
+
+########## the RUNTIME bytes: post-mixin + post-injector ServerGamePacketListenerImpl.handleCustomPayload ##########
+# exported by Mixin into /private/tmp/playpay/out-fix-debug/per-mod/run/000-shooting_star_demo__neoforge/.mixin.out/class/net/minecraft/server/network/ServerGamePacketListenerImpl.class
+  public void handleCustomPayload(net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket);
+    Code:
+         0: new           #3624               // class org/spongepowered/asm/mixin/injection/callback/CallbackInfo
+         3: dup
+         4: ldc_w         #3625               // String handleCustomPayload
+         7: iconst_1
+         8: invokespecial #3628               // Method org/spongepowered/asm/mixin/injection/callback/CallbackInfo."<init>":(Ljava/lang/String;Z)V
+        11: astore_2
+        12: aload_0
+        13: aload_1
+        14: aload_2
+        15: invokespecial #3632               // Method "handler$zhg001$fabric-networking-api-v1$handleCustomPayloadReceivedAsync":(Lnet/minecraft/network/protocol/common/ServerboundCustomPayloadPacket;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V
+        18: aload_2
+        19: invokevirtual #3635               // Method org/spongepowered/asm/mixin/injection/callback/CallbackInfo.isCancelled:()Z
+        22: ifeq          26
+        25: return
+        26: aload_1
+        27: invokevirtual #3641               // Method net/minecraft/network/protocol/common/ServerboundCustomPayloadPacket.payload:()Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;
+        30: aload_0
+        31: getfield      #527                // Field connection:Lnet/minecraft/network/Connection;
+        34: invokestatic  #3647               // Method net/minecraftforge/common/ForgeHooks.onCustomPayload:(Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;Lnet/minecraft/network/Connection;)Z
+        37: ifne          55
+        40: aload_1
+        41: invokevirtual #3641               // Method net/minecraft/network/protocol/common/ServerboundCustomPayloadPacket.payload:()Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;
+        44: invokestatic  #3652               // Method net/forbric/kernel/interop/PayloadInterop.neoForgeWillHandle:(Ljava/lang/Object;)Z
+        47: ifeq          55
+        50: aload_0
+        51: aload_1
+        52: invokestatic  #3658               // Method net/neoforged/neoforge/network/registration/NetworkRegistry.handleModdedPayload:(Lnet/minecraft/network/protocol/common/ServerCommonPacketListener;Lnet/minecraft/network/protocol/common/ServerboundCustomPayloadPacket;)V
+        55: return
+
+
+# Fabric's PLAY mixin is still applied and still calls its own addon:
+  private void handler$zhg001$fabric-networking-api-v1$handleCustomPayloadReceivedAsync(net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket, org.spongepowered.asm.mixin.injection.callback.CallbackInfo);
+    Code:
+         0: aload_0
+         1: invokevirtual #3854               // Method getAddon:()Lnet/fabricmc/fabric/impl/networking/server/ServerPlayNetworkAddon;
+         4: aload_1
+         5: invokevirtual #3641               // Method net/minecraft/network/protocol/common/ServerboundCustomPayloadPacket.payload:()Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;
+         8: invokevirtual #3858               // Method net/fabricmc/fabric/impl/networking/server/ServerPlayNetworkAddon.handle:(Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;)Z
+        11: ifeq          18
+        14: aload_2
+        15: invokevirtual #3861               // Method org/spongepowered/asm/mixin/injection/callback/CallbackInfo.cancel:()V
+        18: return
+

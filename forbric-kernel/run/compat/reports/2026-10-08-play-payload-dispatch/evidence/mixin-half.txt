@@ -1,0 +1,138 @@
+# The two serverbound-PLAY handlers on the merged base, plus fabric's mixin into the shared one.
+# merged jar: /Users/charlescai/Desktop/dsh/实验/forbric/stubtable/stage/merged-base/patched-mc-merged-1.21.1.jar
+# (fabric mixin disassembly carried over from cannot-fire/evidence/fabric-half.txt, same jar/sha)
+
+########## merged ServerGamePacketListenerImpl.handleCustomPayload (Forge's override) ##########
+  public void handleCustomPayload(net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket);
+    Code:
+         0: aload_1
+         1: invokevirtual #3607               // Method net/minecraft/network/protocol/common/ServerboundCustomPayloadPacket.payload:()Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;
+         4: aload_0
+         5: getfield      #510                // Field connection:Lnet/minecraft/network/Connection;
+         8: invokestatic  #3613               // Method net/minecraftforge/common/ForgeHooks.onCustomPayload:(Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;Lnet/minecraft/network/Connection;)Z
+        11: pop
+        12: return
+
+
+########## merged ServerCommonPacketListenerImpl.handleCustomPayload (NeoForge's body: specials + handleModdedPayload) ##########
+         1: invokevirtual #146                // Method net/minecraft/network/protocol/common/ServerboundCustomPayloadPacket.payload:()Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;
+         4: astore_3
+         6: instanceof    #148                // class net/neoforged/neoforge/network/payload/MinecraftRegisterPayload
+         9: ifeq          29
+        13: checkcast     #148                // class net/neoforged/neoforge/network/payload/MinecraftRegisterPayload
+        16: astore_2
+        18: invokevirtual #152                // Method getConnection:()Lnet/minecraft/network/Connection;
+        22: invokevirtual #156                // Method net/neoforged/neoforge/network/payload/MinecraftRegisterPayload.newChannels:()Ljava/util/Set;
+        25: invokestatic  #162                // Method net/neoforged/neoforge/network/registration/NetworkRegistry.onMinecraftRegister:(Lnet/minecraft/network/Connection;Ljava/util/Set;)V
+        28: return
+        30: invokevirtual #146                // Method net/minecraft/network/protocol/common/ServerboundCustomPayloadPacket.payload:()Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;
+        33: astore_3
+        35: instanceof    #164                // class net/neoforged/neoforge/network/payload/MinecraftUnregisterPayload
+        38: ifeq          58
+        42: checkcast     #164                // class net/neoforged/neoforge/network/payload/MinecraftUnregisterPayload
+        45: astore_2
+        47: invokevirtual #152                // Method getConnection:()Lnet/minecraft/network/Connection;
+        51: invokevirtual #167                // Method net/neoforged/neoforge/network/payload/MinecraftUnregisterPayload.forgottenChannels:()Ljava/util/Set;
+        54: invokestatic  #170                // Method net/neoforged/neoforge/network/registration/NetworkRegistry.onMinecraftUnregister:(Lnet/minecraft/network/Connection;Ljava/util/Set;)V
+        57: return
+        59: invokevirtual #146                // Method net/minecraft/network/protocol/common/ServerboundCustomPayloadPacket.payload:()Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;
+        62: astore_3
+        64: instanceof    #172                // class net/neoforged/neoforge/network/payload/CommonVersionPayload
+        67: ifeq          81
+        71: checkcast     #172                // class net/neoforged/neoforge/network/payload/CommonVersionPayload
+        74: astore_2
+        77: invokestatic  #176                // Method net/neoforged/neoforge/network/registration/NetworkRegistry.checkCommonVersion:(Lnet/neoforged/neoforge/common/extensions/ICommonPacketListener;Lnet/neoforged/neoforge/network/payload/CommonVersionPayload;)V
+        80: return
+        82: invokevirtual #146                // Method net/minecraft/network/protocol/common/ServerboundCustomPayloadPacket.payload:()Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;
+        85: astore_3
+        87: instanceof    #178                // class net/neoforged/neoforge/network/payload/CommonRegisterPayload
+        90: ifeq          104
+        94: checkcast     #178                // class net/neoforged/neoforge/network/payload/CommonRegisterPayload
+        97: astore_2
+       100: invokestatic  #182                // Method net/neoforged/neoforge/network/registration/NetworkRegistry.onCommonRegister:(Lnet/neoforged/neoforge/common/extensions/ICommonPacketListener;Lnet/neoforged/neoforge/network/payload/CommonRegisterPayload;)V
+       103: return
+       105: invokevirtual #146                // Method net/minecraft/network/protocol/common/ServerboundCustomPayloadPacket.payload:()Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;
+       108: invokestatic  #186                // Method net/neoforged/neoforge/network/registration/NetworkRegistry.isModdedPayload:(Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;)Z
+       111: ifeq          120
+       116: invokestatic  #190                // Method net/neoforged/neoforge/network/registration/NetworkRegistry.handleModdedPayload:(Lnet/minecraft/network/protocol/common/ServerCommonPacketListener;Lnet/minecraft/network/protocol/common/ServerboundCustomPayloadPacket;)V
+       119: return
+       120: return
+
+# Why the fall-through cannot be switched on alone: fabric-networking-api-v1's SUPER mixin (the second defect)
+# source jar: /private/tmp/rel037/corpus14/mods/fabric-api-0.116.17+1.21.1.jar
+#   module:   META-INF/jars/fabric-networking-api-v1-0.116.17.jar
+#   class:    net/fabricmc/fabric/mixin/networking/ServerCommonNetworkHandlerMixin.class
+
+  private void handleCustomPayloadReceivedAsync(net.minecraft.class_2817, org.spongepowered.asm.mixin.injection.callback.CallbackInfo);
+    Code:
+       0: aload_1
+       1: invokevirtual #34                 // Method net/minecraft/class_2817.comp_1647:()Lnet/minecraft/class_8710;
+       4: astore_3
+       5: aload_0
+       6: invokevirtual #38                 // Method getAddon:()Lnet/fabricmc/fabric/impl/networking/AbstractNetworkAddon;
+       9: astore        6
+      11: aload         6
+      13: instanceof    #40                 // class net/fabricmc/fabric/impl/networking/server/ServerConfigurationNetworkAddon
+      16: ifeq          37
+      19: aload         6
+      21: checkcast     #40                 // class net/fabricmc/fabric/impl/networking/server/ServerConfigurationNetworkAddon
+      24: astore        5
+      26: aload         5
+      28: aload_3
+      29: invokevirtual #44                 // Method net/fabricmc/fabric/impl/networking/server/ServerConfigurationNetworkAddon.handle:(Lnet/minecraft/class_8710;)Z
+      32: istore        4
+      34: goto          47
+      37: new           #48                 // class java/lang/IllegalStateException
+      40: dup
+      41: ldc           #50                 // String Unknown addon
+      43: invokespecial #53                 // Method java/lang/IllegalStateException."<init>":(Ljava/lang/String;)V
+      46: athrow
+      47: iload         4
+      49: ifeq          56
+      52: aload_2
+      53: invokevirtual #58                 // Method org/spongepowered/asm/mixin/injection/callback/CallbackInfo.cancel:()V
+      56: return
+
+
+########## the class's @Mixin target + injection (javap -v, excerpt) ##########
+  #84 = Utf8               RuntimeVisibleAnnotations
+  #85 = Utf8               MethodParameters
+  #86 = Utf8               SourceFile
+  #87 = Utf8               RuntimeInvisibleAnnotations
+{
+  public net.fabricmc.fabric.mixin.networking.ServerCommonNetworkHandlerMixin();
+    RuntimeVisibleAnnotations:
+      0: #21(#22=[s#23],#24=[@#25(#9=s#26)],#27=Z#28)
+        org.spongepowered.asm.mixin.injection.Inject(
+          method=["onCustomPayload"]
+          at=[@org.spongepowered.asm.mixin.injection.At(
+            value="HEAD"
+          )]
+          cancellable=true
+        )
+    MethodParameters:
+      Name                           Flags
+      packet
+      ci
+
+  private void onPlayPong(net.minecraft.class_6374, org.spongepowered.asm.mixin.injection.callback.CallbackInfo);
+    RuntimeVisibleAnnotations:
+      0: #21(#22=[s#69],#24=[@#25(#9=s#26)])
+        org.spongepowered.asm.mixin.injection.Inject(
+          method=["onPong"]
+          at=[@org.spongepowered.asm.mixin.injection.At(
+            value="HEAD"
+          )]
+        )
+    MethodParameters:
+
+########## and the PLAY listener's own fabric mixin, which the fall-through bypasses ##########
+Compiled from "ServerPlayNetworkHandlerMixin.java"
+abstract class net.fabricmc.fabric.mixin.networking.ServerPlayNetworkHandlerMixin extends net.minecraft.class_8609 implements net.fabricmc.fabric.impl.networking.NetworkHandlerExtensions {
+  private net.fabricmc.fabric.impl.networking.server.ServerPlayNetworkAddon addon;
+  net.fabricmc.fabric.mixin.networking.ServerPlayNetworkHandlerMixin(net.minecraft.server.MinecraftServer, net.minecraft.class_2535, net.minecraft.class_8792);
+  private void initAddon(org.spongepowered.asm.mixin.injection.callback.CallbackInfo);
+  private void handleCustomPayloadReceivedAsync(net.minecraft.class_2817, org.spongepowered.asm.mixin.injection.callback.CallbackInfo);
+  public net.fabricmc.fabric.impl.networking.server.ServerPlayNetworkAddon getAddon();
+  public net.fabricmc.fabric.impl.networking.AbstractNetworkAddon getAddon();
+}

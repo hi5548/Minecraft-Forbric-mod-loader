@@ -119,8 +119,7 @@ public final class CommonNetworkInteropInjector implements ClassTransformer {
 	private static final String FORGE_HOOKS = "net/minecraftforge/common/ForgeHooks";
 	private static final String ON_CUSTOM_PAYLOAD = "onCustomPayload";
 	/**
-	 * {@code -Dforbric.playPayloadFallThrough=on} enables the play-phase fall-through. DEFAULT OFF; opening it is
-	 * the next decision, and its own commit.
+	 * {@code -Dforbric.playPayloadFallThrough=off} restores the old behaviour; the fall-through is ON by default.
 	 *
 	 * <p>The defect it addresses is real and measured: the merged
 	 * {@code ServerGamePacketListenerImpl.handleCustomPayload} is MinecraftForge's override, its whole body asks
@@ -136,14 +135,15 @@ public final class CommonNetworkInteropInjector implements ClassTransformer {
 	 * connection, taking gate-m9's world join with it. That is why the switch shipped OFF, with the old behaviour
 	 * (a silently dropped packet) preferred to a disconnect.
 	 *
-	 * <p>That second defect is fixed at the source of the risk: the fall-through no longer routes through the
-	 * shared body at all, but calls NeoForge's dispatch tail directly (see {@link #letNeoForgePayloadsThrough}),
-	 * which leaves Fabric's invariant — that its shared handler is only ever entered from a configuration listener
-	 * — exactly as it is on a real Fabric instance. With the disconnect gone the rewrite is safe to enable; the
-	 * switch stays OFF here because opening it is a separate decision, measured in its own lane.
+	 * <p>That second defect is fixed at the source of the risk: the fall-through does not route through the shared
+	 * body at all, but calls NeoForge's dispatch tail directly (see {@link #letNeoForgePayloadsThrough}), which
+	 * leaves Fabric's invariant — that its shared handler is only ever entered from a configuration listener —
+	 * exactly as it is on a real Fabric instance. With the disconnect gone, the default is the behaviour a player
+	 * wants: the NeoForge mod's packet reaches its handler. {@code =off} is kept as the falsifier arm (and for
+	 * bisecting a future regression): it must reproduce the original drop.
 	 */
 	static boolean playFallThroughEnabled() {
-		return "on".equalsIgnoreCase(System.getProperty("forbric.playPayloadFallThrough", "off"));
+		return !"off".equalsIgnoreCase(System.getProperty("forbric.playPayloadFallThrough", "on"));
 	}
 
 	/** Asks whether NeoForge registered this payload, so the fall-through only reaches payloads it owns. */

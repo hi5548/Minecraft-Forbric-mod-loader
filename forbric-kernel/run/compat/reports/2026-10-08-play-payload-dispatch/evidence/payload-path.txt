@@ -1,0 +1,32 @@
+# The play-phase fall-through, run over the REAL merged ServerGamePacketListenerImpl (offline).
+# injector: forbric-kernel/src/main/java/net/forbric/kernel/transform/CommonNetworkInteropInjector.java (this lane's edit)
+# probe:    /private/tmp/playpay/DispatchProbe.java (source copied to evidence/dispatch-probe.java)
+# class:    net.minecraft.server.network.ServerGamePacketListenerImpl
+# jar:      /Users/charlescai/Desktop/dsh/实验/forbric/stubtable/stage/merged-base/patched-mc-merged-1.21.1.jar
+
+merged jar       = /Users/charlescai/Desktop/dsh/实验/forbric/stubtable/stage/merged-base/patched-mc-merged-1.21.1.jar
+-Dforbric.playPayloadFallThrough = off
+input  bytes=105420 sha256=27ccfef8f2ce4673be34bb2d2ac535c235cfa8e9501732d3efe47f9e54692ae7
+output bytes=105420 sha256=27ccfef8f2ce4673be34bb2d2ac535c235cfa8e9501732d3efe47f9e54692ae7
+byte-identical to input = true
+net.minecraft.server.network.ServerGamePacketListenerImpl.handleCustomPayload(Lnet/minecraft/network/protocol/common/ServerboundCustomPayloadPacket;)V  (12 insns)
+    INSN 182 net/minecraft/network/protocol/common/ServerboundCustomPayloadPacket.payload()Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;
+    INSN 184 net/minecraftforge/common/ForgeHooks.onCustomPayload(Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;Lnet/minecraft/network/Connection;)Z
+    BasicVerifier: OK
+  [merged super body's own tail] net/neoforged/neoforge/network/registration/NetworkRegistry.handleModdedPayload(Lnet/minecraft/network/protocol/common/ServerCommonPacketListener;Lnet/minecraft/network/protocol/common/ServerboundCustomPayloadPacket;)V
+
+[Forbric/INFO] [Forbric/Net] net.minecraft.server.network.ServerGamePacketListenerImpl.handleCustomPayload now falls through to NeoForge's dispatcher when MinecraftForge does not take the payload — it is Forge's override and never called super, so a NeoForge mod's play-phase packet to the server reached nobody
+merged jar       = /Users/charlescai/Desktop/dsh/实验/forbric/stubtable/stage/merged-base/patched-mc-merged-1.21.1.jar
+-Dforbric.playPayloadFallThrough = on
+input  bytes=105420 sha256=27ccfef8f2ce4673be34bb2d2ac535c235cfa8e9501732d3efe47f9e54692ae7
+output bytes=105763 sha256=51c89911d93c56f471cfac517f14066f1ab36f5a6a1fa0aa2a66d045aeff91a2
+byte-identical to input = false
+net.minecraft.server.network.ServerGamePacketListenerImpl.handleCustomPayload(Lnet/minecraft/network/protocol/common/ServerboundCustomPayloadPacket;)V  (20 insns)
+    INSN 182 net/minecraft/network/protocol/common/ServerboundCustomPayloadPacket.payload()Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;
+    INSN 184 net/minecraftforge/common/ForgeHooks.onCustomPayload(Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;Lnet/minecraft/network/Connection;)Z
+    INSN 182 net/minecraft/network/protocol/common/ServerboundCustomPayloadPacket.payload()Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;
+    INSN 184 net/forbric/kernel/interop/PayloadInterop.neoForgeWillHandle(Ljava/lang/Object;)Z
+    INSN 184 net/neoforged/neoforge/network/registration/NetworkRegistry.handleModdedPayload(Lnet/minecraft/network/protocol/common/ServerCommonPacketListener;Lnet/minecraft/network/protocol/common/ServerboundCustomPayloadPacket;)V
+    BasicVerifier: OK
+  [merged super body's own tail] net/neoforged/neoforge/network/registration/NetworkRegistry.handleModdedPayload(Lnet/minecraft/network/protocol/common/ServerCommonPacketListener;Lnet/minecraft/network/protocol/common/ServerboundCustomPayloadPacket;)V
+

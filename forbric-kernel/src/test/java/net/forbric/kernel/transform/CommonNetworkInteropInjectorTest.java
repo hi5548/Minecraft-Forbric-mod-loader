@@ -173,17 +173,31 @@ class CommonNetworkInteropInjectorTest {
 		}
 	}
 
-	/** The default is still the old behaviour: a disconnected player is worse than a dropped packet. */
+	/** The default must be the behaviour a player wants: the NeoForge mod's packet reaches its handler. */
 	@Test
-	void thePlayFallThroughIsOffByDefault() {
+	void thePlayFallThroughIsOnByDefault() {
 		String previous = System.getProperty("forbric.playPayloadFallThrough");
 		System.clearProperty("forbric.playPayloadFallThrough");
 		try {
-			assertFalse(CommonNetworkInteropInjector.playFallThroughEnabled(),
-					"the rewrite stops the \"Unknown addon\" disconnect, but opening the default is its own decision "
-							+ "and its own commit — this one keeps the switch off");
+			assertTrue(CommonNetworkInteropInjector.playFallThroughEnabled(),
+					"the fall-through no longer routes through the shared body fabric-api asserts on, so its default "
+							+ "is the fix, not the silent drop — a NeoForge mod's upward packet must reach its handler");
 		} finally {
 			if (previous != null) System.setProperty("forbric.playPayloadFallThrough", previous);
+		}
+	}
+
+	/** {@code =off} is the falsifier arm: it must reproduce the original silent drop. */
+	@Test
+	void theFallThroughPropertyTurnsTheRewriteOff() {
+		String previous = System.getProperty("forbric.playPayloadFallThrough");
+		System.setProperty("forbric.playPayloadFallThrough", "off");
+		try {
+			assertFalse(CommonNetworkInteropInjector.playFallThroughEnabled(),
+					"-Dforbric.playPayloadFallThrough=off must still restore the old behaviour");
+		} finally {
+			if (previous == null) System.clearProperty("forbric.playPayloadFallThrough");
+			else System.setProperty("forbric.playPayloadFallThrough", previous);
 		}
 	}
 

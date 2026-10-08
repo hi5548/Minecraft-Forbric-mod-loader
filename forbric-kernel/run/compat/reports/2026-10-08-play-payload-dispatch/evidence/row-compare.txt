@@ -1,0 +1,101 @@
+# the row for the subject, one arm per column set. 'standard row green' = FIX is not worse than BASELINE
+kernel_sha256:
+    '48df3d2b90dfec3926fbfcee92dc6bd8a441760f27560fd7d168169d81e2fa97'   BASELINE 0.3.7 gate14 (48df3d2b)
+    '97d894f5946829d46a163e179cc71508424bb8d4bf21ae2534acafa555d6780d'   FIX kernel-playpay default
+    '97d894f5946829d46a163e179cc71508424bb8d4bf21ae2534acafa555d6780d'   OFF kernel-playpay =off
+    '48df3d2b90dfec3926fbfcee92dc6bd8a441760f27560fd7d168169d81e2fa97'   OLD-ON release-kernel =on
+run:
+                                                          'PASS'   BASELINE 0.3.7 gate14 (48df3d2b)
+                                                          'PASS'   FIX kernel-playpay default
+                                                          'PASS'   OFF kernel-playpay =off
+                                                         'STALL'   OLD-ON release-kernel =on
+exit:
+                                                               0   BASELINE 0.3.7 gate14 (48df3d2b)
+                                                               0   FIX kernel-playpay default
+                                                               0   OFF kernel-playpay =off
+                                                             143   OLD-ON release-kernel =on
+stopped:
+                                                            True   BASELINE 0.3.7 gate14 (48df3d2b)
+                                                            True   FIX kernel-playpay default
+                                                            True   OFF kernel-playpay =off
+                                                           False   OLD-ON release-kernel =on
+killed:
+                                                           False   BASELINE 0.3.7 gate14 (48df3d2b)
+                                                           False   FIX kernel-playpay default
+                                                           False   OFF kernel-playpay =off
+                                                            True   OLD-ON release-kernel =on
+world:
+                                                            True   BASELINE 0.3.7 gate14 (48df3d2b)
+                                                            True   FIX kernel-playpay default
+                                                            True   OFF kernel-playpay =off
+                                                            True   OLD-ON release-kernel =on
+frames:
+                                                               1   BASELINE 0.3.7 gate14 (48df3d2b)
+                                                               1   FIX kernel-playpay default
+                                                               1   OFF kernel-playpay =off
+                                                               0   OLD-ON release-kernel =on
+mod:
+                                                      'DEGRADED'   BASELINE 0.3.7 gate14 (48df3d2b)
+                                                      'DEGRADED'   FIX kernel-playpay default
+                                                      'DEGRADED'   OFF kernel-playpay =off
+                                                      'DEGRADED'   OLD-ON release-kernel =on
+status_source:
+                                                       'catalog'   BASELINE 0.3.7 gate14 (48df3d2b)
+                                                       'catalog'   FIX kernel-playpay default
+                                                       'catalog'   OFF kernel-playpay =off
+                                                       'catalog'   OLD-ON release-kernel =on
+confirmed_required:
+                                                               0   BASELINE 0.3.7 gate14 (48df3d2b)
+                                                               0   FIX kernel-playpay default
+                                                               0   OFF kernel-playpay =off
+                                                               0   OLD-ON release-kernel =on
+catalog_failures:
+                                          ['shooting_star_demo']   BASELINE 0.3.7 gate14 (48df3d2b)
+                                          ['shooting_star_demo']   FIX kernel-playpay default
+                                          ['shooting_star_demo']   OFF kernel-playpay =off
+                                          ['shooting_star_demo']   OLD-ON release-kernel =on
+loaded:
+                                                           False   BASELINE 0.3.7 gate14 (48df3d2b)
+                                                           False   FIX kernel-playpay default
+                                                           False   OFF kernel-playpay =off
+                                                           False   OLD-ON release-kernel =on
+strict:
+                                                           False   BASELINE 0.3.7 gate14 (48df3d2b)
+                                                           False   FIX kernel-playpay default
+                                                           False   OFF kernel-playpay =off
+                                                           False   OLD-ON release-kernel =on
+cause:
+                                                  'mod-degraded'   BASELINE 0.3.7 gate14 (48df3d2b)
+                                                  'mod-degraded'   FIX kernel-playpay default
+                                                  'mod-degraded'   OFF kernel-playpay =off
+                                                  'mod-degraded'   OLD-ON release-kernel =on
+load_report:
+                                                            True   BASELINE 0.3.7 gate14 (48df3d2b)
+                                                            True   FIX kernel-playpay default
+                                                            True   OFF kernel-playpay =off
+                                                            True   OLD-ON release-kernel =on
+cpu_busy_pct:
+                                                           294.1   BASELINE 0.3.7 gate14 (48df3d2b)
+                                                           377.1   FIX kernel-playpay default
+                                                           353.7   OFF kernel-playpay =off
+                                                           427.0   OLD-ON release-kernel =on
+load_1m:
+                                                            6.08   BASELINE 0.3.7 gate14 (48df3d2b)
+                                                            6.04   FIX kernel-playpay default
+                                                            8.07   OFF kernel-playpay =off
+                                                            9.16   OLD-ON release-kernel =on
+contended:
+                                                            True   BASELINE 0.3.7 gate14 (48df3d2b)
+                                                            True   FIX kernel-playpay default
+                                                            True   OFF kernel-playpay =off
+                                                            True   OLD-ON release-kernel =on
+seconds:
+                                                              35   BASELINE 0.3.7 gate14 (48df3d2b)
+                                                              36   FIX kernel-playpay default
+                                                              34   OFF kernel-playpay =off
+                                                             174   OLD-ON release-kernel =on
+
+# BASELINE path: /private/tmp/rel037/gate14/per-mod/results.jsonl
+# FIX path     : /private/tmp/playpay/out-fix/per-mod/results.jsonl
+# OFF path     : /private/tmp/playpay/out-off/per-mod/results.jsonl
+# OLD-ON path  : /private/tmp/playpay/out-old-on/per-mod/results.jsonl

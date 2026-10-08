@@ -1,0 +1,42 @@
+Pixel sub-readings — the same classifier (evidence/sampler.py, verbatim from the 0.3.6 gate) and the same ROIs,
+read on all three arms.
+Pre-registered criterion: pure black (0,0,0) fraction = 0.0000 in all three ROIs in every arm.
+
+== arm A — the user's real 12
+   /tmp/rel037/gate12/per-mod/run/000-modmenu__fabric/screenshots/2026-10-08_08.48.45.png  (1708x960)
+   grass_side box=(1180, 455, 1240, 725) n=16200  pure_black(0,0,0)=0.0000  max(R,G,B)<10=0.0000
+   dandelion  box=(640, 440, 860, 690) n=55000  pure_black(0,0,0)=0.0000  max(R,G,B)<10=0.0000
+   leaves     box=(1290, 420, 1450, 560) n=22400  pure_black(0,0,0)=0.0000  max(R,G,B)<10=0.0000
+
+== arm B — the same 12 + Create 6.0.10
+   /tmp/rel037/gate13/per-mod/run/000-create__neoforge/screenshots/2026-10-08_08.50.03.png  (1708x960)
+   grass_side box=(1180, 455, 1240, 725) n=16200  pure_black(0,0,0)=0.0000  max(R,G,B)<10=0.0000
+   dandelion  box=(640, 440, 860, 690) n=55000  pure_black(0,0,0)=0.0000  max(R,G,B)<10=0.0000
+   leaves     box=(1290, 420, 1450, 560) n=22400  pure_black(0,0,0)=0.0000  max(R,G,B)<10=0.0000
+
+== arm C — the same 12 + the two Shooting Star jars
+   /tmp/rel037/gate14/per-mod/run/000-shooting_star_demo__neoforge/screenshots/2026-10-08_08.50.55.png  (1708x960)
+   grass_side box=(1180, 455, 1240, 725) n=16200  pure_black(0,0,0)=0.0000  max(R,G,B)<10=0.0000
+   dandelion  box=(640, 440, 860, 690) n=55000  pure_black(0,0,0)=0.0000  max(R,G,B)<10=0.0000
+   leaves     box=(1290, 420, 1450, 560) n=22400  pure_black(0,0,0)=0.0000  max(R,G,B)<10=0.0000
+
+Classifier fracs (same algorithm), per arm/ROI:
+
+== arm A  /tmp/rel037/gate12/per-mod/run/000-modmenu__fabric/screenshots/2026-10-08_08.48.45.png
+   grass_side frac={'dirt_brown': 0.3381, 'other': 0.0791, 'grass_green': 0.5694, 'grey_tex': 0.0133}
+   dandelion  frac={'grass_green': 0.924, 'dirt_brown': 0.0406, 'other': 0.0283, 'black': 0.0017, 'grey_tex': 0.0013, 'sky': 0.0041}
+   leaves     frac={'grass_green': 0.7716, 'other': 0.0808, 'dirt_brown': 0.1405, 'grey_tex': 0.007}
+
+== arm B  /tmp/rel037/gate13/per-mod/run/000-create__neoforge/screenshots/2026-10-08_08.50.03.png
+   grass_side frac={'grass_green': 0.8455, 'other': 0.1046, 'dirt_brown': 0.0423, 'grey_tex': 0.002, 'black': 0.0056}
+   dandelion  frac={'other': 0.0409, 'dirt_brown': 0.0811, 'grass_green': 0.8691, 'black': 0.0023, 'grey_tex': 0.0026, 'sky': 0.0041}
+   leaves     frac={'grass_green': 0.9353, 'dirt_brown': 0.0131, 'other': 0.0491, 'black': 0.0025}
+
+== arm C  /tmp/rel037/gate14/per-mod/run/000-shooting_star_demo__neoforge/screenshots/2026-10-08_08.50.55.png
+   grass_side frac={'other': 0.2222, 'dirt_brown': 0.1354, 'grey_tex': 0.002, 'black': 0.032, 'grass_green': 0.6084}
+   dandelion  frac={'grass_green': 0.9304, 'dirt_brown': 0.0299, 'other': 0.0346, 'sky': 0.0041, 'grey_tex': 0.0009, 'black': 0.0001}
+   leaves     frac={'grass_green': 0.8515, 'other': 0.053, 'black': 0.0004, 'dirt_brown': 0.0897, 'grey_tex': 0.0054}
+
+NOTE: this fixture is the corpus world (the ROIs frame grass tops). The absolute dirt_brown/grey_tex
+fractions are NOT comparable with the 2026-10-04 cycles (/private/tmp/sodcut-fixture is gone).
+The pre-registered invariant holds: no pure-black regression, in all three arms.

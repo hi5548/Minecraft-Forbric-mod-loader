@@ -1,0 +1,93 @@
+# Load-report comparison
+
+Sizes and md5:
+  0.3.6-beta gate arm A (published)    19427 B  md5 68ae1f74f2606768561176ebe6ef005e
+  0.3.7-beta arm A                     19427 B  md5 68ae1f74f2606768561176ebe6ef005e
+  0.3.7-beta arm B                     24429 B  md5 581e8128dbb16813321d00b04a4942ff
+  0.3.7-beta arm C                     19756 B  md5 f3e1888600b24a1e85511206b297fcaf
+
+## arm A (0.3.7) vs the 0.3.6-beta gate arm A
+  byte-identical: True
+
+## arm A vs arm B (adds Create 6.0.10) — unified diff
+```
+--- /tmp/rel037/gate12/per-mod/run/000-modmenu__fabric/.forbric-kernel/load-report.txt	2026-10-08 08:48:41
++++ /tmp/rel037/gate13/per-mod/run/000-create__neoforge/.forbric-kernel/load-report.txt	2026-10-08 08:49:58
+@@ -46,6 +46,24 @@
+ 下面这些是 Forbric 注意到、但没能证实的情况。它们没有让任何 mod 被标记为出错，
+ 也没有阻止启动；列在这里只是为了排查问题时能看到。
+ 
++  Create  (create)
++    Mod dependency integration — Entrypoint member closure remains unproved: com/simibubi/create/foundation/data/CreateRegistrate#registerEventListeners(Lnet/neoforged/bus/api/IEventBus;)Lcom/simibubi/create/foundation/data/CreateRegistrate;: local helper dispatch may select another body
++    arbitration:entry-closure:com/simibubi/create/foundation/data/CreateRegistrate#registerEventListeners(Lnet/neoforged/bus/api/IEventBus;)Lcom/simibubi/create/foundation/data/CreateRegistrate;:local helper dispatch may select another body:true
++  Create  (create)
++    Mod dependency integration — Entrypoint member closure remains unproved: com/simibubi/create/foundation/events/ClientEvents#onLoadComplete(Lnet/neoforged/fml/event/lifecycle/FMLLoadCompleteEvent;)V: helper closure limit (depth=0, nodes=256, instructions=7832)
++    arbitration:entry-closure:com/simibubi/create/foundation/events/ClientEvents#onLoadComplete(Lnet/neoforged/fml/event/lifecycle/FMLLoadCompleteEvent;)V:helper closure limit (depth=0, nodes=256, instructions=7832):true
++  Create  (create)
++    Mod dependency integration — Entrypoint member closure remains unproved: com/simibubi/create/foundation/model/ModelSwapper#registerListeners(Lnet/neoforged/bus/api/IEventBus;)V: local helper dispatch may select another body
++    arbitration:entry-closure:com/simibubi/create/foundation/model/ModelSwapper#registerListeners(Lnet/neoforged/bus/api/IEventBus;)V:local helper dispatch may select another body:true
++  Create  (create)
++    Mod dependency integration — entrypoint-reachable com/simibubi/create/content/logistics/box/PackageRenderer#renderBox(Lnet/minecraft/world/entity/Entity;FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;ILdev/engine_room/flywheel/lib/model/baked/PartialModel;)V uses INVOKEINTERFACE net/createmod/catnip/render/SuperByteBuffer#nudge(I)Ldev/engine_room/flywheel/lib/transform/Translate; (activation or member resolution not proved)
++    arbitration:entry:com/simibubi/create/content/logistics/box/PackageRenderer#renderBox(Lnet/minecraft/world/entity/Entity;FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;ILdev/engine_room/flywheel/lib/model/baked/PartialModel;)V:net/createmod/catnip/render/SuperByteBuffer#nudge(I)Ldev/engine_room/flywheel/lib/transform/Translate;:185
++  Create  (create)
++    Mod dependency integration — entrypoint-reachable com/simibubi/create/content/logistics/box/PackageRenderer#renderBox(Lnet/minecraft/world/entity/Entity;FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;ILdev/engine_room/flywheel/lib/model/baked/PartialModel;)V uses INVOKEINTERFACE net/createmod/catnip/render/SuperByteBuffer#rotateCentered(FLnet/minecraft/core/Direction;)Ldev/engine_room/flywheel/lib/transform/Affine; (activation or member resolution not proved)
++    arbitration:entry:com/simibubi/create/content/logistics/box/PackageRenderer#renderBox(Lnet/minecraft/world/entity/Entity;FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;ILdev/engine_room/flywheel/lib/model/baked/PartialModel;)V:net/createmod/catnip/render/SuperByteBuffer#rotateCentered(FLnet/minecraft/core/Direction;)Ldev/engine_room/flywheel/lib/transform/Affine;:185
++  Create  (create)
++    Mod dependency integration — entrypoint-reachable com/simibubi/create/content/logistics/box/PackageRenderer#renderBox(Lnet/minecraft/world/entity/Entity;FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;ILdev/engine_room/flywheel/lib/model/baked/PartialModel;)V uses INVOKEINTERFACE net/createmod/catnip/render/SuperByteBuffer#translate(DDD)Ldev/engine_room/flywheel/lib/transform/Translate; (activation or member resolution not proved)
++    arbitration:entry:com/simibubi/create/content/logistics/box/PackageRenderer#renderBox(Lnet/minecraft/world/entity/Entity;FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;ILdev/engine_room/flywheel/lib/model/baked/PartialModel;)V:net/createmod/catnip/render/SuperByteBuffer#translate(DDD)Ldev/engine_room/flywheel/lib/transform/Translate;:185
+   Fabric Block API (v1)  (fabric-block-api-v1)
+     Mixin injection allowTaggedBlocksForTrapdoorClimbing — injector allowTaggedBlocksForTrapdoorClimbing is attached only in LivingEntity.trapdoorUsableAsLadder (nothing in the merged game calls it; vanilla and MinecraftForge call it from LivingEntity.onClimbable), so it never runs
+     mixin-injector:fabric-block-api-v1.mixins.json:net.fabricmc.fabric.mixin.block.LivingEntityMixin#allowTaggedBlocksForTrapdoorClimbing(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;Lnet/minecraft/world/level/block/state/BlockState;)V@net.minecraft.world.entity.LivingEntity
+@@ -53,6 +71,9 @@
+     Mixin net.fabricmc.fabric.mixin.block.LivingEntityMixin — 1/2 anchors resolve, missing: @Inject target LivingEntity.trapdoorUsableAsLadder never runs: nothing in the merged game calls it; vanilla and MinecraftForge call it from LivingEntity.onClimbable
+     mixin:fabric-block-api-v1.mixins.json:net.fabricmc.fabric.mixin.block.LivingEntityMixin
+   Fabric Data Generation API (v1)  (fabric-data-generation-api-v1)
++    Mixin injection addReplaced — A required injector's attachment in the actual defined class could not be established
++    mixin-injector:fabric-data-generation-api-v1.mixins.json:net.fabricmc.fabric.mixin.datagen.TagProviderMixin#addReplaced(ZLnet/minecraft/tags/TagBuilder;)Z@net.minecraft.data.tags.TagsProvider
++  Fabric Data Generation API (v1)  (fabric-data-generation-api-v1)
+     Mixin net.fabricmc.fabric.mixin.datagen.TagProviderMixin — 3/4 anchors resolve, missing: @At(INVOKE) net.minecraft.tags.TagFile.<init> in TagsProvider.lambda$run$5
+     mixin:fabric-data-generation-api-v1.mixins.json:net.fabricmc.fabric.mixin.datagen.TagProviderMixin
+   Fabric Events Interaction (v0)  (fabric-events-interaction-v0)
+@@ -121,6 +142,9 @@
+   Fabric Screen API (v1)  (fabric-screen-api-v1)
+     Mixin net.fabricmc.fabric.mixin.screen.GameRendererMixin — 1/2 anchors resolve, missing: @At(INVOKE) net.minecraft.client.gui.screens.Screen.renderWithTooltip in GameRenderer.render
+     mixin:fabric-screen-api-v1.mixins.json:net.fabricmc.fabric.mixin.screen.GameRendererMixin
++  Flywheel  (flywheel)
++    Mod dependency integration — Entrypoint member closure remains unproved: dev/engine_room/flywheel/impl/NeoForgeFlwConfig#registerSpecs(Lnet/neoforged/fml/ModContainer;)V: local helper dispatch may select another body
++    arbitration:entry-closure:dev/engine_room/flywheel/impl/NeoForgeFlwConfig#registerSpecs(Lnet/neoforged/fml/ModContainer;)V:local helper dispatch may select another body:true
+   forbric
+     Mod dependency combination — Some required candidate contracts could not be verified; this selection remains unproved
+     arbitration:selection
+```
+
+## arm A vs arm C (adds the two Shooting Star jars) — unified diff
+```
+--- /tmp/rel037/gate12/per-mod/run/000-modmenu__fabric/.forbric-kernel/load-report.txt	2026-10-08 08:48:41
++++ /tmp/rel037/gate14/per-mod/run/000-shooting_star_demo__neoforge/.forbric-kernel/load-report.txt	2026-10-08 08:50:51
+@@ -1,7 +1,7 @@
+ Forbric 加载报告
+ =================
+ 
+-这一次启动，9 个 mod 有一部分没有跑起来。
++这一次启动，10 个 mod 有一部分没有跑起来。
+ 
+   Fabric Content Registries (v0)  (fabric-content-registries-v0)
+     fabric-content-registries-v0-0.116.17.jar
+@@ -41,6 +41,11 @@
+     modmenu-11.0.5.jar
+     有一部分没有跑起来 — the kernel removed this injector: Mod Menu's title-screen line no longer names the mod count -- on this base the copyright/version line is drawn by NeoForge's branding path inside a render lambda, so the substitution has no argument to modify; the Mods button, the mod list screen and Mod Menu's other hooks are unaffected
+ 
++  The Shooting Star (Demo)  (shooting_star_demo)
++    the-shooting-star-demo-1.3.1-neoforge.jar
++    有一部分没有跑起来 — compiled against a different MinecraftForge — net.minecraftforge.client.event.RenderGuiEvent$Post is not in this instance
++    还有 1 个 mod 说它们需要这个：The Shooting Star Addition
++
+ 可能的问题（未确认）
+ --------------------
+ 下面这些是 Forbric 注意到、但没能证实的情况。它们没有让任何 mod 被标记为出错，
+```
+
+## Aggregate sentences, verbatim
+  arm A: 这一次启动，9 个 mod 有一部分没有跑起来。
+  arm B: 这一次启动，9 个 mod 有一部分没有跑起来。
+  arm C: 这一次启动，10 个 mod 有一部分没有跑起来。

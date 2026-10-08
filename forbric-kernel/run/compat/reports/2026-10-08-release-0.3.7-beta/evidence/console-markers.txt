@@ -1,0 +1,45 @@
+# Console markers, verbatim counts, all three arms (grep -c on each arm's console.log)
+
+marker                                                     arm A       arm B       arm C
+created [0-9]* custom registr                                  1           1           1
+NewRegistryEvent could not reach                               0           0           0
+0 Forge custom registr(ies) survived                           0           0           0
+Failed to apply some object holders                            0           0           0
+Unable to find registry with key forge:                        0           0           0
+lost connection: Illegal packet received                       0           0           0
+MinecraftForge's EffectiveSide now reads                       0           0           0
+handleServerStopped forward failed                             1           1           1
+ClientSmoke] clean disconnect                                  1           1           1
+ClientSmoke] joined world via quick-play                       1           1           1
+now targets                                                    6           6           6
+re-keyed to getBlock                                           2           2           2
+re-keyed to getItem                                            2           2           2
+is an IdMapper                                                 2           2           2
+@Mixin target type mismatch                                    0           0           0
+ParticleEngine is not an interface                             0           0           0
+SYNTHETIC default method over ParticleEngine                   2           2           2
+create failed during client setup                              0           0           0
+Render layers can only be set                                  0           0           0
+
+## The 'created N custom registr(ies)' line, verbatim per arm
+```
+arm A   [08:48:33] [Render thread/INFO]: [Forbric/Forge] created 9 custom registr(ies) via NewRegistryEvent + fired Forge RegisterEvent x90 on 1 bus(es) [baseline + 0 mod(s)]
+arm B   [08:49:48] [Render thread/INFO]: [Forbric/Forge] created 9 custom registr(ies) via NewRegistryEvent + fired Forge RegisterEvent x90 on 1 bus(es) [baseline + 0 mod(s)]
+arm C   [08:50:42] [Render thread/INFO]: [Forbric/Forge] created 9 custom registr(ies) via NewRegistryEvent + fired Forge RegisterEvent x90 on 1 bus(es) [baseline + 0 mod(s)]
+```
+
+## 'now targets … SpriteContents.<init>(…ForgeTextureMetadata;)V' (arm A, verbatim)
+```
+[08:48:27] [main/INFO]: [Forbric/Mixin] net.caffeinemc.mods.sodium.mixin.features.textures.mipmaps.SpriteContentsMixin: sodium$beforeGenerateMipLevels now targets net.minecraft.client.renderer.texture.SpriteContents.<init>(Lnet/minecraft/resources/ResourceLocation;Lnet/minecraft/client/resources/metadata/animation/FrameSize;Lcom/mojang/blaze3d/platform/NativeImage;Lnet/minecraft/server/packs/resou
+[08:48:27] [main/INFO]: [Forbric/Mixin] net.caffeinemc.mods.sodium.mixin.features.textures.scan.SpriteContentsMixin: sodium$beforeGenerateMipLevels now targets net.minecraft.client.renderer.texture.SpriteContents.<init>(Lnet/minecraft/resources/ResourceLocation;Lnet/minecraft/client/resources/metadata/animation/FrameSize;Lcom/mojang/blaze3d/platform/NativeImage;Lnet/minecraft/server/packs/resource
+```
+
+## Colour-repair markers (arm A, verbatim)
+```
+[08:48:25] [main/INFO]: [Forbric/MergedBaseCompat] net.fabricmc.fabric.mixin.client.rendering.BlockColorsMixin's @Shadow blockColors is an IdMapper this base no longer has, so Mixin could not bind it and discarded the whole mixin; it now reads the live Map by raw key
+[08:48:25] [main/INFO]: [Forbric/MergedBaseCompat] net.fabricmc.fabric.mixin.client.rendering.ItemColorsMixin's @Shadow itemColors is an IdMapper this base no longer has, so Mixin could not bind it and discarded the whole mixin; it now reads the live Map by raw key
+[08:48:25] [main/INFO]: [Forbric/MergedBaseCompat] net.minecraft.client.color.block.BlockColors looked its colours up through a Forge registry delegate while its own register stored the raw object, so every one missed and fell back to MapColor (2 site(s) re-keyed to getBlock)
+[08:48:25] [main/INFO]: [Forbric/MergedBaseCompat] net.minecraft.client.color.item.ItemColors looked its colours up through a Forge registry delegate while its own register stored the raw object, so every one missed and fell back to MapColor (1 site(s) re-keyed to getItem)
+[08:48:35] [Render thread/INFO]: [Forbric/MergedBaseCompat] net.minecraft.client.color.block.BlockColors looked its colours up through a Forge registry delegate while its own register stored the raw object, so every one missed and fell back to MapColor (2 site(s) re-keyed to getBlock)
+[08:48:35] [Render thread/INFO]: [Forbric/MergedBaseCompat] net.minecraft.client.color.item.ItemColors looked its colours up through a Forge registry delegate while its own register stored the raw object, so every one missed and fell back to MapColor (1 site(s) re-keyed to getItem)
+```

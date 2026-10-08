@@ -1,0 +1,89 @@
+# Build provenance — the released candidate kernel jar
+
+REPORTED release kernel jar : /private/tmp/rel037/release-kernel.jar
+sha256                     : 48df3d2b90dfec3926fbfcee92dc6bd8a441760f27560fd7d168169d81e2fa97
+bytes                      : 3290813
+entries                    : 736 (735 boot + 1 nested runtime); 0 stale-numbered ('X N.class', 'X 3.txt', …)
+
+## Source
+
+Clean git worktree /private/tmp/rel037/wt, detached at `4f4935b9` — the version-bump commit whose
+parent is the release source tip `f9d4719b` ("Forge 自定义注册表从未创建 + 服务端线程被判成 CLIENT"),
+on top of `753d1bff` (客户端 datapack 声明). `./gradlew --offline -q jar` in `wt/forbric-kernel`.
+Nothing built in the main tree; no peer tree touched.
+
+## The build JDK (recorded, because it decides the bytes)
+
+The box's default `java` is 21.0.7, but the *published* 0.3.6-beta boot half was compiled with
+**JDK 25**: re-running `13e4ff3f` with `JAVA_HOME=jdk-25.jdk` reproduces 0.3.6's recorded boot-half
+sha `30cef190ddf2cf065f2f0344ab0ee8f8ce7bec050e041455db93445cb9938af6` byte for byte, while JDK 21
+gives `e97a7155…` and 121 content-differing classes against the published jar. This release is
+therefore built with JDK 25 so the entry-set delta below is *source*, not compiler, noise.
+
+## Assembly
+
+`/Volumes/ORICO` is unmounted and `energy-4.1.0-named.jar` / the staged fixtures are absent, so the
+game side cannot be compiled here (the same limit the 0.3.5 / 0.3.6 lanes and the sibling
+2026-10-06 lanes recorded). Same assembly as 0.3.6, in a clean worktree:
+
+1. boot half  `./gradlew --offline -q jar` (JDK 25) -> forbric-kernel-0.1.0-SNAPSHOT.jar
+              sha256 5c4a0190146520517fe2b42d4d6fe34ed075d04cdb8739437e361364635e4cbb
+              (no staged game jars -> the jar task wires in no nested runtime, by design)
+2. runtime half  `META-INF/jars/forbric-kernel-runtime.jar` copied BYTE-FOR-BYTE out of the
+              published 0.3.6-beta jar (`libraries/net/forbric/forbric-kernel/0.3.6-beta/`)
+              sha256 67c2a49b55c8ef860e552ec5b9e028d8836e68d46f5bb4595a40016debde8c6d
+              `git diff --stat b1b90566 HEAD -- forbric-kernel/src/runtime` is EMPTY, so the game
+              side is untouched by everything this release adds.
+3. `pack.py` injects the runtime half into the boot half (zip -X; fixed 1980-02-01 timestamps).
+
+`48df3d2b…` reproduces on a re-build, and is byte-identical to the `after` arm the sibling
+`2026-10-06-shooting-star-disconnect` lane built independently from the same source — two worktrees,
+one source, one result.
+
+## Entry-set comparison, release vs the published 0.3.6-beta jar (name -> sha256 of decompressed bytes)
+
+```
+entry sets equal: False (735 vs 736 boot entries)
+added:   ['net/forbric/kernel/boot/ForgeSidedThreads.class']
+removed: []
+differing: 9
+    net/forbric/api/ForeignType$1.class
+    net/forbric/api/ForeignType.class
+    net/forbric/kernel/boot/DatapackRegistryDeclaration.class
+    net/forbric/kernel/boot/KernelForgeBaseline.class
+    net/forbric/kernel/boot/KernelForgeModContext.class
+    net/forbric/kernel/boot/KernelLifecycle$ReopenedRegistries.class
+    net/forbric/kernel/boot/KernelLifecycle.class
+    net/forbric/kernel/transform/ForbricMergedBaseCompatTransformer$LostSwitchMap.class
+    net/forbric/kernel/transform/ForbricMergedBaseCompatTransformer.class
+```
+
+Exactly the classes of the six edited + one added source files:
+`git diff --stat 13e4ff3f HEAD -- forbric-kernel/src/main` lists ForeignType.java,
+DatapackRegistryDeclaration.java, ForgeSidedThreads.java (new), KernelForgeBaseline.java,
+KernelForgeModContext.java, KernelLifecycle.java, ForbricMergedBaseCompatTransformer.java.
+Every other boot entry is byte-identical, including the whole `src/runtime` game side.
+
+## Checks on the frozen jar
+
+- 736 entries; 0 stale-numbered entries.
+- `carrier-stubs.txt` inside it carries 95 data rows, sha256
+  `4736ce5d00264be4869d7a1158d63842f61c80d4a9cad03aa70caf0e5a4776ea` (byte-identical to 0.3.6).
+- `net/forbric/kernel/boot/ForgeSidedThreads.class` present (groupFor); `KernelForgeModContext`
+  carries `eventBusPost`; `ForbricMergedBaseCompatTransformer` names `EffectiveSide`.
+- The W7Harness's `assert_game_side` accepted it (`META-INF/jars/forbric-kernel-runtime.jar`
+  present) and all three arms ran these exact bytes
+  (`frozen/frozen-kernel-sha256.txt` = this sha in every run dir).
+
+## Installer provenance
+
+- `forbric-kernel-installer-0.3.7-beta.jar` embedded kernel
+  `forbric/libs/net/forbric/forbric-kernel/0.3.7-beta/forbric-kernel-0.3.7-beta.jar`
+  sha256 `48df3d2b…` — byte-identical to this gate's kernel.
+- Installer has 105 entries, 0 stale-numbered entries; built in the same clean worktree
+  (`./gradlew jar releaseZip -x buildForbricJars`, after placing this exact kernel at
+  `forbric-kernel/build/libs/forbric-kernel-0.1.0-SNAPSHOT.jar`).
+- The `fabric-loader/` substrate is a sibling checkout (untracked); it was symlinked into the
+  worktree so `buildLoaderJars` / `buildMergeTools` ran against the same substrate. The loader
+  source is unchanged since v0.3.6-beta-1.21.1
+  (`git diff --stat v0.3.6-beta-1.21.1 HEAD -- forbric-loader/src` empty).

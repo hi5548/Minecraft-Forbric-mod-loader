@@ -1,0 +1,171 @@
+Forbric 加载报告
+=================
+
+这一次启动，9 个 mod 有一部分没有跑起来。
+
+  Fabric Content Registries (v0)  (fabric-content-registries-v0)
+    fabric-content-registries-v0-0.116.17.jar
+    有一部分没有跑起来 — the kernel removed this injector: fabric-content-registries-v0's furnace fuel map is no longer consulted by isFuel/getBurnDuration (the merged base routes both through ForgeHooks.getBurnTime); the mixin's fuelTimeMapHook and its other anchors still bind
+
+  Fabric Events Interaction (v0)  (fabric-events-interaction-v0)
+    fabric-events-interaction-v0-0.116.17.jar
+    有一部分没有跑起来 — the kernel removed this injector: fabric-events-interaction's UseEntityCallback no longer fires on the client (its @Inject.locals capture cannot be satisfied on the merged startUseItem) — the event a mod uses to cancel or observe the use action against an entity; the mixin's other six injectors still apply; the kernel removed these injectors: fabric-events-interaction's PlayerBlockBreakEvents BEFORE/AFTER no longer fire from ServerPlayerGameMode.destroyBlock
+
+  Fabric Item API (v1)  (fabric-item-api-v1)
+    fabric-item-api-v1-0.116.17.jar
+    有一部分没有跑起来 — the kernel removed this injector: fabric-item-api's AllowEnchanting event no longer fires from AnvilMenu.createResult (NeoForge checks ItemStack.supportsEnchantment instead); the mixin's other anchor still binds; the kernel removed this injector: fabric-item-api's crafting-remainder substitution no longer applies to the brewing stand (doBrew calls ItemStack.hasCraftingRemainingItem and getCraftingRemainingItem directly); the mixin's captureItemStack (the ItemStack.shrink inject) still binds; the kernel removed this injector: fabric-item-api's AllowEnchanting event no longer fires from EnchantRandomlyFunction (the merged base checks ItemStack.supportsEnchantment); the kernel removed these injectors: fabric-item-api's crafting-remainder substitution no longer applies in Recipe.getRemainingItems (the merged base calls ItemStack's own methods); the kernel leaves out its mixin EnchantmentHelperMixin on the merged game
+
+  Fabric Object Builder API (v1)  (fabric-object-builder-api-v1)
+    fabric-object-builder-api-v1-0.116.17.jar
+    有一部分没有跑起来 — the kernel removed this injector: Fabric's type-aware emerald trade no longer substitutes a modded VillagerType for the vanilla one (the merged EmeraldsForVillagerTypeItem is built from a caller-supplied map, with no registry iteration left to widen); the mixin's @At(NEW) construction anchor and its method anchors still bind
+    还有 1 个 mod 说它们需要这个：Fabric Data Attachment API (v1)
+
+  Fabric Particles (v1)  (fabric-particles-v1)
+    fabric-particles-v1-0.116.17.jar
+    有一部分没有跑起来 — the kernel leaves out its mixin BlockDustParticleMixin on the merged game
+
+  Fabric Recipe API (v1)  (fabric-recipe-api-v1)
+    fabric-recipe-api-v1-0.116.17.jar
+    有一部分没有跑起来 — the kernel removed this injector: fabric-recipe-api's custom Ingredient packet codec no longer replaces the built-in one (the merged <clinit> uses Either.map); the mixin's injectCodec still binds
+
+  Fabric Registry Sync (v0)  (fabric-registry-sync-v0)
+    fabric-registry-sync-v0-0.116.17.jar
+    有一部分没有跑起来 — the kernel leaves out its mixin BlockColorsMixin on the merged game; the kernel leaves out its mixin ItemColorsMixin on the merged game; the kernel leaves out its mixin ParticleManagerMixin on the merged game; the kernel leaves out its mixin RegistryLoaderMixin on the merged game
+
+  Fabric Rendering Fluids (v1)  (fabric-rendering-fluids-v1)
+    fabric-rendering-fluids-v1-0.116.17.jar
+    有一部分没有跑起来 — the kernel leaves out its mixin FluidRendererMixin on the merged game
+    还有 1 个 mod 说它们需要这个：Fabric Transfer API (v1)
+
+  Mod Menu  (modmenu)
+    modmenu-11.0.5.jar
+    有一部分没有跑起来 — the kernel removed this injector: Mod Menu's title-screen line no longer names the mod count -- on this base the copyright/version line is drawn by NeoForge's branding path inside a render lambda, so the substitution has no argument to modify; the Mods button, the mod list screen and Mod Menu's other hooks are unaffected
+
+可能的问题（未确认）
+--------------------
+下面这些是 Forbric 注意到、但没能证实的情况。它们没有让任何 mod 被标记为出错，
+也没有阻止启动；列在这里只是为了排查问题时能看到。
+
+  Create  (create)
+    Mod dependency integration — Entrypoint member closure remains unproved: com/simibubi/create/foundation/data/CreateRegistrate#registerEventListeners(Lnet/neoforged/bus/api/IEventBus;)Lcom/simibubi/create/foundation/data/CreateRegistrate;: local helper dispatch may select another body
+    arbitration:entry-closure:com/simibubi/create/foundation/data/CreateRegistrate#registerEventListeners(Lnet/neoforged/bus/api/IEventBus;)Lcom/simibubi/create/foundation/data/CreateRegistrate;:local helper dispatch may select another body:true
+  Create  (create)
+    Mod dependency integration — Entrypoint member closure remains unproved: com/simibubi/create/foundation/events/ClientEvents#onLoadComplete(Lnet/neoforged/fml/event/lifecycle/FMLLoadCompleteEvent;)V: helper closure limit (depth=0, nodes=256, instructions=7832)
+    arbitration:entry-closure:com/simibubi/create/foundation/events/ClientEvents#onLoadComplete(Lnet/neoforged/fml/event/lifecycle/FMLLoadCompleteEvent;)V:helper closure limit (depth=0, nodes=256, instructions=7832):true
+  Create  (create)
+    Mod dependency integration — Entrypoint member closure remains unproved: com/simibubi/create/foundation/model/ModelSwapper#registerListeners(Lnet/neoforged/bus/api/IEventBus;)V: local helper dispatch may select another body
+    arbitration:entry-closure:com/simibubi/create/foundation/model/ModelSwapper#registerListeners(Lnet/neoforged/bus/api/IEventBus;)V:local helper dispatch may select another body:true
+  Create  (create)
+    Mod dependency integration — entrypoint-reachable com/simibubi/create/content/logistics/box/PackageRenderer#renderBox(Lnet/minecraft/world/entity/Entity;FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;ILdev/engine_room/flywheel/lib/model/baked/PartialModel;)V uses INVOKEINTERFACE net/createmod/catnip/render/SuperByteBuffer#nudge(I)Ldev/engine_room/flywheel/lib/transform/Translate; (activation or member resolution not proved)
+    arbitration:entry:com/simibubi/create/content/logistics/box/PackageRenderer#renderBox(Lnet/minecraft/world/entity/Entity;FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;ILdev/engine_room/flywheel/lib/model/baked/PartialModel;)V:net/createmod/catnip/render/SuperByteBuffer#nudge(I)Ldev/engine_room/flywheel/lib/transform/Translate;:185
+  Create  (create)
+    Mod dependency integration — entrypoint-reachable com/simibubi/create/content/logistics/box/PackageRenderer#renderBox(Lnet/minecraft/world/entity/Entity;FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;ILdev/engine_room/flywheel/lib/model/baked/PartialModel;)V uses INVOKEINTERFACE net/createmod/catnip/render/SuperByteBuffer#rotateCentered(FLnet/minecraft/core/Direction;)Ldev/engine_room/flywheel/lib/transform/Affine; (activation or member resolution not proved)
+    arbitration:entry:com/simibubi/create/content/logistics/box/PackageRenderer#renderBox(Lnet/minecraft/world/entity/Entity;FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;ILdev/engine_room/flywheel/lib/model/baked/PartialModel;)V:net/createmod/catnip/render/SuperByteBuffer#rotateCentered(FLnet/minecraft/core/Direction;)Ldev/engine_room/flywheel/lib/transform/Affine;:185
+  Create  (create)
+    Mod dependency integration — entrypoint-reachable com/simibubi/create/content/logistics/box/PackageRenderer#renderBox(Lnet/minecraft/world/entity/Entity;FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;ILdev/engine_room/flywheel/lib/model/baked/PartialModel;)V uses INVOKEINTERFACE net/createmod/catnip/render/SuperByteBuffer#translate(DDD)Ldev/engine_room/flywheel/lib/transform/Translate; (activation or member resolution not proved)
+    arbitration:entry:com/simibubi/create/content/logistics/box/PackageRenderer#renderBox(Lnet/minecraft/world/entity/Entity;FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;ILdev/engine_room/flywheel/lib/model/baked/PartialModel;)V:net/createmod/catnip/render/SuperByteBuffer#translate(DDD)Ldev/engine_room/flywheel/lib/transform/Translate;:185
+  Fabric Block API (v1)  (fabric-block-api-v1)
+    Mixin injection allowTaggedBlocksForTrapdoorClimbing — injector allowTaggedBlocksForTrapdoorClimbing is attached only in LivingEntity.trapdoorUsableAsLadder (nothing in the merged game calls it; vanilla and MinecraftForge call it from LivingEntity.onClimbable), so it never runs
+    mixin-injector:fabric-block-api-v1.mixins.json:net.fabricmc.fabric.mixin.block.LivingEntityMixin#allowTaggedBlocksForTrapdoorClimbing(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;Lnet/minecraft/world/level/block/state/BlockState;)V@net.minecraft.world.entity.LivingEntity
+  Fabric Block API (v1)  (fabric-block-api-v1)
+    Mixin net.fabricmc.fabric.mixin.block.LivingEntityMixin — 1/2 anchors resolve, missing: @Inject target LivingEntity.trapdoorUsableAsLadder never runs: nothing in the merged game calls it; vanilla and MinecraftForge call it from LivingEntity.onClimbable
+    mixin:fabric-block-api-v1.mixins.json:net.fabricmc.fabric.mixin.block.LivingEntityMixin
+  Fabric Data Generation API (v1)  (fabric-data-generation-api-v1)
+    Mixin injection addReplaced — A required injector's attachment in the actual defined class could not be established
+    mixin-injector:fabric-data-generation-api-v1.mixins.json:net.fabricmc.fabric.mixin.datagen.TagProviderMixin#addReplaced(ZLnet/minecraft/tags/TagBuilder;)Z@net.minecraft.data.tags.TagsProvider
+  Fabric Data Generation API (v1)  (fabric-data-generation-api-v1)
+    Mixin net.fabricmc.fabric.mixin.datagen.TagProviderMixin — 3/4 anchors resolve, missing: @At(INVOKE) net.minecraft.tags.TagFile.<init> in TagsProvider.lambda$run$5
+    mixin:fabric-data-generation-api-v1.mixins.json:net.fabricmc.fabric.mixin.datagen.TagProviderMixin
+  Fabric Events Interaction (v0)  (fabric-events-interaction-v0)
+    Mixin net.fabricmc.fabric.mixin.event.interaction.ServerPlayNetworkHandlerMixin — its mixin ServerPlayNetworkHandlerMixin targets net.minecraft.server.network.ServerGamePacketListenerImpl$1, a renumbered anonymous class; on this base that name is a different class, so its injections may bind to unrelated code
+    mixin-target-drift:fabric-events-interaction-v0.mixins.json:net.fabricmc.fabric.mixin.event.interaction.ServerPlayNetworkHandlerMixin
+  Fabric Events Interaction (v0)  (fabric-events-interaction-v0)
+    Mixin net.fabricmc.fabric.mixin.event.interaction.ServerPlayNetworkHandlerMixin — 4/5 anchors resolve, missing: @Mixin target ServerGamePacketListenerImpl$1.ServerGamePacketListenerImpl$1 is not the class vanilla compiled at that name (the class was reshaped by the merge)
+    mixin:fabric-events-interaction-v0.mixins.json:net.fabricmc.fabric.mixin.event.interaction.ServerPlayNetworkHandlerMixin
+  Fabric Item API (v1)  (fabric-item-api-v1)
+    Mixin injection enchantmentKey — A required MixinExtras injector has no attachment in the actual defined class; no audited replacement says whether its feature is lost
+    mixin-injector:fabric-item-api-v1.mixins.json:net.fabricmc.fabric.mixin.item.RegistryLoaderMixin#enchantmentKey(Lnet/minecraft/core/WritableRegistry;Lnet/minecraft/resources/ResourceKey;Ljava/lang/Object;Lnet/minecraft/core/RegistrationInfo;Lcom/llamalad7/mixinextras/injector/wrapoperation/Operation;Lnet/minecraft/core/WritableRegistry;Lcom/mojang/serialization/Decoder;Lnet/minecraft/resources/RegistryOps;Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/server/packs/resources/Resource;Lnet/minecraft/core/RegistrationInfo;)Lnet/minecraft/core/Holder$Reference;@net.minecraft.resources.RegistryDataLoader
+  Fabric Item API (v1)  (fabric-item-api-v1)
+    Mixin net.fabricmc.fabric.mixin.item.RegistryLoaderMixin — 1/2 anchors resolve, missing: @At(INVOKE) net.minecraft.core.WritableRegistry.register in RegistryDataLoader.loadElementFromResource
+    mixin:fabric-item-api-v1.mixins.json:net.fabricmc.fabric.mixin.item.RegistryLoaderMixin
+  Fabric Model Loading API (v1)  (fabric-model-loading-api-v1)
+    Mixin injection wrapInnerBake — A required MixinExtras injector has no attachment in the actual defined class; no audited replacement says whether its feature is lost
+    mixin-injector:fabric-model-loading-api-v1.mixins.json:net.fabricmc.fabric.mixin.client.model.loading.ModelLoaderBakerImplMixin#wrapInnerBake(Lnet/minecraft/client/resources/model/ModelBaker;Lnet/minecraft/client/resources/model/UnbakedModel;Lnet/minecraft/client/resources/model/ModelState;Lcom/llamalad7/mixinextras/injector/wrapoperation/Operation;Lnet/minecraft/resources/ResourceLocation;)Lnet/minecraft/client/resources/model/BakedModel;@net.minecraft.client.resources.model.ModelBakery$ModelBakerImpl
+  Fabric Model Loading API (v1)  (fabric-model-loading-api-v1)
+    Mixin net.fabricmc.fabric.mixin.client.model.loading.ModelLoaderBakerImplMixin — 3/4 anchors resolve, missing: @At(INVOKE) ModelBakery$ModelBakerImpl.bakeUncached in bake
+    mixin:fabric-model-loading-api-v1.mixins.json:net.fabricmc.fabric.mixin.client.model.loading.ModelLoaderBakerImplMixin
+  Fabric Networking API (v1)  (fabric-networking-api-v1)
+    Mod dependency integration — Entrypoint member closure remains unproved: net/fabricmc/fabric/api/networking/v1/PayloadTypeRegistry#register(Lnet/minecraft/class_8710$class_9154;Lnet/minecraft/class_9139;)Lnet/minecraft/class_8710$class_9155;: local helper dispatch may select another body
+    arbitration:entry-closure:net/fabricmc/fabric/api/networking/v1/PayloadTypeRegistry#register(Lnet/minecraft/class_8710$class_9154;Lnet/minecraft/class_9139;)Lnet/minecraft/class_8710$class_9155;:local helper dispatch may select another body:true
+  Fabric Networking API (v1)  (fabric-networking-api-v1)
+    Mixin injection wrapCodec — A required MixinExtras injector has no attachment in the actual defined class; no audited replacement says whether its feature is lost
+    mixin-injector:fabric-networking-api-v1.mixins.json:net.fabricmc.fabric.mixin.networking.CustomPayloadC2SPacketMixin#wrapCodec(Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload$FallbackProvider;Ljava/util/List;Lcom/llamalad7/mixinextras/injector/wrapoperation/Operation;)Lnet/minecraft/network/codec/StreamCodec;@net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket
+  Fabric Networking API (v1)  (fabric-networking-api-v1)
+    Mixin injection wrapConfigCodec — A required MixinExtras injector has no attachment in the actual defined class; no audited replacement says whether its feature is lost
+    mixin-injector:fabric-networking-api-v1.mixins.json:net.fabricmc.fabric.mixin.networking.CustomPayloadS2CPacketMixin#wrapConfigCodec(Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload$FallbackProvider;Ljava/util/List;Lcom/llamalad7/mixinextras/injector/wrapoperation/Operation;)Lnet/minecraft/network/codec/StreamCodec;@net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket
+  Fabric Networking API (v1)  (fabric-networking-api-v1)
+    Mixin injection wrapPlayCodec — A required MixinExtras injector has no attachment in the actual defined class; no audited replacement says whether its feature is lost
+    mixin-injector:fabric-networking-api-v1.mixins.json:net.fabricmc.fabric.mixin.networking.CustomPayloadS2CPacketMixin#wrapPlayCodec(Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload$FallbackProvider;Ljava/util/List;Lcom/llamalad7/mixinextras/injector/wrapoperation/Operation;)Lnet/minecraft/network/codec/StreamCodec;@net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket
+  Fabric Networking API (v1)  (fabric-networking-api-v1)
+    Mixin net.fabricmc.fabric.mixin.networking.CustomPayloadC2SPacketMixin — 1/2 anchors resolve, missing: @At(INVOKE) net.minecraft.network.protocol.common.custom.CustomPacketPayload.codec in ServerboundCustomPayloadPacket.<clinit>
+    mixin:fabric-networking-api-v1.mixins.json:net.fabricmc.fabric.mixin.networking.CustomPayloadC2SPacketMixin
+  Fabric Networking API (v1)  (fabric-networking-api-v1)
+    Mixin net.fabricmc.fabric.mixin.networking.CustomPayloadS2CPacketMixin — 2/4 anchors resolve, missing: @At(INVOKE) net.minecraft.network.protocol.common.custom.CustomPacketPayload.codec in ClientboundCustomPayloadPacket.<clinit>
+    mixin:fabric-networking-api-v1.mixins.json:net.fabricmc.fabric.mixin.networking.CustomPayloadS2CPacketMixin
+  Fabric Object Builder API (v1)  (fabric-object-builder-api-v1)
+    Mixin injection init — A required MixinExtras injector has no attachment in the actual defined class; no audited replacement says whether its feature is lost
+    mixin-injector:fabric-object-builder-v1.client.mixins.json:net.fabricmc.fabric.mixin.object.builder.client.HangingSignEditScreenMixin#init(Ljava/lang/String;Lcom/llamalad7/mixinextras/injector/wrapoperation/Operation;)Lnet/minecraft/resources/ResourceLocation;@net.minecraft.client.gui.screens.inventory.HangingSignEditScreen
+  Fabric Object Builder API (v1)  (fabric-object-builder-api-v1)
+    Mixin net.fabricmc.fabric.mixin.object.builder.client.HangingSignEditScreenMixin — 1/2 anchors resolve, missing: @At(INVOKE) net.minecraft.resources.ResourceLocation.withDefaultNamespace in HangingSignEditScreen.<init>
+    mixin:fabric-object-builder-v1.client.mixins.json:net.fabricmc.fabric.mixin.object.builder.client.HangingSignEditScreenMixin
+  Fabric Registry Sync (v0)  (fabric-registry-sync-v0)
+    Mod dependency integration — Entrypoint member closure remains unproved: net/fabricmc/fabric/api/event/registry/RegistryAttributeHolder#addAttribute(Lnet/fabricmc/fabric/api/event/registry/RegistryAttribute;)Lnet/fabricmc/fabric/api/event/registry/RegistryAttributeHolder;: local helper dispatch may select another body
+    arbitration:entry-closure:net/fabricmc/fabric/api/event/registry/RegistryAttributeHolder#addAttribute(Lnet/fabricmc/fabric/api/event/registry/RegistryAttribute;)Lnet/fabricmc/fabric/api/event/registry/RegistryAttributeHolder;:local helper dispatch may select another body:true
+  Fabric Registry Sync (v0)  (fabric-registry-sync-v0)
+    Mod dependency integration — Entrypoint member closure remains unproved: net/fabricmc/fabric/impl/registry/sync/packet/RegistryPacketHandler#getPacketId()Lnet/minecraft/class_8710$class_9154;: local helper dispatch may select another body
+    arbitration:entry-closure:net/fabricmc/fabric/impl/registry/sync/packet/RegistryPacketHandler#getPacketId()Lnet/minecraft/class_8710$class_9154;:local helper dispatch may select another body:true
+  Fabric Registry Sync (v0)  (fabric-registry-sync-v0)
+    Mixin net.fabricmc.fabric.mixin.registry.sync.ExperimentalRegistriesValidatorMixin — 1/2 anchors resolve, missing: @At(FIELD) net.minecraft.resources.RegistryDataLoader.WORLDGEN_REGISTRIES in RegistryPatchGenerator.lambda$createLookup$3
+    mixin:fabric-registry-sync-v0.mixins.json:net.fabricmc.fabric.mixin.registry.sync.ExperimentalRegistriesValidatorMixin
+  Fabric Rendering (v1)  (fabric-rendering-v1)
+    Mixin injection allowNoneMinecraftId — A required MixinExtras injector has no attachment in the actual defined class; no audited replacement says whether its feature is lost
+    mixin-injector:fabric-rendering-v1.mixins.json:net.fabricmc.fabric.mixin.client.rendering.shader.ShaderProgramMixin#allowNoneMinecraftId(Ljava/lang/String;Lcom/llamalad7/mixinextras/injector/wrapoperation/Operation;)Lnet/minecraft/resources/ResourceLocation;@net.minecraft.client.renderer.ShaderInstance
+  Fabric Rendering (v1)  (fabric-rendering-v1)
+    Mixin injection modifyId — A required MixinExtras injector has no attachment in the actual defined class; no audited replacement says whether its feature is lost
+    mixin-injector:fabric-rendering-v1.mixins.json:net.fabricmc.fabric.mixin.client.rendering.shader.ShaderProgramMixin#modifyId(Ljava/lang/String;Lcom/llamalad7/mixinextras/injector/wrapoperation/Operation;)Lnet/minecraft/resources/ResourceLocation;@net.minecraft.client.renderer.ShaderInstance
+  Fabric Rendering (v1)  (fabric-rendering-v1)
+    Mixin net.fabricmc.fabric.mixin.client.rendering.shader.ShaderProgramMixin — 4/6 anchors resolve, missing: @At(INVOKE) net.minecraft.resources.ResourceLocation.withDefaultNamespace in ShaderInstance.<init>, @At(INVOKE) net.minecraft.resources.ResourceLocation.withDefaultNamespace in ShaderInstance.getOrCreate
+    mixin:fabric-rendering-v1.mixins.json:net.fabricmc.fabric.mixin.client.rendering.shader.ShaderProgramMixin
+  Fabric Screen API (v1)  (fabric-screen-api-v1)
+    Mixin injection onRenderScreen — A required MixinExtras injector has no attachment in the actual defined class; no audited replacement says whether its feature is lost
+    mixin-injector:fabric-screen-api-v1.mixins.json:net.fabricmc.fabric.mixin.screen.GameRendererMixin#onRenderScreen(Lnet/minecraft/client/gui/screens/Screen;Lnet/minecraft/client/gui/GuiGraphics;IIFLcom/llamalad7/mixinextras/injector/wrapoperation/Operation;)V@net.minecraft.client.renderer.GameRenderer
+  Fabric Screen API (v1)  (fabric-screen-api-v1)
+    Mixin net.fabricmc.fabric.mixin.screen.GameRendererMixin — 1/2 anchors resolve, missing: @At(INVOKE) net.minecraft.client.gui.screens.Screen.renderWithTooltip in GameRenderer.render
+    mixin:fabric-screen-api-v1.mixins.json:net.fabricmc.fabric.mixin.screen.GameRendererMixin
+  Flywheel  (flywheel)
+    Mod dependency integration — Entrypoint member closure remains unproved: dev/engine_room/flywheel/impl/NeoForgeFlwConfig#registerSpecs(Lnet/neoforged/fml/ModContainer;)V: local helper dispatch may select another body
+    arbitration:entry-closure:dev/engine_room/flywheel/impl/NeoForgeFlwConfig#registerSpecs(Lnet/neoforged/fml/ModContainer;)V:local helper dispatch may select another body:true
+  forbric
+    Mod dependency combination — Some required candidate contracts could not be verified; this selection remains unproved
+    arbitration:selection
+  forbric
+    Portal creation — The portal caller contains both native hooks, but their order, cancellation barriers and consumed result are not proved; the caller and legacy bridge remain unchanged and duplicate delivery has not been ruled out.
+    portal-direct-composition
+  Lithium  (lithium)
+    Mixin net.caffeinemc.mods.lithium.mixin.world.raycast.BlockGetterMixin — 4/6 anchors resolve, missing: @Shadow method BlockGetter.method_17743(Lnet/minecraft/world/level/ClipContext;Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/phys/BlockHitResult;, @Shadow method BlockGetter.method_17746(Lnet/minecraft/world/level/ClipContext;)Lnet/minecraft/world/phys/BlockHitResult;
+    mixin:lithium.mixins.json:net.caffeinemc.mods.lithium.mixin.world.raycast.BlockGetterMixin
+  ModernFix  (modernfix)
+    Mixin org.embeddedt.modernfix.common.mixin.bugfix.world_screen_skipped.WorldSelectionListMixin — 2/3 anchors resolve, missing: @At(INVOKE) WorldSelectionList$WorldListEntry.doDeleteWorld in <init>
+    mixin:modernfix-modernfix.mixins.json:org.embeddedt.modernfix.common.mixin.bugfix.world_screen_skipped.WorldSelectionListMixin
+
+怎么办
+------
+先在 logs/latest.log 里搜上面的 mod 名字，那里有具体的报错。
+常见原因是这个 mod 是给别的 Minecraft 版本做的，或者它需要的另一个 mod 没装。
+把它从 mods 文件夹里拿出来，游戏的其余部分照常能玩。
+
+说明
+----
+Forbric 不会因为一个 mod 出问题就停下来，它会把能装的都装上。所以上面这些 mod
+其实还有一部分留在游戏里（它们的类已经加载了），只是没有走完自己的初始化。
+这份报告记录加载结果，是否继续由兼容性选择决定。

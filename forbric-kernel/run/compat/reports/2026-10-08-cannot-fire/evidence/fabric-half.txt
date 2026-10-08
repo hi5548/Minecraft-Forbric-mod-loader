@@ -1,0 +1,78 @@
+# Why the fall-through cannot be switched on alone: fabric-networking-api-v1's SUPER mixin (the second defect)
+# source jar: /private/tmp/rel037/corpus14/mods/fabric-api-0.116.17+1.21.1.jar
+#   module:   META-INF/jars/fabric-networking-api-v1-0.116.17.jar
+#   class:    net/fabricmc/fabric/mixin/networking/ServerCommonNetworkHandlerMixin.class
+
+  private void handleCustomPayloadReceivedAsync(net.minecraft.class_2817, org.spongepowered.asm.mixin.injection.callback.CallbackInfo);
+    Code:
+       0: aload_1
+       1: invokevirtual #34                 // Method net/minecraft/class_2817.comp_1647:()Lnet/minecraft/class_8710;
+       4: astore_3
+       5: aload_0
+       6: invokevirtual #38                 // Method getAddon:()Lnet/fabricmc/fabric/impl/networking/AbstractNetworkAddon;
+       9: astore        6
+      11: aload         6
+      13: instanceof    #40                 // class net/fabricmc/fabric/impl/networking/server/ServerConfigurationNetworkAddon
+      16: ifeq          37
+      19: aload         6
+      21: checkcast     #40                 // class net/fabricmc/fabric/impl/networking/server/ServerConfigurationNetworkAddon
+      24: astore        5
+      26: aload         5
+      28: aload_3
+      29: invokevirtual #44                 // Method net/fabricmc/fabric/impl/networking/server/ServerConfigurationNetworkAddon.handle:(Lnet/minecraft/class_8710;)Z
+      32: istore        4
+      34: goto          47
+      37: new           #48                 // class java/lang/IllegalStateException
+      40: dup
+      41: ldc           #50                 // String Unknown addon
+      43: invokespecial #53                 // Method java/lang/IllegalStateException."<init>":(Ljava/lang/String;)V
+      46: athrow
+      47: iload         4
+      49: ifeq          56
+      52: aload_2
+      53: invokevirtual #58                 // Method org/spongepowered/asm/mixin/injection/callback/CallbackInfo.cancel:()V
+      56: return
+
+
+########## the class's @Mixin target + injection (javap -v, excerpt) ##########
+  #84 = Utf8               RuntimeVisibleAnnotations
+  #85 = Utf8               MethodParameters
+  #86 = Utf8               SourceFile
+  #87 = Utf8               RuntimeInvisibleAnnotations
+{
+  public net.fabricmc.fabric.mixin.networking.ServerCommonNetworkHandlerMixin();
+    RuntimeVisibleAnnotations:
+      0: #21(#22=[s#23],#24=[@#25(#9=s#26)],#27=Z#28)
+        org.spongepowered.asm.mixin.injection.Inject(
+          method=["onCustomPayload"]
+          at=[@org.spongepowered.asm.mixin.injection.At(
+            value="HEAD"
+          )]
+          cancellable=true
+        )
+    MethodParameters:
+      Name                           Flags
+      packet
+      ci
+
+  private void onPlayPong(net.minecraft.class_6374, org.spongepowered.asm.mixin.injection.callback.CallbackInfo);
+    RuntimeVisibleAnnotations:
+      0: #21(#22=[s#69],#24=[@#25(#9=s#26)])
+        org.spongepowered.asm.mixin.injection.Inject(
+          method=["onPong"]
+          at=[@org.spongepowered.asm.mixin.injection.At(
+            value="HEAD"
+          )]
+        )
+    MethodParameters:
+
+########## and the PLAY listener's own fabric mixin, which the fall-through bypasses ##########
+Compiled from "ServerPlayNetworkHandlerMixin.java"
+abstract class net.fabricmc.fabric.mixin.networking.ServerPlayNetworkHandlerMixin extends net.minecraft.class_8609 implements net.fabricmc.fabric.impl.networking.NetworkHandlerExtensions {
+  private net.fabricmc.fabric.impl.networking.server.ServerPlayNetworkAddon addon;
+  net.fabricmc.fabric.mixin.networking.ServerPlayNetworkHandlerMixin(net.minecraft.server.MinecraftServer, net.minecraft.class_2535, net.minecraft.class_8792);
+  private void initAddon(org.spongepowered.asm.mixin.injection.callback.CallbackInfo);
+  private void handleCustomPayloadReceivedAsync(net.minecraft.class_2817, org.spongepowered.asm.mixin.injection.callback.CallbackInfo);
+  public net.fabricmc.fabric.impl.networking.server.ServerPlayNetworkAddon getAddon();
+  public net.fabricmc.fabric.impl.networking.AbstractNetworkAddon getAddon();
+}

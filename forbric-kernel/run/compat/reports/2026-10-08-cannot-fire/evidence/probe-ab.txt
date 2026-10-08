@@ -1,0 +1,40 @@
+# the mod's own DevAutoTest hook driven on the user's 14 jars (instrument OUTSIDE the artifact)
+# kernel pinned: 48df3d2b90dfec3926fbfcee92dc6bd8a441760f27560fd7d168169d81e2fa97 (release-kernel.jar)
+# probe jar: /private/tmp/cannotfire/probe/cannotfire-probe.jar (one class, dev.aek.shootingstardemo.mc1211.devtest.DevAutoTest)
+# added to the harness's --libraryPath; probe source + sha below
+
+=========== ARM 1 — -Dforbric.playPayloadFallThrough=off (the default) ===========
+1041:[09:58:52] [Render thread/INFO]: [STDOUT]: [CANNOTFIRE/PROBE] DevAutoTest.register() called — probe is live
+1667:[09:59:02] [Server thread/INFO]: [STDOUT]: [CANNOTFIRE/PROBE] gave the Stellar Remote to 00000000-0000-0000-0000-000000000000 (server side, hotbar slot 0)
+1668:[09:59:02] [Render thread/INFO]: [STDOUT]: [CANNOTFIRE/PROBE] tick 80: not holding the remote yet
+1670:[09:59:02] [Render thread/INFO]: [STDOUT]: [CANNOTFIRE/PROBE] tick 87: called ShootingStarDemoClient.onUse — the cast the click makes (selected skill 'SS-01 · Railgun', ClientSkills.remaining before = 0)
+1679:[09:59:03] [Render thread/INFO]: [STDOUT]: [CANNOTFIRE/PROBE] tick+12: ClientSkills.remaining(SS-01 · Railgun)=0
+1689:[09:59:10] [Render thread/INFO]: [STDOUT]: [CANNOTFIRE/PROBE] RESULT=CAST_DROPPED — 150 ticks after onUse, no CooldownPayload ever arrived
+
+140:[09:58:43] [main/INFO]: [Forbric/Mixin] guest accessor mixin fabric-data-attachment-api-v1 (fabric-data-attachment-api-v1.mixins.json):CustomPayloadS2CPacketAccessor cannot bind — @Accessor field ServerboundCustomPayloadPacket.MAX_PAYLOAD_SIZE:I:I (kept; the merge re-typed or removed the member, so the generated accessor will throw when called)
+237:[09:58:43] [main/INFO]: [Forbric/Mixin] guest mixin fabric-networking-api-v1 (fabric-networking-api-v1.mixins.json):CustomPayloadC2SPacketMixin applies only partially on the merged base — 1/2 anchors resolve, missing: @At(INVOKE) net.minecraft.network.protocol.common.custom.CustomPacketPayload.codec in ServerboundCustomPayloadPacket.<clinit> (kept; -Dforbric.mixinFit=strict drops these)
+
+=========== ARM 2 — -Dforbric.playPayloadFallThrough=on ===========
+1043:[10:00:07] [Render thread/INFO]: [STDOUT]: [CANNOTFIRE/PROBE] DevAutoTest.register() called — probe is live
+1669:[10:00:17] [Server thread/INFO]: [STDOUT]: [CANNOTFIRE/PROBE] gave the Stellar Remote to 00000000-0000-0000-0000-000000000000 (server side, hotbar slot 0)
+1672:[10:00:17] [Render thread/INFO]: [STDOUT]: [CANNOTFIRE/PROBE] tick 79: called ShootingStarDemoClient.onUse — the cast the click makes (selected skill 'SS-01 · Railgun', ClientSkills.remaining before = 0)
+
+243:[09:59:59] [main/INFO]: [Forbric/Net] net.minecraft.server.network.ServerGamePacketListenerImpl.handleCustomPayload now falls through to NeoForge's dispatcher when MinecraftForge does not take the payload — it is Forge's override and never called super, so a NeoForge mod's play-phase packet to the server reached nobody
+957:[10:00:06] [Render thread/INFO]: [Forbric/Net] net.minecraft.server.network.ServerGamePacketListenerImpl.handleCustomPayload now falls through to NeoForge's dispatcher when MinecraftForge does not take the payload — it is Forge's override and never called super, so a NeoForge mod's play-phase packet to the server reached nobody
+
+--- the kick, verbatim (console.log /private/tmp/cannotfire/gate1-on/per-mod/run/000-shooting_star_demo__neoforge) ---
+[10:00:17] [Netty Server IO #1/ERROR]: Exception caught in connection
+java.lang.IllegalStateException: Unknown addon
+	at forbric/net.minecraft.server.network.ServerCommonPacketListenerImpl.handler$zhd000$fabric-networking-api-v1$handleCustomPayloadReceivedAsync(ServerCommonPacketListenerImpl.java:544) ~[patched-mc-merged-1.21.1.jar:?]
+	at forbric/net.minecraft.server.network.ServerCommonPacketListenerImpl.handleCustomPayload(ServerCommonPacketListenerImpl.java) ~[patched-mc-merged-1.21.1.jar:?]
+	at forbric/net.minecraft.server.network.ServerGamePacketListenerImpl.handleCustomPayload(ServerGamePacketListenerImpl.java:1817) ~[patched-mc-merged-1.21.1.jar:?]
+	at forbric/net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket.handle(ServerboundCustomPayloadPacket.java:40) ~[patched-mc-merged-1.21.1.jar:?]
+	at forbric/net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket.handle(ServerboundCustomPayloadPacket.java:15) ~[patched-mc-merged-1.21.1.jar:?]
+	at forbric/net.minecraft.network.Connection.genericsFtw(Connection.java:207) ~[patched-mc-merged-1.21.1.jar:?]
+	at forbric/net.minecraft.network.Connection.channelRead0(Connection.java:190) ~[patched-mc-merged-1.21.1.jar:?]
+	at forbric/net.minecraft.network.Connection.channelRead0(Connection.java:70) ~[patched-mc-merged-1.21.1.jar:?]
+[10:00:17] [Server thread/INFO]: ForbricKernel lost connection: Internal Exception: java.lang.IllegalStateException: Unknown addon
+[10:00:17] [Server thread/INFO]: ForbricKernel left the game
+
+1713:[10:00:17] [Server thread/INFO]: ForbricKernel lost connection: Internal Exception: java.lang.IllegalStateException: Unknown addon
+1754:[10:00:18] [Render thread/WARN]: Client disconnected with reason: Internal Exception: java.lang.IllegalStateException: Unknown addon

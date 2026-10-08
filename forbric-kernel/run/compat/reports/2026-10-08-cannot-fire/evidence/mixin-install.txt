@@ -1,0 +1,209 @@
+# arm V: the demo's 12 mc1211 client mixins ARE installed on the merged base (so the input path is intact)
+# instrument: -Dmixin.debug.verbose=true -Dmixin.debug.export=true
+
+## Mixin's own 'Mixing' lines for shooting_star_demo.mc1211.mixins.json (console.log, verbatim)
+Mixing CameraMixin from shooting_star_demo.mc1211.mixins.json into net.minecraft.client.Camera
+Mixing FontTextureMixin from shooting_star_demo.mc1211.mixins.json into net.minecraft.client.renderer.texture.TextureManager
+Mixing GameRendererMixin from shooting_star_demo.mc1211.mixins.json into net.minecraft.client.renderer.GameRenderer
+Mixing GlyphFilterMixin from shooting_star_demo.mc1211.mixins.json into net.minecraft.client.renderer.texture.AbstractTexture
+Mixing GuiMixin from shooting_star_demo.mc1211.mixins.json into net.minecraft.client.gui.Gui
+Mixing KeyboardHandlerMixin from shooting_star_demo.mc1211.mixins.json into net.minecraft.client.KeyboardHandler
+Mixing KeyboardInputMixin from shooting_star_demo.mc1211.mixins.json into net.minecraft.client.player.KeyboardInput
+Mixing LevelRendererMixin from shooting_star_demo.mc1211.mixins.json into net.minecraft.client.renderer.LevelRenderer
+Mixing MouseHandlerMixin from shooting_star_demo.mc1211.mixins.json into net.minecraft.client.MouseHandler
+Mixing MouseTurnMixin from shooting_star_demo.mc1211.mixins.json into net.minecraft.client.MouseHandler
+Mixing PlayerModelPoseMixin from shooting_star_demo.mc1211.mixins.json into net.minecraft.client.model.PlayerModel
+Mixing SoundEngineMixin from shooting_star_demo.mc1211.mixins.json into net.minecraft.client.sounds.SoundEngine
+
+## 'Preparing' + 'Selecting' (console.log, verbatim)
+487:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-api-lookup-api-v1.mixins.json
+488:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-biome-api-v1.mixins.json
+489:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-block-api-v1.mixins.json
+490:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-blockrenderlayer-v1.mixins.json
+491:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-command-api-v2.mixins.json
+492:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-command-api-v2.client.mixins.json
+493:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-content-registries-v0.mixins.json
+494:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-convention-tags-api-v2.mixins.json
+495:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-crash-report-info-v1.mixins.json
+496:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-data-attachment-api-v1.mixins.json
+497:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-data-attachment-api-v1.client.mixins.json
+498:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-data-generation-api-v1.mixins.json
+499:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-data-generation-api-v1.client.mixins.json
+500:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-dimensions-v1.mixins.json
+501:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-entity-events-v1.mixins.json
+502:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-entity-events-v1.client.mixins.json
+503:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-events-interaction-v0.mixins.json
+504:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-events-interaction-v0.client.mixins.json
+505:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-game-rule-api-v1.mixins.json
+506:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-game-rule-api-v1.client.mixins.json
+507:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-item-api-v1.mixins.json
+508:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-item-api-v1.client.mixins.json
+509:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-item-group-api-v1.mixins.json
+510:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-item-group-api-v1.client.mixins.json
+511:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-key-binding-api-v1.mixins.json
+512:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-lifecycle-events-v1.mixins.json
+513:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-lifecycle-events-v1.client.mixins.json
+514:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-loot-api-v2.mixins.json
+515:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-loot-api-v3.mixins.json
+516:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-message-api-v1.mixins.json
+517:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-message-api-v1.client.mixins.json
+518:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-model-loading-api-v1.mixins.json
+519:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-networking-api-v1.mixins.json
+520:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-networking-api-v1.client.mixins.json
+521:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-object-builder-v1.mixins.json
+522:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-object-builder-v1.client.mixins.json
+523:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-particles-v1.client.mixins.json
+524:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-recipe-api-v1.mixins.json
+525:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-registry-sync-v0.mixins.json
+526:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-registry-sync-v0.client.mixins.json
+527:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-renderer-indigo.mixins.json
+528:[09:43:40] [main/INFO]: [Forbric/Mixin] guarded 7 method(s) of guest mixin config plugin net.fabricmc.fabric.impl.client.indigo.IndigoMixinConfigPlugin — a plugin that throws would otherwise abort config preparation for every mod
+529:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-rendering-fluids-v1.mixins.json
+530:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-rendering-v1.mixins.json
+531:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-resource-conditions-api-v1.mixins.json
+532:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-resource-loader-v0.mixins.json
+533:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-resource-loader-v0.client.mixins.json
+534:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-screen-api-v1.mixins.json
+535:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-screen-handler-api-v1.mixins.json
+536:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-sound-api-v1.mixins.json
+537:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-tag-api-v1.mixins.json
+538:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-transfer-api-v1.mixins.json
+539:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config mixins.modmenu.json
+540:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config immediatelyfast-common.mixins.json
+541:[09:43:40] [main/INFO]: [Forbric/Mixin] guarded 7 method(s) of guest mixin config plugin net.raphimc.immediatelyfast.injection.ImmediatelyFastMixinPlugin — a plugin that throws would otherwise abort config preparation for every mod
+543:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config immediatelyfast-neoforge.mixins.json
+544:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config entityculling.mixins.json
+546:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config ferritecore.predicates.mixin.json
+547:[09:43:40] [main/INFO]: [Forbric/Mixin] guarded 7 method(s) of guest mixin config plugin malte0811.ferritecore.mixin.config.FerriteMixinConfig — a plugin that throws would otherwise abort config preparation for every mod
+549:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config ferritecore.fastmap.mixin.json
+551:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config ferritecore.mrl.mixin.json
+553:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config ferritecore.dedupmultipart.mixin.json
+555:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config ferritecore.blockstatecache.mixin.json
+557:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config ferritecore.dedupbakedquad.mixin.json
+559:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config ferritecore.threaddetec.mixin.json
+561:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config ferritecore.modelsides.mixin.json
+563:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config ferritecore.datacomponents.mixin.json
+565:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config ferritecore.accessors.mixin.json
+567:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config lithium.mixins.json
+568:[09:43:40] [main/INFO]: [Forbric/Mixin] guarded 7 method(s) of guest mixin config plugin net.caffeinemc.mods.lithium.mixin.LithiumMixinPlugin — a plugin that throws would otherwise abort config preparation for every mod
+574:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config lithium-neoforge.mixins.json
+575:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config modernfix-modernfix.mixins.json
+576:[09:43:40] [main/INFO]: [Forbric/Mixin] guarded 7 method(s) of guest mixin config plugin org.embeddedt.modernfix.core.ModernFixMixinPlugin — a plugin that throws would otherwise abort config preparation for every mod
+612:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config shooting_star_addition.mixins.json
+613:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config shooting_star_demo.mc1211.mixins.json
+614:[09:43:40] [main/INFO]: [Forbric/Mixin] guarded 7 method(s) of guest mixin config plugin dev.aek.shootingstardemo.mc1211.client.MixinGate — a plugin that throws would otherwise abort config preparation for every mod
+615:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config transition.mixins.json
+616:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config trender.mixins.json
+617:[09:43:40] [main/INFO]: [Forbric/Mixin] guarded 7 method(s) of guest mixin config plugin dev.tr7zw.trender.gui.impl.LibGuiMixinPlugin — a plugin that throws would otherwise abort config preparation for every mod
+618:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-block-view-api-v2.mixins.json
+619:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-block-view-api-v2.client.mixins.json
+620:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-renderer-api-v1.mixins.json
+621:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-renderer-api-v1.debughud.mixins.json
+622:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-rendering-data-attachment-v1.mixins.json
+623:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config fabric-rendering-data-attachment-v1.client.mixins.json
+624:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config sodium-common.mixins.json
+625:[09:43:40] [main/INFO]: [Forbric/Mixin] guarded 7 method(s) of guest mixin config plugin net.caffeinemc.mods.sodium.mixin.SodiumMixinPlugin — a plugin that throws would otherwise abort config preparation for every mod
+627:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config sodium-neoforge.mixins.json
+628:[09:43:40] [main/INFO]: [Mixin/mixin] Selecting config neoforge.mixins.json
+773:[09:43:41] [main/INFO]: [Mixin/mixin] Preparing shooting_star_addition.mixins.json (5)
+774:[09:43:41] [main/INFO]: [Mixin/mixin] Preparing shooting_star_demo.mc1211.mixins.json (0)
+
+## the exported, mixin-applied net.minecraft.client.MouseHandler (javap -p)
+Compiled from "MouseHandler.java"
+public class net.minecraft.client.MouseHandler {
+  private static final org.slf4j.Logger LOGGER;
+  private final net.minecraft.client.Minecraft minecraft;
+  private boolean isLeftPressed;
+  private boolean isMiddlePressed;
+  private boolean isRightPressed;
+  private double xpos;
+  private double ypos;
+  private int fakeRightMouse;
+  private int activeButton;
+  private boolean ignoreFirstMove;
+  private int clickDepth;
+  private double mousePressedTime;
+  private final net.minecraft.util.SmoothDouble smoothTurnX;
+  private final net.minecraft.util.SmoothDouble smoothTurnY;
+  private double accumulatedDX;
+  private double accumulatedDY;
+  private double accumulatedScrollX;
+  private double accumulatedScrollY;
+  private double lastHandleMovementTime;
+  private boolean mouseGrabbed;
+  private net.minecraft.client.gui.screens.Screen currentScreen;
+  private double shootingStarDemo$pitch;
+  public net.minecraft.client.MouseHandler(net.minecraft.client.Minecraft);
+  private void onPress(long, int, int, int);
+  private void onScroll(long, double, double);
+  private void onDrop(long, java.util.List<java.nio.file.Path>, int);
+  public void setup(long);
+  private void onMove(long, double, double);
+  public void handleAccumulatedMovement();
+  private void turnPlayer(double);
+  public boolean isLeftPressed();
+  public boolean isMiddlePressed();
+  public boolean isRightPressed();
+  public double xpos();
+  public double ypos();
+  public double getXVelocity();
+  public double getYVelocity();
+  public void setIgnoreFirstMove();
+  public boolean isMouseGrabbed();
+  public void grabMouse();
+  public void releaseMouse();
+  public void cursorEntered();
+  private void lambda$handleAccumulatedMovement$11(net.minecraft.client.gui.screens.Screen, double, double, double, double);
+  private static void lambda$handleAccumulatedMovement$10(net.minecraft.client.gui.screens.Screen, double, double);
+  private void lambda$setup$9(long, int, long);
+  private void lambda$setup$8(long, java.util.List, int);
+  private void lambda$setup$7(long, double, double);
+  private void lambda$setup$6(long, double, double);
+  private void lambda$setup$5(long, int, int, int);
+  private void lambda$setup$4(long, int, int, int);
+  private void lambda$setup$3(long, double, double);
+  private void lambda$setup$2(long, double, double);
+  private static void lambda$onPress$1(boolean[], net.minecraft.client.gui.screens.Screen, double, double, int);
+  private static void lambda$onPress$0(boolean[], net.minecraft.client.gui.screens.Screen, double, double, int);
+  static {};
+  private static void handler$zln000$fabric-screen-api-v1$beforeMouseClickedEvent(boolean[], net.minecraft.client.gui.screens.Screen, double, double, int, org.spongepowered.asm.mixin.injection.callback.CallbackInfo);
+  private static void handler$zln000$fabric-screen-api-v1$afterMouseClickedEvent(boolean[], net.minecraft.client.gui.screens.Screen, double, double, int, org.spongepowered.asm.mixin.injection.callback.CallbackInfo);
+  private static void handler$zln000$fabric-screen-api-v1$beforeMouseReleasedEvent(boolean[], net.minecraft.client.gui.screens.Screen, double, double, int, org.spongepowered.asm.mixin.injection.callback.CallbackInfo);
+  private static void handler$zln000$fabric-screen-api-v1$afterMouseReleasedEvent(boolean[], net.minecraft.client.gui.screens.Screen, double, double, int, org.spongepowered.asm.mixin.injection.callback.CallbackInfo);
+  private void handler$zln000$fabric-screen-api-v1$beforeMouseScrollEvent(long, double, double, org.spongepowered.asm.mixin.injection.callback.CallbackInfo, boolean, double, double, double, double, double);
+  private void handler$zln000$fabric-screen-api-v1$afterMouseScrollEvent(long, double, double, org.spongepowered.asm.mixin.injection.callback.CallbackInfo, boolean, double, double, double, double, double);
+  private void handler$boe000$shooting_star_demo$shootingStarDemo$whiteSpaceClick(long, int, int, int, org.spongepowered.asm.mixin.injection.callback.CallbackInfo);
+  private void handler$boe000$shooting_star_demo$shootingStarDemo$whiteSpaceScroll(long, double, double, org.spongepowered.asm.mixin.injection.callback.CallbackInfo);
+  private double modify$bof000$shooting_star_demo$shootingStarDemo$whiteSpaceYaw(double, double);
+  private double modify$bof000$shooting_star_demo$shootingStarDemo$whiteSpacePitch(double, double);
+}
+
+sha256 of the exported class:
+2c9f86ecc6d06276f80ca60859bfee545eeeaa6773accc9b6a96563615513e18  /private/tmp/cannotfire/gate1/per-mod/run/000-shooting_star_demo__neoforge/.mixin.out/class/net/minecraft/client/MouseHandler.class
+
+## the demo jar's own mixin gate (why the list is the plugin's, not the JSON's)
+shooting_star_demo.mc1211.mixins.json (from the jar):
+{"required":true,"minVersion":"0.8","package":"dev.aek.shootingstardemo.mc1211.client.mixin","plugin":"dev.aek.shootingstardemo.mc1211.client.MixinGate","compatibilityLevel":"JAVA_17","injectors":{"defaultRequire":1}}
+MixinGate.getMixins() (javap -c, excerpt: side==CLIENT && mcVersion=='1.21.1' -> 12 names, else List.of())
+  public java.util.List<java.lang.String> getMixins();
+    Code:
+       0: invokestatic  #32                 // Method org/spongepowered/asm/mixin/MixinEnvironment.getCurrentEnvironment:()Lorg/spongepowered/asm/mixin/MixinEnvironment;
+       3: invokevirtual #36                 // Method org/spongepowered/asm/mixin/MixinEnvironment.getSide:()Lorg/spongepowered/asm/mixin/MixinEnvironment$Side;
+       6: getstatic     #40                 // Field org/spongepowered/asm/mixin/MixinEnvironment$Side.CLIENT:Lorg/spongepowered/asm/mixin/MixinEnvironment$Side;
+       9: if_acmpne     16
+      12: iconst_1
+      13: goto          17
+      16: iconst_0
+      17: istore_1
+      18: iload_1
+      19: ifeq          39
+      22: ldc           #16                 // String 1.21.1
+      24: invokestatic  #44                 // Method running:()Ljava/lang/String;
+      27: invokevirtual #50                 // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+      30: ifeq          39
+      33: getstatic     #52                 // Field MIXINS:Ljava/util/List;
+      36: goto          42
+      39: invokestatic  #57                 // InterfaceMethod java/util/List.of:()Ljava/util/List;
+      42: areturn
+
+  private static java.lang.String running();

@@ -1,0 +1,65 @@
+# the AbiAudit row is about the jar's DEAD half (mc1201, the Forge-1.20.1 build), not the live mc1211 one
+
+## which classes of the jar name net.minecraftforge.client.event.RenderGuiEvent*
+   dev/aek/shootingstardemo/mc1201/client/ShootingStarDemoClient.class
+
+## the jar's two entrypoints / two mixin configs
+[[mixins]]
+config = "shooting_star_demo.mc1211.mixins.json"
+
+[[dependencies.shooting_star_demo]]
+modId = "neoforge"
+  --- MANIFEST.MF:
+Manifest-Version: 1.0
+MixinConfigs: shooting_star_demo.mc1201.mixins.json
+
+
+## the loader's arbitration (console.log arm V, verbatim)
+11:[09:43:26] [main/INFO]: [Forbric/MultiLoader] the-shooting-star-demo-1.3.1-neoforge.jar declares 2 loaders — loading it as NEOFORGE only, suppressing [FORGE] (a universal jar would otherwise initialise once per live ecosystem)
+  (and the constructed entrypoint:)
+1951:[09:43:47] [Render thread/INFO]: [Forbric/ModLoader] constructed @Mod shooting_star_demo (NeoForge, dev.aek.shootingstardemo.mc1211.ShootingStarDemo) -> dev.aek.shootingstardemo.mc1211.ShootingStarDemo@161196c0
+
+## the LIVE mc1211 client entrypoint's own event registrations (javap -p)
+Compiled from "ShootingStarDemoClient.java"
+public final class dev.aek.shootingstardemo.mc1211.client.ShootingStarDemoClient {
+  public dev.aek.shootingstardemo.mc1211.client.ShootingStarDemoClient();
+  public static void init(net.neoforged.bus.api.IEventBus);
+  private static void tick(net.minecraft.client.Minecraft);
+  private static void openMenu(net.minecraft.client.Minecraft, net.minecraft.world.entity.player.Player);
+  private static void onUse(net.minecraft.world.entity.player.Player, dev.aek.shootingstardemo.mc1211.magic.MagicItem);
+  private static void lambda$init$7(net.neoforged.neoforge.event.entity.player.PlayerInteractEvent$EntityInteract);
+  private static java.lang.String lambda$init$6();
+  private static void lambda$init$5(net.neoforged.neoforge.client.event.ScreenEvent$Init$Post);
+  private static void lambda$init$4(net.neoforged.neoforge.client.event.ClientTickEvent$Post);
+  private static void lambda$init$3(net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent$LoggingOut);
+  private static void lambda$init$2(net.neoforged.neoforge.client.event.RegisterShadersEvent);
+  private static void lambda$init$1(net.minecraft.client.renderer.ShaderInstance);
+  private static void lambda$init$0(net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent);
+}
+
+## the LIVE payload registration (javap -c, mc1211/net/Network.register)
+  public static void register(net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent);
+    Code:
+       0: aload_0
+       1: ldc           #19                 // String 1
+       3: invokevirtual #39                 // Method net/neoforged/neoforge/network/event/RegisterPayloadHandlersEvent.registrar:(Ljava/lang/String;)Lnet/neoforged/neoforge/network/registration/PayloadRegistrar;
+       6: astore_1
+       7: aload_1
+       8: getstatic     #45                 // Field dev/aek/shootingstardemo/mc1211/net/CastSkillPayload.TYPE:Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload$Type;
+      11: getstatic     #49                 // Field dev/aek/shootingstardemo/mc1211/net/CastSkillPayload.CODEC:Lnet/minecraft/network/codec/StreamCodec;
+      14: invokedynamic #68,  0             // InvokeDynamic #0:handle:()Lnet/neoforged/neoforge/network/handling/IPayloadHandler;
+      19: invokevirtual #74                 // Method net/neoforged/neoforge/network/registration/PayloadRegistrar.playToServer:(Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload$Type;Lnet/minecraft/network/codec/StreamCodec;Lnet/neoforged/neoforge/network/handling/IPayloadHandler;)Lnet/neoforged/neoforge/network/registration/PayloadRegistrar;
+      22: pop
+      23: aload_1
+      24: getstatic     #77                 // Field dev/aek/shootingstardemo/mc1211/net/SpellFxPayload.TYPE:Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload$Type;
+      27: getstatic     #78                 // Field dev/aek/shootingstardemo/mc1211/net/SpellFxPayload.CODEC:Lnet/minecraft/network/codec/StreamCodec;
+      30: invokedynamic #85,  0             // InvokeDynamic #1:handle:()Lnet/neoforged/neoforge/network/handling/IPayloadHandler;
+      35: invokevirtual #88                 // Method net/neoforged/neoforge/network/registration/PayloadRegistrar.playToClient:(Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload$Type;Lnet/minecraft/network/codec/StreamCodec;Lnet/neoforged/neoforge/network/handling/IPayloadHandler;)Lnet/neoforged/neoforge/network/registration/PayloadRegistrar;
+      38: pop
+      39: aload_1
+      40: getstatic     #91                 // Field dev/aek/shootingstardemo/mc1211/net/CooldownPayload.TYPE:Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload$Type;
+      43: getstatic     #92                 // Field dev/aek/shootingstardemo/mc1211/net/CooldownPayload.CODEC:Lnet/minecraft/network/codec/StreamCodec;
+      46: invokedynamic #99,  0             // InvokeDynamic #2:handle:()Lnet/neoforged/neoforge/network/handling/IPayloadHandler;
+      51: invokevirtual #88                 // Method net/neoforged/neoforge/network/registration/PayloadRegistrar.playToClient:(Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload$Type;Lnet/minecraft/network/codec/StreamCodec;Lnet/neoforged/neoforge/network/handling/IPayloadHandler;)Lnet/neoforged/neoforge/network/registration/PayloadRegistrar;
+      54: pop
+      55: return

@@ -1,0 +1,72 @@
+# Unit-test reading — `net.forbric.kernel.boot.DatapackRegistryDeclarationTest`
+
+Run on this box, JDK 21.0.7, offline:
+
+```
+./gradlew --offline test --tests 'net.forbric.kernel.boot.DatapackRegistryDeclarationTest'
+```
+
+`-Pforbric.stagedRoot` was not passed, so `compileRuntimeJava` is SKIPPED (staged game jars absent, and
+`energy-4.1.0-named.jar` with them) — that is the same machine limit every lane on this box has hit, and it does not
+touch this class: `DatapackRegistryDeclaration` and `KernelLifecycle` are boot-side, and the test reads their
+bytecode from `build/classes/java/main`.
+
+## After the fix (this tree)
+
+```
+test: 22 tests, 1 skipped, 0 failed
+```
+
+```
+PASS aClientWhoseFabricMainsRunInTheConstructorWaitsForThem() 0.0s
+PASS theDedicatedServerKeepsItsOrder() 0.001s
+PASS nothingWaitsWhenThereIsNothingToWaitFor() 0.0s
+PASS theSwitchDeclaresFromMainAgain() 0.001s
+PASS theEarlyWindowAsksBeforeDeclaring() 0.002s
+PASS theConstructorHookDeclaresAfterTheWindowCloses() 0.002s
+PASS clientSetupCannotRunAheadOfTheDeclaration() 0.013s
+PASS theDeclarationRunsOncePerProcess() 0.002s
+PASS anEarlyClientCannotDeclareBeforeTheBaselineExists() 0.003s
+SKIPPED theReconcilesReflectiveTargetsExistWithTheseShapes()  (assumeTrue — needs the staged game jars)
+PASS initialisingTheLoaderFirstLosesWhatItsTailInjectorAdds() 0.001s
+PASS initialisingTheHooksFirstSeesIt() 0.0s
+PASS theReconcilePutsItBackWhicheverRanFirst() 0.0s
+PASS theReconcileIsANoOpWhenTheOrderWasRight() 0.0s
+PASS theReconcileSwitchLeavesNeoForgesListAsCopied() 0.0s
+PASS anEntryReplacedInPlaceIsNamedNotDeclaredTwice() 0.0s
+PASS theOldOrderPoisonsTheLoaderAndTheNewOneDoesNot() 0.002s
+PASS theInjectorsModIsReadWhateverMixinsCountersSay() 0.01s
+PASS aNestedClassOfTheLoaderIsNotTheLoader() 0.001s
+PASS aPoisonedLoaderIsAFindingThatSaysWhatItCosts() 0.001s
+PASS aLaterTouchOfThePoisonedHooksIsRecognisedToo() 0.001s
+PASS anOrdinaryDeclarationFailureIsNotCalledAPoisonedLoader() 0.0s
+```
+
+The one skip is pre-existing and unrelated (`theReconcilesReflectiveTargetsExistWithTheseShapes` needs the staged
+`RegistryDataLoader`/`DataPackRegistriesHooks` classes; the same reason `2026-10-06-particle-accessor` recorded).
+
+## The new assertion fails without the guard (the "does it defend anything" check)
+
+The one assertion this lane adds is `anEarlyClientCannotDeclareBeforeTheBaselineExists`: the bus check must precede
+the one-shot. Reverting **only** the `if (baselineBus == null) { … return; }` block (leaving the rest of the lane's
+edits in place, so the file still compiles) and re-running the class:
+
+```
+> Task :test FAILED
+DatapackRegistryDeclarationTest > anEarlyClientCannotDeclareBeforeTheBaselineExists() FAILED
+test: 22 tests, 1 skipped, 1 failed
+```
+
+```
+<failure message="org.opentest4j.AssertionFailedError: and check it BEFORE the once-guard, or the one shot is spent on a
+post to nobody ==&gt; expected: &lt;true&gt; but was: &lt;false&gt;" type="org.opentest4j.AssertionFailedError">
+```
+
+The guard was restored and the class re-run (`22 tests, 1 skipped, 0 failed`), which is the reading above. So the
+assertion is not a tautology: it discriminates exactly the shape the fix removes.
+
+## What the unit tests do NOT cover
+
+They are bytecode-shape assertions plus the two pure predicates; the *behaviour* — the event reaching the baseline
+bus and `neoforge:biome_modifier` landing on the list — is the W7Harness reading in `gate-reading.txt`, because no
+game class exists on this machine's test path.

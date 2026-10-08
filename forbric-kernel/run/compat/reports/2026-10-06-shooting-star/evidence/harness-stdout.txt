@@ -1,0 +1,56 @@
+# Harness stdout, all arms, verbatim (the tool's own output; nothing edited)
+
+## `before-published` — the kernel the user ran, `forbric-kernel-0.3.6-beta.jar` (sha 16bcd602…)
+
+```
+[client-sweep] pinned forbric-kernel-0.3.6-beta.jar -> /private/tmp/shooting-lane/before-out/frozen/forbric-kernel-client.jar
+[client-sweep] frozen kernel sha256=16bcd60242c54890fda728e294ad41935619ff4b499f359f539d6e44dae45b74
+[client-sweep] 000 the-shooting-star-demo-1.3.1-neoforge.jar (+13 dep)
+[client-sweep]   114% CPU busy across 8 cores (load 4.8) — this row is timing-suspect (rule 3)
+[client-sweep] ----   PASS     world=True frames=1 mod=DEGRADED  278s cause=mod-degraded
+[client-sweep] rows: /private/tmp/shooting-lane/before-out/per-mod/results.jsonl
+```
+
+## `before` — a same-environment rebuild of this tree's HEAD sources (sha 389c889b…)
+
+```
+[client-sweep] frozen kernel sha256=389c889beddd2f0927f76ebece6a43f85eb7e554e8450ecbd6b253c5004ab4eb
+[client-sweep] 000 the-shooting-star-demo-1.3.1-neoforge.jar (+13 dep)
+[client-sweep]   404% CPU busy across 8 cores (load 18.3) — this row is timing-suspect (rule 3)
+[client-sweep] ----   PASS     world=True frames=1 mod=DEGRADED   34s cause=mod-degraded
+[client-sweep] rows: /private/tmp/shooting-lane/arm-before/per-mod/results.jsonl
+```
+
+## `after` — the same rebuild plus this lane's two edits (sha ec81fdcd…)
+
+```
+[client-sweep] frozen kernel sha256=ec81fdcdb87f928bb4db2f7956f46971bfd22ccdb078893e2b7a4c57d8d3f795
+[client-sweep] 000 the-shooting-star-demo-1.3.1-neoforge.jar (+13 dep)
+[client-sweep]   306% CPU busy across 8 cores (load 19.5) — this row is timing-suspect (rule 3)
+[client-sweep] ----   PASS     world=True frames=1 mod=DEGRADED   33s cause=mod-degraded
+[client-sweep] rows: /private/tmp/shooting-lane/arm-after/per-mod/results.jsonl
+```
+
+Every row carries the harness's own rule-3 machine-load caveat. No criterion here is a timing one: every claim is a
+line-presence claim read from `console.log`, and the arms are compared on those lines. The `278 s` of
+`before-published` is the cold remap; `before`/`after` reused the warm `/private/tmp/shooting-lane/remap` and came in
+at 34 s / 33 s — which is why the reported A/B pair is `before` vs `after`, not the published arm.
+
+## Superseded reading (recorded, not a criterion)
+
+An `after` reading was taken earlier on a jar assembled before zip entry timestamps were normalised
+(`/private/tmp/shooting-lane/after-out`, kernel sha `1543b40f…`). Its console markers are identical to `after`'s
+(19 buses / 2 declared, 0 `Missing registry`, 1 `applied NeoForge's 0 biome modifier(s)…`, `joined world` = 1);
+it is superseded on artifact reproducibility only, and no criterion changed. Its row:
+`PASS world=True frames=1 mod=DEGRADED 34s cause=mod-degraded`.
+
+## Two aborted same-env attempts (recorded, not results)
+
+`/private/tmp/shooting-lane/arm-before` and `arm-after` were first run at 11:09 and both came back
+`FAIL world=False 13s cause=verify`. The cause is foreign to this lane: the shared harness had just grown a
+`-javaagent` (`w7/harness/agent/hide-window-agent.jar`) that a sibling lane was actively fixing, and the jar that was
+on disk at that moment injected a bare `RETURN` at `org.lwjgl.glfw.GLFW.glfwShowWindow`'s entry without recomputing
+its stack map frames → `java.lang.VerifyError: Expecting a stack map frame … GLFW.glfwShowWindow(J)V @1: getstatic`.
+Both arms failed identically, so it names the agent, not the kernel. The two arms were then re-run with
+`W7_SHOW_WINDOW=1`, which makes the agent's transform a no-op (`HideWindowAgent.Transformer.transform` returns null
+when `forbric.hideWindow=false`), and those are the readings above.

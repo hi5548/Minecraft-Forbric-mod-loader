@@ -1,0 +1,61 @@
+# Console markers, three arms, verbatim (one subject: the-shooting-star-demo-1.3.1-neoforge.jar + its 13-mod closure)
+
+`before-published` = the kernel the user actually ran (`forbric-kernel-0.3.6-beta.jar`).
+`before` = a same-environment rebuild of this tree's HEAD sources (so it differs from `after` in exactly 3 boot-half entries).
+`after` = the same rebuild plus this lane's two edits.
+
+=== before-published  (/private/tmp/shooting-lane/before-out/per-mod/run/000-the-shooting-star-demo__neoforge/console.log) ===
+-- declaration posted: 1
+   1589: [11:04:27] [Render thread/INFO]: [Forbric/Lifecycle] posted datapack-registry declaration to 0 bus(es) — 0 declared ([]), 25 total
+-- declaration declined (no NeoForge bus yet): 0
+-- step 3a deferral: 1
+   1719: [11:04:29] [Render thread/INFO]: [Forbric/Lifecycle] datapack-registry declaration waits for the Fabric main and client entrypoints in Minecraft.<init> — its initialisers run Fabric mod code, which must not run before those mains (-Dforbric.datapackDeclarationAfterFabric=off to declare here)
+-- modifier pass FAILED / -1 -1: 1
+   2146: [11:04:34] [Server thread/WARN]: [Forbric/Worldgen] NeoForge's biome/structure modifiers did not apply — -1 biome and -1 structure modifier(s) were loaded and none of them changed the world. The server start is unaffected
+-- modifier pass applied: 0
+-- Missing registry (neoforge:biome_modifier): 1
+   2147: java.lang.IllegalStateException: Missing registry: ResourceKey[minecraft:root / neoforge:biome_modifier]
+-- declared list names neoforge:biome_modifier: 0
+-- declared list names neoforge:structure_modifier: 0
+-- joined world via quick-play: 1
+   2258: [11:04:37] [Render thread/INFO]: [Forbric/ClientSmoke] joined world via quick-play: W7Client
+-- clean disconnect observed: 1
+   2315: [11:04:48] [Render thread/INFO]: [Forbric/ClientSmoke] clean disconnect observed; stopping client
+
+=== before  (/private/tmp/shooting-lane/arm-before/per-mod/run/000-the-shooting-star-demo__neoforge/console.log) ===
+-- declaration posted: 1
+   1006: [11:10:58] [Render thread/INFO]: [Forbric/Lifecycle] posted datapack-registry declaration to 0 bus(es) — 0 declared ([]), 25 total
+-- declaration declined (no NeoForge bus yet): 0
+-- step 3a deferral: 1
+   1136: [11:11:00] [Render thread/INFO]: [Forbric/Lifecycle] datapack-registry declaration waits for the Fabric main and client entrypoints in Minecraft.<init> — its initialisers run Fabric mod code, which must not run before those mains (-Dforbric.datapackDeclarationAfterFabric=off to declare here)
+-- modifier pass FAILED / -1 -1: 1
+   1563: [11:11:06] [Server thread/WARN]: [Forbric/Worldgen] NeoForge's biome/structure modifiers did not apply — -1 biome and -1 structure modifier(s) were loaded and none of them changed the world. The server start is unaffected
+-- modifier pass applied: 0
+-- Missing registry (neoforge:biome_modifier): 1
+   1564: java.lang.IllegalStateException: Missing registry: ResourceKey[minecraft:root / neoforge:biome_modifier]
+-- declared list names neoforge:biome_modifier: 0
+-- declared list names neoforge:structure_modifier: 0
+-- joined world via quick-play: 1
+   1675: [11:11:08] [Render thread/INFO]: [Forbric/ClientSmoke] joined world via quick-play: W7Client
+-- clean disconnect observed: 1
+   1732: [11:11:20] [Render thread/INFO]: [Forbric/ClientSmoke] clean disconnect observed; stopping client
+
+=== after  (/private/tmp/shooting-lane/arm-after/per-mod/run/000-the-shooting-star-demo__neoforge/console.log) ===
+-- declaration posted: 1
+   1134: [11:11:34] [Render thread/INFO]: [Forbric/Lifecycle] posted datapack-registry declaration to 19 bus(es) — 2 declared ([RegistryData[key=ResourceKey[minecraft:root / neoforge:biome_modifier], elementCodec=KeyDispatchCodec[String[comapFlatMapped][comapFlatMapped][mapResult WithLifecycle[net.minecraft.core.Registry$$Lambda/0x00000078016852a0@115adba9 net.minecraft.core.Registry$$Lambda/0x00000078016852a0@115adba9]][flatComa
+-- declaration declined (no NeoForge bus yet): 1
+   1003: [11:11:32] [Render thread/INFO]: [Forbric/Lifecycle] datapack-registry declaration asked for before any NeoForge bus exists — the mod-loading window has not constructed the baseline yet, so the event would reach nobody and a declaration is not idempotent; left for the call after that window
+-- step 3a deferral: 0
+-- modifier pass FAILED / -1 -1: 0
+-- modifier pass applied: 1
+   1566: [11:11:39] [Server thread/INFO]: [Forbric/Worldgen] applied NeoForge's 0 biome modifier(s) and 0 structure modifier(s) — the kernel used to neuter this outright because its datapack registries were not declared
+-- Missing registry (neoforge:biome_modifier): 0
+-- declared list names neoforge:biome_modifier: 1
+   1134: [11:11:34] [Render thread/INFO]: [Forbric/Lifecycle] posted datapack-registry declaration to 19 bus(es) — 2 declared ([RegistryData[key=ResourceKey[minecraft:root / neoforge:biome_modifier], elementCodec=KeyDispatchCodec[String[comapFlatMapped][comapFlatMapped][mapResult WithLifecycle[net.minecraft.core.Registry$$Lambda/0x00000078016852a0@115adba9 net.minecraft.core.Registry$$Lambda/0x00000078016852a0@115adba9]][flatComa
+-- declared list names neoforge:structure_modifier: 1
+   1134: [11:11:34] [Render thread/INFO]: [Forbric/Lifecycle] posted datapack-registry declaration to 19 bus(es) — 2 declared ([RegistryData[key=ResourceKey[minecraft:root / neoforge:biome_modifier], elementCodec=KeyDispatchCodec[String[comapFlatMapped][comapFlatMapped][mapResult WithLifecycle[net.minecraft.core.Registry$$Lambda/0x00000078016852a0@115adba9 net.minecraft.core.Registry$$Lambda/0x00000078016852a0@115adba9]][flatComa
+-- joined world via quick-play: 1
+   1662: [11:11:42] [Render thread/INFO]: [Forbric/ClientSmoke] joined world via quick-play: W7Client
+-- clean disconnect observed: 1
+   1721: [11:11:53] [Render thread/INFO]: [Forbric/ClientSmoke] clean disconnect observed; stopping client
+

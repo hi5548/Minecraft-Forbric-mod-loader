@@ -87,9 +87,23 @@ final class DatapackRegistryDeclaration {
 	 *
 	 * <p>A dedicated server, a client with {@code -Dforbric.fabricMainInConstructor=off} and a pack without Fabric
 	 * mods keep step 3a where it was: the mains already precede it, or there are none.
+	 *
+	 * <p><b>And the wait ends the moment the mains HAVE run.</b> Its only reason is that the initialisers it
+	 * touches run Fabric mod code, and on native Fabric that code first runs at world load, after every main — so
+	 * once the mains have run, "later than the mains" is a property of where this call already sits. Waiting anyway
+	 * is what left a client unable to declare at all: the client-entrypoint hook is wired into
+	 * {@code Minecraft.<init>} AHEAD of the call that drives {@code KernelLifecycle.driveNativeRegistration}, so
+	 * the deferred declaration runs before the kernel has constructed the NeoForge baseline — the client's Fabric
+	 * entrypoints run at 10:34:55 and the baseline is constructed at 10:34:57 in the shipped log. The deferred call
+	 * then posts to no bus, spends the one-shot, and {@code neoforge:biome_modifier} /
+	 * {@code neoforge:structure_modifier} — declared by that baseline's own listener, and by nobody else — are
+	 * never declared. {@code KernelLifecycle.registerDataPackRegistries} carries the rest of the account, and a
+	 * bus-existence check there keeps the one-shot from being spent even if this ordering ever changes again.
 	 */
-	static boolean waitsForFabric(Side side, boolean fabricActive, boolean mainsInConstructor) {
+	static boolean waitsForFabric(Side side, boolean fabricActive, boolean mainsInConstructor,
+			boolean mainsAlreadyRan) {
 		if (!side.isClient() || !fabricActive || !mainsInConstructor) return false;
+		if (mainsAlreadyRan) return false;
 		return !"off".equalsIgnoreCase(System.getProperty(DEFERRAL_SWITCH, "on"));
 	}
 

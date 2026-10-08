@@ -38,6 +38,7 @@ import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.FieldInsnNode;
 import org.objectweb.asm.tree.JumpInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
@@ -65,26 +66,29 @@ class DatapackRegistryDeclarationTest {
 
 	@Test
 	void aClientWhoseFabricMainsRunInTheConstructorWaitsForThem() {
-		assertTrue(DatapackRegistryDeclaration.waitsForFabric(Side.CLIENT, true, true));
+		assertTrue(DatapackRegistryDeclaration.waitsForFabric(Side.CLIENT, true, true, false));
 	}
 
 	/** The server's mains already precede step 3a, and its log is the proof the order is clean there. */
 	@Test
 	void theDedicatedServerKeepsItsOrder() {
-		assertFalse(DatapackRegistryDeclaration.waitsForFabric(Side.DEDICATED_SERVER, true, true));
+		assertFalse(DatapackRegistryDeclaration.waitsForFabric(Side.DEDICATED_SERVER, true, true, false));
 	}
 
 	@Test
 	void nothingWaitsWhenThereIsNothingToWaitFor() {
-		assertFalse(DatapackRegistryDeclaration.waitsForFabric(Side.CLIENT, false, true), "no Fabric mods");
-		assertFalse(DatapackRegistryDeclaration.waitsForFabric(Side.CLIENT, true, false),
+		assertFalse(DatapackRegistryDeclaration.waitsForFabric(Side.CLIENT, false, true, false), "no Fabric mods");
+		assertFalse(DatapackRegistryDeclaration.waitsForFabric(Side.CLIENT, true, false, false),
 				"-Dforbric.fabricMainInConstructor=off already runs the mains before step 3a");
+		assertFalse(DatapackRegistryDeclaration.waitsForFabric(Side.CLIENT, true, true, true),
+				"the mains have already run, so step 3a is already behind them — waiting would defer the "
+						+ "declaration to a later hook, where no NeoForge bus exists yet");
 	}
 
 	@Test
 	void theSwitchDeclaresFromMainAgain() {
 		System.setProperty(DatapackRegistryDeclaration.DEFERRAL_SWITCH, "off");
-		assertFalse(DatapackRegistryDeclaration.waitsForFabric(Side.CLIENT, true, true));
+		assertFalse(DatapackRegistryDeclaration.waitsForFabric(Side.CLIENT, true, true, false));
 	}
 
 	/**
@@ -156,21 +160,62 @@ class DatapackRegistryDeclarationTest {
 		assertTrue(declares >= 0 && declares < lifecycle, "the declaration must precede client setup");
 	}
 
-	/** Three call sites on a client; a second post would hand every listener the event twice. */
+	/**
+	 * Three call sites on a client; a second post would hand every listener the event twice.
+	 *
+	 * <p>The once-guard is no longer the very first instruction — the bus check below precedes it, and so does the
+	 * line that names why — but it must still come before everything that can initialise a game class, which is
+	 * what a second post would re-enter.
+	 */
 	@Test
 	void theDeclarationRunsOncePerProcess() throws Exception {
 		MethodNode declare = method("registerDataPackRegistries");
 		assumeTrue(declare != null, "KernelLifecycle not compiled yet");
 
-		MethodInsnNode first = null;
-		for (AbstractInsnNode insn : declare.instructions.toArray()) {
-			if (insn instanceof MethodInsnNode call) {
-				first = call;
+		int guard = firstCall(declare, "compareAndSet");
+		assertTrue(guard >= 0, "the once-guard must exist");
+		int loads = firstCall(declare, "forName");
+		assertTrue(loads < 0 || guard < loads, "the once-guard must precede every Class.forName it guards");
+		int reads = firstCall(declare, "getDataPackRegistries");
+		assertTrue(reads < 0 || guard < reads, "and the read of NeoForge's list");
+	}
+
+	/**
+	 * The declaration must not spend its one shot on a post that reaches nobody.
+	 *
+	 * <p>NeoForge's baseline mod is constructed in the mod-loading window and every mod bus comes after it, so
+	 * before that window there is no NeoForge bus at all — and a client whose Fabric entrypoints run ahead of the
+	 * window reaches the declaration in exactly that state. Posting then declares nothing (0 buses, list unchanged
+	 * at 25) while spending the one shot, and the two registries only the BASELINE declares —
+	 * {@code neoforge:biome_modifier}, {@code neoforge:structure_modifier} — are then absent for the session:
+	 * {@code ServerLifecycleHooks.runModifiers} throws on its first lookup, and every biome and structure modifier
+	 * on the instance is skipped. So the bus is checked before the guard, and the check is a field read: a
+	 * {@code Class.forName} to answer it would initialise {@code RegistryDataLoader} ahead of the Fabric mains,
+	 * the poisoning this whole class exists to prevent.
+	 */
+	@Test
+	void anEarlyClientCannotDeclareBeforeTheBaselineExists() throws Exception {
+		MethodNode declare = method("registerDataPackRegistries");
+		assumeTrue(declare != null, "KernelLifecycle not compiled yet");
+
+		AbstractInsnNode[] insns = declare.instructions.toArray();
+		int guard = firstCall(declare, "compareAndSet");
+		int bus = -1;
+		for (int i = 0; i < insns.length; i++) {
+			if (insns[i] instanceof FieldInsnNode read && "baselineBus".equals(read.name)) {
+				bus = i;
 				break;
 			}
 		}
-		assertNotNull(first);
-		assertEquals("compareAndSet", first.name, "the once-guard must be the first thing it does");
+		assertTrue(bus >= 0, "the declaration must check that a NeoForge bus exists");
+		assertTrue(bus < guard, "and check it BEFORE the once-guard, or the one shot is spent on a post to nobody");
+		for (int i = 0; i < guard; i++) {
+			if (insns[i] instanceof MethodInsnNode call) {
+				assertEquals("info", call.name,
+						"nothing but the diagnostic may run before the bus check — an initialiser here would "
+								+ "poison RegistryDataLoader ahead of the Fabric mains");
+			}
+		}
 	}
 
 	// --- the two initialisers, in either order ------------------------------------------------------------------

@@ -1,0 +1,72 @@
+# Build provenance — the three boot jars, and why the reported pair isolates the fix
+
+All builds on this box, JDK 21.0.7 (`/Library/Java/JavaVirtualMachines/jdk-21.jdk`).
+
+## `before-published` — the arm the user actually ran
+
+`/Applications/.minecraft/libraries/net/forbric/forbric-kernel/0.3.6-beta/forbric-kernel-0.3.6-beta.jar`,
+sha256 `16bcd60242c54890fda728e294ad41935619ff4b499f359f539d6e44dae45b74`, 3287792 bytes. This is the artifact named
+in the context's stack traces (`~[forbric-kernel-0.3.6-beta.jar:?]`), so it is the most faithful "reproduce the user's
+failure" arm and it is reported first. Its sources equal this tree's HEAD —
+`git diff --stat bf738f8b a6572f82 -- forbric-kernel/src` is empty.
+
+It is **not** byte-identical to a rebuild from those sources: 121 of 727 non-boot-entry classes differ from a local
+rebuild, and the difference is synthetic lambda numbering (`…$0` vs `…$4` inside the same class), i.e. a different
+compiler environment, not different sources. That is why a second, same-environment arm exists.
+
+## The same-environment pair
+
+Both built with the game side deliberately absent, which is what makes the *boot* half buildable on this box:
+
+```
+./gradlew --offline -q -Pforbric.stagedRoot=/private/tmp/shooting-lane/empty jar
+```
+
+(`energy-4.1.0-named.jar` is absent, so `compileRuntimeJava` is SKIPPED and the game side cannot be rebuilt here at
+all — the same machine limit `2026-10-06-particle-accessor` and `2026-10-06-bughunt-create` recorded.)
+
+* `before` — from this tree's HEAD sources (`git checkout --` of the two edited files, build, restore):
+  boot half of `build/libs/forbric-kernel-0.1.0-SNAPSHOT.jar`.
+* `after` — from the working tree with this lane's two edits.
+
+Then, for each, `META-INF/jars/forbric-kernel-runtime.jar` is taken **byte for byte** from the published jar, and every
+entry's zip timestamp is normalised to 1980-02-01 so the sha is content-derived and a rebuild reproduces it:
+
+| jar | sha256 | bytes | entries | `X N.class` duplicates | class entries |
+|---|---|---|---|---|---|
+| `kernel-before.jar` | `389c889beddd2f0927f76ebece6a43f85eb7e554e8450ecbd6b253c5004ab4eb` | 3287822 | 735 | 0 | 687 |
+| `kernel-fix.jar` | `ec81fdcdb87f928bb4db2f7956f46971bfd22ccdb078893e2b7a4c57d8d3f795` | 3287959 | 735 | 0 | 687 |
+
+The bundled runtime half is sha256 `67c2a49b55c8ef860e552ec5b9e028d8836e68d46f5bb4595a40016debde8c6d` (539986 bytes) —
+which is the same sha the user's installed instance keeps its extracted runtime jar under
+(`.minecraft/versions/1.21.1-forbric/.forbric-kernel/lib/67c2a49b…/forbric-kernel-runtime.jar`), so the half this lane
+did not touch is byte-for-byte the shipped one.
+
+**Entry-set comparison (name → sha256 of the decompressed bytes):**
+
+```
+entry sets equal: True   (735 vs 735)
+differing entries: ['net/forbric/kernel/boot/DatapackRegistryDeclaration.class',
+                    'net/forbric/kernel/boot/KernelLifecycle$ReopenedRegistries.class',
+                    'net/forbric/kernel/boot/KernelLifecycle.class']
+```
+
+So the reported `before`/`after` pair differs in exactly three boot-half classes, all in the two files
+`diff.patch` changes (`KernelLifecycle$ReopenedRegistries` is a nested class of the second, shifted by the edit). That
+is the isolation the A/B rests on.
+
+## Artifact hygiene
+
+`build/classes` carried **534** stale editor/Finder duplicates of the form `X N.class` (and `X N.properties`), 32 of
+which the first boot jar in this lane had already picked up. They were verified against their counterparts (83 of the
+first 116 byte-identical; the rest older copies), deleted, and the boot half rebuilt — 0 remain in either reported jar
+(`X N.class` scan: 735 entries, 0 dup-shaped). The published release forbids these entries, so a jar carrying them
+would not have been a valid stand-in for the tip.
+
+## What was NOT rebuilt
+
+The game side (`forbric-kernel-runtime.jar`) is untouched by this lane and was not rebuilt; it is taken from the
+published jar as above. The two edits are boot-side:
+`DatapackRegistryDeclaration.waitsForFabric` and `KernelLifecycle.registerDataPackRegistries` (plus the step-3a call
+site that passes the new predicate argument). Nothing else in the tree changed under this lane: `git status` shows
+three modified files and the new report directory.

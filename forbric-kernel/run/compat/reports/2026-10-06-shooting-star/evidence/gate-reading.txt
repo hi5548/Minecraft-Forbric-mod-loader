@@ -1,0 +1,142 @@
+# Gate reading — W7Harness client surface, one subject, three arms
+
+One `sweep_client.py` run per arm; the subject is `the-shooting-star-demo-1.3.1-neoforge.jar` with its 13-mod
+closure in `mods/`. Everything below is read out of the run's own artefacts.
+
+## before-published  —  kernel 16bcd60242c5…
+
+row (`results.jsonl`, verbatim fields):
+```
+  subject                = "the-shooting-star-demo-1.3.1-neoforge.jar"
+  kernel_sha256          = "16bcd60242c54890fda728e294ad41935619ff4b499f359f539d6e44dae45b74"
+  java                   = "/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home/bin/java \u2014 java version \"21.0.7\" 2025-04-15 LTS"
+  compatibility_policy   = "strict"
+  mixin_fit              = "default"
+  run                    = "PASS"
+  exit                   = 0
+  stopped                = true
+  killed                 = false
+  world                  = true
+  frames                 = 1
+  mod                    = "DEGRADED"
+  status_source          = "catalog"
+  confirmed_required     = 0
+  catalog_failures       = ["shooting_star_demo"]
+  seconds                = 278
+  cause                  = "mod-degraded"
+  dep_status             = 13 dep(s), all OK = True
+  findings               = 32 row(s)
+```
+
+`console.log` markers (count of lines):
+```
+  posted … to 0 bus(es) — 0 declared                               : 1
+  posted … to N bus(es), N>=1                                      : 0
+  declared list names neoforge:biome_modifier                      : 0
+  declared list names neoforge:structure_modifier                  : 0
+  asked for before any NeoForge bus exists (new line)              : 0
+  … declaration waits for the Fabric main                          : 1
+  NeoForge's biome/structure modifiers did not apply               : 1
+  IllegalStateException: Missing registry: …neoforge:biome_modifier : 1
+  applied NeoForge's N biome modifier(s) and M structure modifier(s) : 0
+  joined world via quick-play                                      : 1
+  clean disconnect observed                                        : 1
+```
+crash-reports written: 0 []
+load-report.txt: 152 lines; aggregate line(s):
+
+## before  —  kernel 389c889beddd…
+
+row (`results.jsonl`, verbatim fields):
+```
+  subject                = "the-shooting-star-demo-1.3.1-neoforge.jar"
+  kernel_sha256          = "389c889beddd2f0927f76ebece6a43f85eb7e554e8450ecbd6b253c5004ab4eb"
+  java                   = "/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home/bin/java \u2014 java version \"21.0.7\" 2025-04-15 LTS"
+  compatibility_policy   = "strict"
+  mixin_fit              = "default"
+  run                    = "PASS"
+  exit                   = 0
+  stopped                = true
+  killed                 = false
+  world                  = true
+  frames                 = 1
+  mod                    = "DEGRADED"
+  status_source          = "catalog"
+  confirmed_required     = 0
+  catalog_failures       = ["shooting_star_demo"]
+  seconds                = 34
+  cause                  = "mod-degraded"
+  dep_status             = 13 dep(s), all OK = True
+  findings               = 32 row(s)
+```
+
+`console.log` markers (count of lines):
+```
+  posted … to 0 bus(es) — 0 declared                               : 1
+  posted … to N bus(es), N>=1                                      : 0
+  declared list names neoforge:biome_modifier                      : 0
+  declared list names neoforge:structure_modifier                  : 0
+  asked for before any NeoForge bus exists (new line)              : 0
+  … declaration waits for the Fabric main                          : 1
+  NeoForge's biome/structure modifiers did not apply               : 1
+  IllegalStateException: Missing registry: …neoforge:biome_modifier : 1
+  applied NeoForge's N biome modifier(s) and M structure modifier(s) : 0
+  joined world via quick-play                                      : 1
+  clean disconnect observed                                        : 1
+```
+crash-reports written: 0 []
+load-report.txt: 152 lines; aggregate line(s):
+
+## after  —  kernel ec81fdcdb87f…
+
+row (`results.jsonl`, verbatim fields):
+```
+  subject                = "the-shooting-star-demo-1.3.1-neoforge.jar"
+  kernel_sha256          = "ec81fdcdb87f928bb4db2f7956f46971bfd22ccdb078893e2b7a4c57d8d3f795"
+  java                   = "/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home/bin/java \u2014 java version \"21.0.7\" 2025-04-15 LTS"
+  compatibility_policy   = "strict"
+  mixin_fit              = "default"
+  run                    = "PASS"
+  exit                   = 0
+  stopped                = true
+  killed                 = false
+  world                  = true
+  frames                 = 1
+  mod                    = "DEGRADED"
+  status_source          = "catalog"
+  confirmed_required     = 0
+  catalog_failures       = ["shooting_star_demo"]
+  seconds                = 33
+  cause                  = "mod-degraded"
+  dep_status             = 13 dep(s), all OK = True
+  findings               = 32 row(s)
+```
+
+`console.log` markers (count of lines):
+```
+  posted … to 0 bus(es) — 0 declared                               : 0
+  posted … to N bus(es), N>=1                                      : 1
+  declared list names neoforge:biome_modifier                      : 1
+  declared list names neoforge:structure_modifier                  : 1
+  asked for before any NeoForge bus exists (new line)              : 1
+  … declaration waits for the Fabric main                          : 0
+  NeoForge's biome/structure modifiers did not apply               : 0
+  IllegalStateException: Missing registry: …neoforge:biome_modifier : 0
+  applied NeoForge's N biome modifier(s) and M structure modifier(s) : 1
+  joined world via quick-play                                      : 1
+  clean disconnect observed                                        : 1
+```
+crash-reports written: 0 []
+load-report.txt: 152 lines; aggregate line(s):
+
+## Cross-arm summary
+
+| arm | kernel | run | world | frames | mod | conf.req | `Missing registry: …neoforge:biome_modifier` | `did not apply — -1 biome` | `applied NeoForge's …` | declaration |
+|---|---|---|---|---|---|---|---|---|---|---|
+| before-published | 16bcd60242c5… | PASS | True | 1 | DEGRADED | 0 | 1 | 1 | 0 | 0 bus(es), 0 declared |
+| before | 389c889beddd… | PASS | True | 1 | DEGRADED | 0 | 1 | 1 | 0 | 0 bus(es), 0 declared |
+| after | ec81fdcdb87f… | PASS | True | 1 | DEGRADED | 0 | 0 | 0 | 1 | 19 bus(es), 2 declared |
+
+`mod=DEGRADED` on every arm is the subject's own, pre-existing state and is not this lane's: the Demo jar
+ships a 1.20.1/1.21.1 dual package and its `mc1211` client class still references
+`net.minecraftforge.client.event.RenderGuiEvent$Post`, which the merged base does not carry.

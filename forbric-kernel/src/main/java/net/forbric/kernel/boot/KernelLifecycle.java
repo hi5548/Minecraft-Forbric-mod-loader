@@ -242,8 +242,18 @@ public final class KernelLifecycle {
 		// joined, and NeoForge's data maps died with them. It moved when the client mains did (09d86de) and this
 		// step did not. It runs at the end of onClientEntrypoints instead: after every main and client entrypoint,
 		// the root frozen again, which is the state the dedicated server already declares in, cleanly.
+		//
+		// The wait ends the moment the mains HAVE run, and that half is load-bearing. On the current client the
+		// entrypoint hook is wired into Minecraft.<init> AHEAD of the call that drives this window, so deferring
+		// here deferred the declaration to a hook that runs BEFORE the kernel has constructed the NeoForge
+		// baseline — and every NeoForge bus comes with it. The deferred call then reached no bus at all and spent
+		// the one-shot: neoforge:biome_modifier and neoforge:structure_modifier are declared by the baseline's own
+		// DataPackRegistryEvent listener and by nothing else, so both went missing, and
+		// ServerLifecycleHooks.runModifiers throws on its first lookupOrThrow over neoforge:biome_modifier — which
+		// is every biome and structure modifier on the instance, NeoForge's and MinecraftForge's alike, silently
+		// not applied. See DatapackRegistryDeclaration.waitsForFabric and registerDataPackRegistries.
 		if (DatapackRegistryDeclaration.waitsForFabric(side, KernelFabricEcosystem.active(),
-				KernelFabricEcosystem.mainsRunInConstructor())) {
+				KernelFabricEcosystem.mainsRunInConstructor(), KernelFabricEcosystem.mainsAlreadyRan())) {
 			ForbricLog.info("[Forbric/Lifecycle] datapack-registry declaration waits for the Fabric main and client "
 					+ "entrypoints in Minecraft.<init> — its initialisers run Fabric mod code, which must not run "
 					+ "before those mains (-D%s=off to declare here)", DatapackRegistryDeclaration.DEFERRAL_SWITCH);
@@ -1326,8 +1336,29 @@ public final class KernelLifecycle {
 	 * <p>Once per process, and never retried: a client reaches it from up to three places (see
 	 * {@link DatapackRegistryDeclaration#waitsForFabric}), and a second post would hand every mod's listener the
 	 * event twice, while a failed first attempt has usually left a class erroneous that a retry cannot revive.
+	 *
+	 * <p><b>But a post to NO bus is not a declaration, so it must not spend that one-shot.</b> NeoForge's baseline
+	 * mod is constructed in the mod-loading window and every mod bus comes after it, so before that window there is
+	 * no NeoForge bus at all — and a client whose Fabric entrypoints run ahead of the window reaches here in exactly
+	 * that state (the deferral above routes it here; see {@link DatapackRegistryDeclaration#waitsForFabric}). The
+	 * cost of declaring anyway was measured on the shipped kernel: the call posted to 0 buses, the list stayed at
+	 * its 25 copied entries, and {@code neoforge:biome_modifier} / {@code neoforge:structure_modifier} — which the
+	 * baseline's own {@code DataPackRegistryEvent} listener declares, and which nothing else declares — were absent
+	 * for the whole session. {@code ServerLifecycleHooks.runModifiers}' first instruction is a
+	 * {@code registryOrThrow(neoforge:biome_modifier)}, so it threw before the first modifier was read, and EVERY
+	 * biome and structure modifier was skipped: NeoForge's own, and MinecraftForge's, which ride the same pass
+	 * through {@code ForgeWorldModifierInjector}. Every mod's own declared datapack registry was lost with them.
+	 * So the bus is checked first, by a plain field read — loading a game class to ask would initialise
+	 * {@code RegistryDataLoader} before the Fabric mains, which is the poisoning this class exists to prevent — and
+	 * the call that runs after the mod-loading window declares for real.
 	 */
 	private static void registerDataPackRegistries(ClassLoader cl) {
+		if (baselineBus == null) {
+			ForbricLog.info("[Forbric/Lifecycle] datapack-registry declaration asked for before any NeoForge bus "
+					+ "exists — the mod-loading window has not constructed the baseline yet, so the event would "
+					+ "reach nobody and a declaration is not idempotent; left for the call after that window");
+			return;
+		}
 		if (!DATAPACK_REGISTRIES_DECLARED.compareAndSet(false, true)) return;
 		try {
 			Class<?> eventCls = Class.forName(

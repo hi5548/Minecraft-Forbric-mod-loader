@@ -1,0 +1,113 @@
+# Byte evidence — the merged base carries NeoForge's biome-modifier machinery, and NeoForge's own listener is what declares the two datapack registries
+
+Commands run on this box (JDK 21 `javap`), outputs verbatim. `NEO=/Applications/.minecraft/.forbric-build/out/neoforge-runtime.jar`
+(the same jar the harness stages as `neoforge-runtime/neoforge-runtime.jar`), `MERGED=/Applications/.minecraft/.forbric-build/out/patched-mc-merged-1.21.1.jar`.
+
+## 1. `NeoForgeMod.lambda$new$71` — the baseline's own DataPackRegistryEvent listener
+
+```
+javap -p -c -classpath $NEO net.neoforged.neoforge.common.NeoForgeMod
+
+  private static void lambda$new$71(net.neoforged.neoforge.registries.DataPackRegistryEvent$NewRegistry);
+    Code:
+         0: aload_0
+         1: getstatic     #671                // Field net/neoforged/neoforge/registries/NeoForgeRegistries$Keys.BIOME_MODIFIERS:Lnet/minecraft/resources/ResourceKey;
+         4: getstatic     #674                // Field net/neoforged/neoforge/common/world/BiomeModifier.DIRECT_CODEC:Lcom/mojang/serialization/Codec;
+         7: invokevirtual #680                // Method net/neoforged/neoforge/registries/DataPackRegistryEvent$NewRegistry.dataPackRegistry:(Lnet/minecraft/resources/ResourceKey;Lcom/mojang/serialization/Codec;)V
+        10: aload_0
+        11: getstatic     #686                // Field net/neoforged/neoforge/registries/NeoForgeRegistries$Keys.STRUCTURE_MODIFIERS:Lnet/minecraft/resources/ResourceKey;
+        14: getstatic     #689                // Field net/neoforged/neoforge/common/world/StructureModifier.DIRECT_CODEC:Lcom/mojang/serialization/Codec;
+        17: invokevirtual #680                // Method net/neoforged/neoforge/registries/DataPackRegistryEvent$NewRegistry.dataPackRegistry:(Lnet/minecraft/resources/ResourceKey;Lcom/mojang/serialization/Codec;)V
+        20: return
+
+  private static java.lang.String lambda$new$70();
+    Code:
+         0: invokestatic  #692                // Method java/util/UUID.randomUUID:()Ljava/util/UUID;
+         3: astore_0
+         4: getstatic     #19                 // Field LOGGER:Lorg/apache/logging/log4j/Logger;
+         7: ldc_w         #698                // String Preparing crash report with UUID {}
+        10: aload_0
+        11: invokeinterface #700,  3          // InterfaceMethod org/apache/logging/log4j/Logger.fatal:(Ljava/lang/String;Ljava/lang/Object;)V
+```
+
+It declares `NeoForgeRegistries$Keys.BIOME_MODIFIERS` with `BiomeModifier.DIRECT_CODEC` and
+`NeoForgeRegistries$Keys.STRUCTURE_MODIFIERS` with `StructureModifier.DIRECT_CODEC`, through
+`DataPackRegistryEvent$NewRegistry.dataPackRegistry(ResourceKey, Codec)`. It is bound as an `IEventBus` consumer
+in `NeoForgeMod`'s constructor (BootstrapMethods entry #1856, `REF_invokeStatic … lambda$new$71`), i.e. it is attached to
+the bus the kernel passes as the baseline bus. **Nothing else declares these two keys** — there is no other
+`dataPackRegistry` call site for them anywhere in `neoforge-runtime.jar`.
+
+## 2. `ServerLifecycleHooks.runModifiers` — why an absent registry costs the whole pass
+
+```
+javap -p -c -classpath $NEO net.neoforged.neoforge.server.ServerLifecycleHooks
+Compiled from "ServerLifecycleHooks.java"
+  private static void runModifiers(net.minecraft.server.MinecraftServer);
+    Code:
+         0: aload_0
+         1: invokevirtual #212                // Method net/minecraft/server/MinecraftServer.registryAccess:()Lnet/minecraft/core/RegistryAccess$Frozen;
+         4: astore_1
+         5: aload_1
+         6: getstatic     #216                // Field net/neoforged/neoforge/registries/NeoForgeRegistries$Keys.BIOME_MODIFIERS:Lnet/minecraft/resources/ResourceKey;
+         9: invokeinterface #222,  2          // InterfaceMethod net/minecraft/core/RegistryAccess.registryOrThrow:(Lnet/minecraft/resources/ResourceKey;)Lnet/minecraft/core/Registry;
+        14: invokeinterface #228,  1          // InterfaceMethod net/minecraft/core/Registry.holders:()Ljava/util/stream/Stream;
+        19: invokedynamic #232,  0            // InvokeDynamic #2:apply:()Ljava/util/function/Function;
+        24: invokeinterface #236,  2          // InterfaceMethod java/util/stream/Stream.map:(Ljava/util/function/Function;)Ljava/util/stream/Stream;
+        29: invokeinterface #242,  1          // InterfaceMethod java/util/stream/Stream.toList:()Ljava/util/List;
+        34: astore_2
+        35: aload_1
+        36: getstatic     #246                // Field net/neoforged/neoforge/registries/NeoForgeRegistries$Keys.STRUCTURE_MODIFIERS:Lnet/minecraft/resources/ResourceKey;
+        39: invokeinterface #222,  2          // InterfaceMethod net/minecraft/core/RegistryAccess.registryOrThrow:(Lnet/minecraft/resources/ResourceKey;)Lnet/minecraft/core/Registry;
+```
+
+Instruction 0-14 is the first statement of the method: `registryAccess()` then
+`RegistryAccess.registryOrThrow(NeoForgeRegistries$Keys.BIOME_MODIFIERS)`. A missing registry throws **there**, before a
+single modifier is read, so the whole pass — and MinecraftForge's modifiers, which `ForgeWorldModifierInjector`
+splices into the lists this method materialises — does nothing.
+
+## 3. `NeoForgeRegistries$Keys` — the registry keys
+
+```
+javap -p -c -classpath $NEO 'net.neoforged.neoforge.registries.NeoForgeRegistries$Keys'   # <clinit> excerpts
+        16: ldc           #40                 // String biome_modifier_serializers
+        18: invokestatic  #25                 // Method key:(Ljava/lang/String;)Lnet/minecraft/resources/ResourceKey;
+        21: putstatic     #42                 // Field BIOME_MODIFIER_SERIALIZERS:Lnet/minecraft/resources/ResourceKey;
+        24: ldc           #45                 // String structure_modifier_serializers
+        26: invokestatic  #25                 // Method key:(Ljava/lang/String;)Lnet/minecraft/resources/ResourceKey;
+        29: putstatic     #47                 // Field STRUCTURE_MODIFIER_SERIALIZERS:Lnet/minecraft/resources/ResourceKey;
+        …
+        80: ldc           #80                 // String biome_modifier
+        82: invokestatic  #25                 // Method key:(Ljava/lang/String;)Lnet/minecraft/resources/ResourceKey;
+        85: putstatic     #82                 // Field BIOME_MODIFIERS:Lnet/minecraft/resources/ResourceKey;
+        88: ldc           #85                 // String structure_modifier
+        90: invokestatic  #25                 // Method key:(Ljava/lang/String;)Lnet/minecraft/resources/ResourceKey;
+        93: putstatic     #87                 // Field STRUCTURE_MODIFIERS:Lnet/minecraft/resources/ResourceKey;
+```
+
+`key(String)` is `ResourceKey.createRegistryKey(ResourceLocation.fromNamespaceAndPath("neoforge", …))`, so
+`BIOME_MODIFIERS` is `ResourceKey[minecraft:root / neoforge:biome_modifier]` and `STRUCTURE_MODIFIERS` is its
+structure twin — the exact key `RegistryAccess.registryOrThrow` is asked for in the exception.
+
+## 4. It is the MERGED base + companion runtime jar that carry this, not a Forge-only remnant
+
+```
+MERGED       patched-mc-merged-1.21.1.jar         entries= 23535  net/neoforged=    0  net/minecraftforge=    3
+NEO-RUNTIME  neoforge-runtime.jar                 entries=  5030  net/neoforged= 1884  net/minecraftforge=   41
+```
+
+The merged jar itself carries **no** `net/neoforged` class — they all come from the companion runtime jar, which the
+harness stages as `--runtimeJar neoforge-runtime/neoforge-runtime.jar`. So "does the merged base carry NeoForge's
+biome_modifier registry/serializers?" is answered by the two jars **together**, and the answer is yes: the
+`BiomeModifier` family, `NeoForgeRegistries$Keys`, `NeoForgeRegistries`, `NeoForgeRegistriesSetup`, `NeoForgeMod`,
+`DataPackRegistryEvent`, `DataPackRegistriesHooks`, and the `ServerLifecycleHooks` reader are all present. Independently
+re-checked by a sibling read-only census (class-set diff: merged ⊇ reference ∪ forge, i.e. no class the references have
+is missing).
+
+## 5. The client-side seam the fix touches
+
+`KernelLifecycle.registerDataPackRegistries` (boot half) is where NeoForge's own listener is reached: it builds one
+`DataPackRegistryEvent$NewRegistry`, posts it on the baseline bus, then on every published Neo mod bus, then calls the
+package-private `process()` which flushes into `DataPackRegistriesHooks`. If the baseline bus does not exist yet — the
+state a client's Fabric entrypoints leave it in — the post reaches nobody and the two keys are never declared. That is
+the entire defect; the two edits in `diff.patch` change **when** that post happens and stop the one-shot from being spent
+on a post to nobody. No new declaration code exists in this lane.

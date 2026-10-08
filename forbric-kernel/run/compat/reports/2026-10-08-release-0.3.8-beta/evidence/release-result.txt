@@ -1,0 +1,26 @@
+tag                : v0.3.8-beta-1.21.1 (lightweight) -> 08fc926dda7a87f0e015d3e8b90fda68291235ec
+                     (the report commit; its parent 02d05fcc is the pre-registration commit — written before any
+                      arm ran; its parent 2a9e6938 is the version bump; whose parent 66200a3e is the
+                      play-payload-dispatch lane's fix commit — the release source tip)
+release            : https://github.com/hi5548/Minecraft-Forbric-mod-loader/releases/tag/v0.3.8-beta-1.21.1
+assets             :
+  forbric-kernel-installer-0.3.8-beta.jar  sha256 8d4ef1ae568960eb25a6b4e0e51a4e7178045677e1c0c6f68cf689cce0f97979  8531173 B
+  forbric-kernel-installer-0.3.8-beta.zip  sha256 70909d77d758c7993aa223c4bf87e2a3ce9e36ba7beb0584d85128b500c1fe7b  8525337 B
+                     (GitHub's own asset digests, read back after upload, equal these two)
+local artifacts    : forbric-kernel-installer/build/{libs,dist}/ ; copies /private/tmp/rel038/artifacts/
+release kernel     : /private/tmp/rel038/release-kernel.jar
+                     sha256 97d894f5946829d46a163e179cc71508424bb8d4bf21ae2534acafa555d6780d
+embedded kernel    : forbric/libs/net/forbric/forbric-kernel/0.3.8-beta/forbric-kernel-0.3.8-beta.jar
+                     sha256 97d894f5946829d46a163e179cc71508424bb8d4bf21ae2534acafa555d6780d
+                     (byte-identical to this gate's kernel and to the copy the headless install put under
+                      /Applications/.minecraft/libraries/net/forbric/forbric-kernel/0.3.8-beta/)
+installer hygiene  : 105 entries, 0 stale-numbered ('X N.class' / 'X 2.jar') entries
+tag pushed         : `git push fork v0.3.8-beta-1.21.1` (tag-only, matching every prior release; the fork's
+                     `main`/`1.21.1-port` branch is not the release line and was not touched)
+install            : java -jar forbric-kernel-installer-0.3.8-beta.jar --dir /Applications/.minecraft
+                     exit 0; user's 14 mods 14/14 sha256 IDENTICAL; versions/ unchanged; options.txt/saves/config/
+                     .forbric-kernel/log4j2.xml/global mods/(129 jars)/logs/resourcepacks/data/downloads mtimes
+                     untouched; the only intended change is 1.21.1-forbric.json (0.3.7 -> 0.3.8)
+                     (evidence/install-verification.txt)
+v0.3.7-beta        : annotated superseded (a note prepended to the release body) and its two assets withdrawn
+                     on 2026-10-08, per the convention v0.3.6-beta-1.21.1 records

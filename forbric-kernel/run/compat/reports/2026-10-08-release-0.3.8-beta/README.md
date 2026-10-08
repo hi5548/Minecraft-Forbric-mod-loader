@@ -118,6 +118,17 @@
 
 ---
 
-## 发布结果回填
+## 发布结果回填（2026-10-08）
 
-*（发布后追加）*
+- tag `v0.3.8-beta-1.21.1`（轻量 tag，指向发布提交 `08fc926d`；其父 `02d05fcc` 为**预登记**提交，祖父 `2a9e6938`
+  为升版本提交，曾祖父 `66200a3e` 为 play-payload-dispatch 车道的修复提交 = 发布源码尖端）
+- Release `https://github.com/hi5548/Minecraft-Forbric-mod-loader/releases/tag/v0.3.8-beta-1.21.1`，附件：
+  - `forbric-kernel-installer-0.3.8-beta.jar` sha256 `8d4ef1ae568960eb25a6b4e0e51a4e7178045677e1c0c6f68cf689cce0f97979`（8531173 B）
+  - `forbric-kernel-installer-0.3.8-beta.zip` sha256 `70909d77d758c7993aa223c4bf87e2a3ce9e36ba7beb0584d85128b500c1fe7b`（8525337 B）
+  （GitHub 回读的附件 digest 与这两条相同）
+- 本地构建产物：`forbric-kernel-installer/build/{libs,dist}/`，副本 `/private/tmp/rel038/artifacts/`
+- 安装器内嵌内核逐字节 = 本次 gate 的 `97d894f5…`（= 装上的 `libraries/net/forbric/forbric-kernel/0.3.8-beta/…jar`）
+- 安装器 jar：105 条目、0 条陈旧重名条目
+- tag 只推 tag（`git push fork v0.3.8-beta-1.21.1`），与历次发布一致；fork 的 `main`/`1.21.1-port` 不是发布线，未动
+- `v0.3.7-beta-1.21.1` 已按惯例标注"已被取代"并撤下两个附件
+- 逐条见 `evidence/release-result.txt`、`evidence/install-verification.txt`

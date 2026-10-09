@@ -1,0 +1,14 @@
+### R2 offline probe: real injector over real staged bytes
+forge-runtime: 700967fcfc0feb906008aac5573aa8a04726a2d479470ed0cb6898a0b1f9594d
+remapped fabric-registry-sync: e4a12ef13289602cb938692e3c2ef3bda6e9448a09d476cf459fe1edfd208288
+
+[Forbric/INFO] [Forbric/RegistrySync] gave net.minecraftforge.registries.NamespacedWrapper NeoForge's id-remap contract (clear, registerIdMapping) and fabric-api's (remap, both the 26.2 two-arg and the 1.21.1 three-arg form) — the server's ids are staged and applied through Forge's own injectSnapshot
+[wrapper] read=27069B changed=true
+  + registerIdMapping(Lnet/minecraft/resources/ResourceKey;I)V
+  + clear(Z)V
+  + remap(Lit/unimi/dsi/fastutil/objects/Object2IntMap;Lnet/fabricmc/fabric/impl/registry/sync/RemappableRegistry$RemapMode;)V
+  + remap(Ljava/lang/String;Lit/unimi/dsi/fastutil/objects/Object2IntMap;Lnet/fabricmc/fabric/impl/registry/sync/RemappableRegistry$RemapMode;)V
+[Forbric/INFO] [Forbric/RegistrySync] flushing the Forge-wrapped registries' staged ids at 1 return(s) of net.fabricmc.fabric.impl.registry.sync.RegistrySyncManager.apply
+[fabric-sync] read=19871B changed=true
+  apply(Ljava/util/Map;Lnet/fabricmc/fabric/impl/registry/sync/RemappableRegistry$RemapMode;)V RETURNs=1 flushed=1 headFlip=LdcInsnNode
+[RemappableRegistry] remap(Ljava/lang/String;Lit/unimi/dsi/fastutil/objects/Object2IntMap;Lnet/fabricmc/fabric/impl/registry/sync/RemappableRegistry$RemapMode;)V

@@ -359,20 +359,14 @@ public final class KernelBoot {
 		List<Path> shadowCandidates = new ArrayList<>(fabricJars);
 		for (Path jar : modJars) if (!shadowCandidates.contains(jar)) shadowCandidates.add(jar);
 		PortingLayerAudit.report(shadowCandidates, runtimeJars);
-		// Which installed mods name a fabric-api surface the merged base still switches off; reported after the
-		// catalog is published, so the rows reach load-report.txt.
-		FabricApiModuleLossAudit.scan(shadowCandidates);
-		// Which installed jars read a vanilla field with a descriptor the merge no longer declares (NoSuchFieldError
-		// at that access); reported after the catalog is published, so the rows reach load-report.txt.
-		FieldDriftAudit.scan(shadowCandidates);
-		// Which merged-base methods nothing in the merged game calls an installed mod calls itself: an injector bound
-		// there still runs. Read before Mixin prepares a config, so MixinFit's liveness verdict can ask.
-		net.forbric.kernel.mixin.MergedBaseUncalledMethods.scanGuests(shadowCandidates);
-		// Which installed jars name a Forge-family class that exists in no carrier, not the merged base and no
-		// installed jar (compiled against another NeoForge/MinecraftForge); reported after the catalog is published.
+		// ONE pass over shadowCandidates for the four guest audits that each used to open every jar and read
+		// every class for a different set of needles: fabric-api surface loss, vanilla-field drift, merged-base
+		// method liveness, and dangling Forge-family names. Each class's bytes are decompressed and read ONCE and
+		// handed to every enabled audit; their verdicts are unchanged. Reported after the catalog is published,
+		// so the rows reach load-report.txt. See GuestClassScan.
 		List<Path> abiUniverse = new ArrayList<>(runtimeJars);
 		if (gameJar != null) abiUniverse.add(gameJar);
-		AbiLinkAudit.scan(shadowCandidates, abiUniverse);
+		GuestClassScan.scan(shadowCandidates, abiUniverse);
 
 		ForbricLog.info("[Forbric/Boot] sovereign kernel — %s %s, %d owned jar(s), %d Forge-family mod(s), "
 				+ "%d Fabric jar(s), %d MC library jar(s)", side.name().toLowerCase(), gameVersion, owned.size(),

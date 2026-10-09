@@ -33,10 +33,16 @@ import org.junit.jupiter.api.Test;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.InsnNode;
+import org.objectweb.asm.tree.JumpInsnNode;
+import org.objectweb.asm.tree.LabelNode;
+import org.objectweb.asm.tree.LdcInsnNode;
+import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.VarInsnNode;
 import org.objectweb.asm.tree.analysis.Analyzer;
 import org.objectweb.asm.tree.analysis.BasicVerifier;
 
@@ -127,10 +133,68 @@ class RegistrySyncParityInjectorTest {
 				"(Lit/unimi/dsi/fastutil/objects/Object2IntMap;"
 						+ "Lnet/fabricmc/fabric/impl/registry/sync/RemappableRegistry$RemapMode;)V"),
 				"fabric-api's half — without it a pure-Fabric server's ids are accepted and silently not applied");
+		assertNotNull(method(out, "remap",
+				"(Ljava/lang/String;Lit/unimi/dsi/fastutil/objects/Object2IntMap;"
+						+ "Lnet/fabricmc/fabric/impl/registry/sync/RemappableRegistry$RemapMode;)V"),
+				"the 1.21.1 form RemappableRegistry actually declares here — the two-arg override alone is dead "
+						+ "on this base, so RegistrySyncManager.apply's invokeinterface reaches fabric's empty-field method");
 
 		for (String name : new String[] {"clear", "registerIdMapping", "remap"}) {
 			new Analyzer<>(new BasicVerifier()).analyze(out.name, method(out, name, null));
 		}
+	}
+
+	/**
+	 * The 1.21.1 client-sync entry: {@code RegistrySyncManager.apply(Map, RemapMode)V}. Its returns must flush the
+	 * wrapper's staging — the 26.2-shaped hook targeted a class that does not exist on this base, so it was silent.
+	 */
+	@Test
+	void theFabricSyncManagerEntryGetsTheFlushAtEveryReturn() {
+		String name = "net.fabricmc.fabric.impl.registry.sync.RegistrySyncManager";
+		byte[] in = syncManagerWithTwoReturns();
+		byte[] out = injector.transform(name, in, ctx());
+		assertTrue(out != in, "the flush was not injected into the 1.21.1 fabric sync entry");
+
+		ClassNode node = parse(out);
+		MethodNode apply = method(node, "apply",
+				"(Ljava/util/Map;Lnet/fabricmc/fabric/impl/registry/sync/RemappableRegistry$RemapMode;)V");
+		assertNotNull(apply, "apply(Map, RemapMode)V missing");
+		int returns = 0;
+		int flushed = 0;
+		for (AbstractInsnNode insn = apply.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+			if (insn.getOpcode() == Opcodes.RETURN) {
+				returns++;
+				AbstractInsnNode prev = insn.getPrevious();
+				if (prev instanceof MethodInsnNode call && call.name.equals("finishFabricRemap")) flushed++;
+			}
+		}
+		assertEquals(2, returns, "fixture shape changed");
+		assertEquals(returns, flushed, "every RETURN of RegistrySyncManager.apply must flush the staged ids");
+		AbstractInsnNode head = apply.instructions.getFirst();
+		assertTrue(head instanceof LdcInsnNode, "the head hook (beginSnapshotApplication) is missing");
+	}
+
+	/** A stand-in for {@code RegistrySyncManager} with the real entry's shape: a static apply with two returns. */
+	private static byte[] syncManagerWithTwoReturns() {
+		ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+		cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "net/fabricmc/fabric/impl/registry/sync/RegistrySyncManager",
+				null, "java/lang/Object", null);
+		MethodNode m = new MethodNode(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "apply",
+				"(Ljava/util/Map;Lnet/fabricmc/fabric/impl/registry/sync/RemappableRegistry$RemapMode;)V", null, null);
+		LabelNode ret1 = new LabelNode();
+		LabelNode ret2 = new LabelNode();
+		m.instructions.add(new VarInsnNode(Opcodes.ALOAD, 0));
+		m.instructions.add(new JumpInsnNode(Opcodes.IFNULL, ret1));
+		m.instructions.add(new JumpInsnNode(Opcodes.GOTO, ret2));
+		m.instructions.add(ret1);
+		m.instructions.add(new InsnNode(Opcodes.RETURN));
+		m.instructions.add(ret2);
+		m.instructions.add(new InsnNode(Opcodes.RETURN));
+		m.maxStack = 1;
+		m.maxLocals = 2;
+		m.accept(cw);
+		cw.visitEnd();
+		return cw.toByteArray();
 	}
 
 	/** Fail-soft, not fail-hard: a carrier that already declares the member keeps its own. */

@@ -1,0 +1,33 @@
+### R4: the four accessors carry Fabric's REMAPPED value form (name:desc / name(args)ret)
+--- remapped fabric-transfer-api-v1 accessor annotations (javap -v) ---
+        org.spongepowered.asm.mixin.gen.Accessor(
+          value="container1:Lnet/minecraft/world/Container;"
+        org.spongepowered.asm.mixin.gen.Accessor(
+          value="container2:Lnet/minecraft/world/Container;"
+        org.spongepowered.asm.mixin.gen.Accessor(
+          value="items:Lnet/minecraft/core/NonNullList;"
+        org.spongepowered.asm.mixin.gen.Accessor(
+          value="content:Lnet/minecraft/world/level/material/Fluid;"
+        org.spongepowered.asm.mixin.gen.Invoker(
+          value="getWeight(Lnet/minecraft/world/item/ItemStack;)Lorg/apache/commons/lang3/math/Fraction;"
+
+### R4: their targets EXIST in the merged base with matching name+descriptor
+  private final net.minecraft.world.Container container1;
+  private final net.minecraft.world.Container container2;
+  private final net.minecraft.core.NonNullList<net.minecraft.world.item.ItemStack> items;
+  private net.minecraft.world.item.component.ItemContainerContents(net.minecraft.core.NonNullList<net.minecraft.world.item.ItemStack>);
+  public void copyInto(net.minecraft.core.NonNullList<net.minecraft.world.item.ItemStack>);
+  public final net.minecraft.world.level.material.Fluid content;
+  static org.apache.commons.lang3.math.Fraction getWeight(net.minecraft.world.item.ItemStack);
+
+### R2: the real 1.21.1 RemappableRegistry.remap signature (3-arg)
+  public abstract void remap(java.lang.String, it.unimi.dsi.fastutil.objects.Object2IntMap<net.minecraft.resources.ResourceLocation>, net.fabricmc.fabric.impl.registry.sync.RemappableRegistry$RemapMode) throws net.fabricmc.fabric.impl.registry.sync.RemapException;
+### R2: the real client-sync entry
+  public static void apply(java.util.Map<net.minecraft.resources.ResourceLocation, it.unimi.dsi.fastutil.objects.Object2IntMap<net.minecraft.resources.ResourceLocation>>, net.fabricmc.fabric.impl.registry.sync.RemappableRegistry$RemapMode) throws net.fabricmc.fabric.impl.registry.sync.RemapException;
+### R2: the class the OLD hook named is ABSENT from fabric-api 0.116.17
+0
+
+### shipped 0.3.8 instance log: no fabric-sync flush line, and 56 accessor false positives
+flushing ... RegistrySyncManager.apply: 0
+flushing ... ClientRegistrySyncHandler.apply: 0
+guest accessor mixin ... cannot bind: 56

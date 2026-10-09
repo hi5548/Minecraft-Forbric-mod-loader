@@ -117,6 +117,13 @@ public final class FieldDriftAudit {
 		}
 	}
 
+	/** Records {@code n} jars as scanned — the summary line's count; {@link GuestClassScan} owns the one boot pass. */
+	static void recordJars(int n) {
+		synchronized (HITS) {
+			scannedJars += n;
+		}
+	}
+
 	/** One count line always; one line per hit jar; DEGRADED on every catalog entry whose jar is a hit. */
 	public static void report() {
 		if (!enabled()) return;

@@ -142,7 +142,7 @@ public final class MergedBaseUncalledMethods {
 	 * the method through a {@code CONSTANT_NameAndType} — so it costs one pass over the entries the other guest audits read.
 	 */
 	public static void scanGuests(List<Path> jars) {
-		if (!MixinFit.asksLiveness() || jars == null) return;
+		if (!enabled() || jars == null) return;
 		for (Path jar : jars) {
 			try (ZipFile zip = new ZipFile(jar.toFile())) {
 				for (ZipEntry entry : zip.stream().toList()) {
@@ -156,6 +156,16 @@ public final class MergedBaseUncalledMethods {
 						jar.getFileName(), unreadable);
 			}
 		}
+		finishGuestScan();
+	}
+
+	/** Whether the liveness verdict is asked at all — {@code -Dforbric.mixinFit.liveness=off} reads every row as live. */
+	public static boolean enabled() {
+		return MixinFit.asksLiveness();
+	}
+
+	/** The one summary {@link #scanGuests} used to print; kept separate so {@link GuestClassScan}'s single pass can end with it. */
+	public static void finishGuestScan() {
 		if (!GUEST_CALLED.isEmpty()) {
 			ForbricLog.info("[Forbric/Mixin] installed mods call %d of the %d merged-base method(s) nothing in the merged game "
 					+ "calls; an injector there counts as running", GUEST_CALLED.size(), keys().size());
@@ -163,7 +173,7 @@ public final class MergedBaseUncalledMethods {
 	}
 
 	/** {@link #scanGuests} for one class's bytes. */
-	static void noteGuest(byte[] classBytes) {
+	public static void noteGuest(byte[] classBytes) {
 		ClassReader reader;
 		try {
 			reader = new ClassReader(classBytes);
@@ -181,12 +191,12 @@ public final class MergedBaseUncalledMethods {
 	}
 
 	/** Whether an installed mod references {@code nameAndDesc}; test and census seam. */
-	static boolean calledByGuest(String nameAndDesc) {
+	public static boolean calledByGuest(String nameAndDesc) {
 		return GUEST_CALLED.contains(nameAndDesc);
 	}
 
 	/** Test and census seam: forgets what the installed mods reference. */
-	static void forgetGuests() {
+	public static void forgetGuests() {
 		GUEST_CALLED.clear();
 	}
 

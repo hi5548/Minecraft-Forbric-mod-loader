@@ -57,8 +57,9 @@ public final class KernelRegistryRevert {
 	}
 
 	/**
-	 * Head of every remap entry point ({@code RegistryManager.applySnapshot}, {@code ClientRegistrySyncHandler
-	 * .apply}): remember the ids as they are now, once per connection. The revert's own {@code applySnapshot} passes
+	 * Head of every remap entry point (NeoForge's {@code RegistryManager.applySnapshot}, fabric-api's client sync
+	 * entry — {@code RegistrySyncManager.apply} on 1.21.1, {@code ClientRegistrySyncHandler.apply} on 26.2):
+	 * remember the ids as they are now, once per connection. The revert's own {@code applySnapshot} passes
 	 * through here too, and must not re-capture the ids it is in the middle of undoing.
 	 */
 	public static void captureIfNeeded(Class<?> gameClass) {

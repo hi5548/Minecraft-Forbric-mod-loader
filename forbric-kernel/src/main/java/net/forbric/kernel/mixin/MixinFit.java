@@ -1200,7 +1200,7 @@ public final class MixinFit {
 
 	private static Anchor accessorAnchor(MethodNode m, ClassNode target, Function<String, byte[]> resolver) {
 		AnnotationNode a = annotation(m, ACCESSOR_DESC);
-		String name = asString(value(a, "value"));
+		String name = memberName(asString(value(a, "value")));
 		Type[] params = Type.getArgumentTypes(m.desc);
 		Type ret = Type.getReturnType(m.desc);
 		String desc;
@@ -1219,10 +1219,27 @@ public final class MixinFit {
 
 	private static Anchor invokerAnchor(MethodNode m, ClassNode target, Function<String, byte[]> resolver) {
 		AnnotationNode a = annotation(m, INVOKER_DESC);
-		String name = asString(value(a, "value"));
+		String name = memberName(asString(value(a, "value")));
 		if (name == null || name.isEmpty()) name = derived(m.name, "invoke", "call");
 		if (name == null || name.startsWith("<")) return null;    // constructor invokers: not judged
 		return new Anchor("@Invoker method", name + m.desc, findMethod(target, name, m.desc, resolver) != null);
+	}
+
+	/**
+	 * The member name an {@code @Accessor}/{@code @Invoker} value names, parsed the way Mixin parses it.
+	 *
+	 * <p>Fabric's tiny-remapper rewrites the annotation value into Mixin's selector form: {@code field:desc} for an
+	 * accessor ({@code "container1:Lnet/minecraft/world/Container;"}) and {@code name(args)ret} for an invoker
+	 * ({@code "getWeight(Lnet/minecraft/world/item/ItemStack;)Lorg/apache/commons/lang3/math/Fraction;"}). Mixin
+	 * reads it through {@code TargetSelector.parseName}, which keeps only the name; taking the whole string as the
+	 * member name — what this used to do — misses every remapped accessor, so every fabric-api accessor (and every
+	 * mod's) was reported "cannot bind" on every boot. A diagnostic that cries wolf on the whole corpus is worse
+	 * than none, and this one is also where {@code -Dforbric.mixinFit=strict} would have looked for a defect.
+	 */
+	private static String memberName(String value) {
+		if (value == null || value.isEmpty()) return null;
+		Member parsed = parseMember(value);
+		return parsed != null ? parsed.name() : value;
 	}
 
 	/** Mixin's implicit accessor naming: strip one of the prefixes and decapitalise. */

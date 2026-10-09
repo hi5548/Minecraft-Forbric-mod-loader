@@ -16,9 +16,6 @@
 
 package net.forbric.kernel.boot;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -26,8 +23,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
 
 import net.forbric.api.ModCatalog;
 import net.forbric.api.Side;
@@ -125,24 +120,6 @@ public final class FabricApiModuleLossAudit {
 		byte[][] out = new byte[LOSSES.size()][];
 		for (int i = 0; i < out.length; i++) out[i] = ByteScan.needle(LOSSES.get(i).needle());
 		return out;
-	}
-
-	/** Every class of every jar, one pass; a jar that cannot be read is skipped, never refused. */
-	public static void scan(List<Path> jars) {
-		if (!enabled()) return;
-		for (Path jar : jars) {
-			String name = jar.getFileName().toString();
-			try (ZipFile zip = new ZipFile(jar.toFile())) {
-				for (ZipEntry entry : zip.stream().toList()) {
-					if (!entry.getName().endsWith(".class")) continue;
-					try (InputStream in = zip.getInputStream(entry)) {
-						note(name, in.readAllBytes());
-					}
-				}
-			} catch (IOException unreadable) {
-				ForbricLog.debug("[Forbric/FabricApi] could not read %s: %s", name, unreadable);
-			}
-		}
 	}
 
 	/** Records {@code jarName} under every surface {@code classBytes} names, and whether it implements one. */

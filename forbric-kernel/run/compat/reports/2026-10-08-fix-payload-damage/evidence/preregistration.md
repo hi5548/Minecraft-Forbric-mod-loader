@@ -163,8 +163,11 @@ outside `[Forbric/PayloadOrdering]` lines**.
 
 ### A1 — boot reading MET via the landed path
 
-First arm (`--only modmenu`, `corpus-user12`): the anchor pair read 0/0, which was **misread**. `corpus-user12`
-suppresses `[FORGE]` for every subject (its Forge claims are manifest-only), but that is not why the pair was empty:
+First arm (`--only modmenu`, `corpus-user12`): the anchor pair read 0/0, which was **misread**. That arm carries the
+landed reading too — it shows the two `[Forbric/Damage]` lines (4 across two transform passes) and no damage-seam
+miss, because the seams are placed on the **merged** classes at boot, independent of the subject's ecosystem. It was
+never unexercised. `corpus-user12` does suppress `[FORGE]` for every subject (its Forge claims are manifest-only),
+but that is not why the pair was empty:
 the string I had pinned as MUST-BE-PRESENT — `[Forbric/Anchor]   forbric-forge-damage-seams on <class>: …` — is the
 **miss** listing, emitted only inside the `else` of `if (r.clean())` (`transform/TransformChain.java:207-212`), i.e.
 the form a *declining* kernel prints. W7Harness built that string from a console where it appeared without checking

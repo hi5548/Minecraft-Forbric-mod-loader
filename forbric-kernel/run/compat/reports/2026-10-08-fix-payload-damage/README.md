@@ -136,11 +136,16 @@ damage-seam miss.
 **Cross-kernel contrast — what makes it a repair and not a coincidence** (same rig, stage and corpus; only the
 kernel differs; evidence `w7-cross-kernel.txt`):
 
-| kernel | `[Forbric/Damage]` (landed) | `forbric-forge-damage-seams` (miss form) |
+| kernel | `[Forbric/Damage]` landed lines | damage-seam miss entries (classes declined) |
 |---|---|---|
 | `16bcd602` | 0 | 2 |
 | `117edc56` | 0 | 2 |
-| **`975774d8`** | **2** | **0** |
+| **`975774d8`** | **2** (forge arm; **4** in the `--only modmenu` arm) | **0** |
+
+The seams are placed on the merged classes at boot, so every arm carries the landed reading regardless of subject
+ecosystem; the `--only modmenu` console shows 4 landed lines (two per class across two transform passes) and the
+forge arm 2. The transformer *name* `forbric-forge-damage-seams` appears only in miss lines, which is why a grep for
+it reads 0 on a working kernel and 4 on a declining one (2 `made no edit` per-class lines + 2 miss-list lines).
 
 **Adjudication of the written criteria — corrected in the adjudication, not by rewriting them.**
 

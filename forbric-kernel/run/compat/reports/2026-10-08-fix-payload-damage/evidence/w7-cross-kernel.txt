@@ -1,4 +1,9 @@
-# Cross-kernel contrast (same rig, stage .stage-orico, kernel differs)
-16bcd602  [Forbric/Damage]=0  miss-form(forbric-forge-damage-seams)=4  path=/Users/charlescai/Desktop/dsh/实验/forbric/w7/reports/hidewindow-hidden/per-mod/run/000-modmenu__fabric/console.log
-117edc56  [Forbric/Damage]=0  miss-form(forbric-forge-damage-seams)=4  path=/Users/charlescai/Desktop/dsh/实验/forbric/w7/reports/2026-10-08-fix-sync-perf/per-mod/run/000-modmenu__fabric/console.log
-975774d8  [Forbric/Damage]=2  miss-form=0  (see w7-arm-a1-forge.txt)
+# Cross-kernel contrast (same rig, stage .stage-orico; only the kernel differs)
+# [Forbric/Damage] = landed-path line (the injector's own log); it is emitted when a class was EDITED.
+# forbric-forge-damage-seams = the transformer NAME, which appears ONLY in miss lines: 2 x 'was handed ... made no edit'
+#   plus 2 x the miss listing '[Forbric/Anchor]   <name> on <class>: <cost>' (TransformChain.java:207-212).
+#   So a DECLINING kernel shows >=2 occurrences and a LANDED kernel shows 0 — 0 is the good reading, not 'not visited'.
+
+16bcd602  landed([Forbric/Damage])=0  name-occurrences(miss-form)=4  path=/Users/charlescai/Desktop/dsh/实验/forbric/w7/reports/hidewindow-hidden/per-mod/run/000-modmenu__fabric/console.log
+117edc56  landed([Forbric/Damage])=0  name-occurrences(miss-form)=4  path=/Users/charlescai/Desktop/dsh/实验/forbric/w7/reports/2026-10-08-fix-sync-perf/per-mod/run/000-modmenu__fabric/console.log
+975774d8  landed=2 (forge arm), landed=4 (--only modmenu arm)  name-occurrences(miss-form)=0  (see w7-arm-a1-forge.txt / w7-arm-a1-modmenu.txt)

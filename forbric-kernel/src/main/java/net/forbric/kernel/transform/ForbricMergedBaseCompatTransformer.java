@@ -94,7 +94,7 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 	}
 
 	/** The repairs {@link #transform} runs, in its order; a test pins the two lists against each other. */
-	static final List<String> REPAIRS = List.of("repairLambdaBootstrapHandles", "addBlockStateModelConflictResolvers", "addBlockStateAppearanceResolver", "addMissingForgeFluidTypeBridge", "addMissingForgeKeyMappingLookupInitializer", "addMissingForgeKnownRegistriesInitializer", "addMissingIngredientInvalidationCounterInitializer", "routeKeyMappingClickToPopulatedLookup", "giveKeyMappingItsMinecraftForgeFace", "routeFabricParticleFactoriesThroughTheLiveMap", "giveFeaturesPerStepItsVanillaDescriptorBack", "letDungeonsGenerateWithoutTheDataMap", "restoreDoublePrecisionToTheRandomSources", "convertRadiansWithVanillasFoldedConstant", "saveTheHeightmapsVanillaSaves", "guardNeoForgesWorldModifierPass", "letForeignResourceConditionsThrough", "letForeignResourceConditionsThroughMinecraftForge", "letFabricResourceConditionsDecide", "translateAGuestsPrivateSkipMarker", "serveDefaultAttributesBothEcosystems", "restoreForgeClientInit", "restoreForgeGeometryReload", "nameTheReloadListenersNeoForgeRefusesToName", "dropInterfaceDefaultShadowingOverrides", "tolerateEmptyCreativeTabStacks", "routePlaceItemHookToNeoForge", "bridgeOrphanedPipRenderers", "keepForgeOutboundProtocolCurrent", "surviveTheMissingForgeModelDataManager", "dropTheWindowTitlesLoaderBrand", "keepTheSaveOffTheTeardownsFailurePath", "postNeoForgesItemTooltipEvent", "askNeoForgeWhatAnItemsAttributesAre", "readTheSpawnReasonThatIsActuallyWritten", "giveTheUnwrittenLoggerAValue", "addTheMissingCapabilityLifecycleStubs", "addTheMissingNbtBuilderFactory", "postMinecraftForgesReloadListenerEvent", "giveMinecraftForgesReloadEventItsConditionContext", "letMinecraftForgeIngredientTypesDecode", "letMinecraftForgeFluidsChooseTheirModel", "giveMinecraftForgesParticleLookupItsFirstVariant", "dropStubsThatBypassARealSuperclassMethod", "inlineTheSwitchMapTheMergeLost", "vetoUnjudgeableOverlayConditions", "hideTheLegacyLootModifierIndexFromTheDirectoryScan", "letModdedFeatureFlagsRegister", "dropTheKeyModifierSuffixBeforeParsingAKeyName", "letTheAtlasLowerItsMipLevelLikeVanilla", "wrapTheStreamsVanillaWraps", "returnFromANestedBootstrapBeforeItsTail", "letBothEcosystemsSetBurnTime", "letMinecraftForgeSeeSpawnerMobs", "letMinecraftForgeAddPackFinders", "giveForgeEventsTheConstructorTheEventBusWants", "readASelfDependencyAsACycle", "routeForeignEntityDataSerializersToNeoForge", "restoreTheRawColourKeysAndRebindTheColourMixins", "letMinecraftForgeReadTheMergedThreadGroups");
+	static final List<String> REPAIRS = List.of("repairLambdaBootstrapHandles", "addBlockStateModelConflictResolvers", "addBlockStateAppearanceResolver", "addMissingForgeFluidTypeBridge", "addMissingForgeKeyMappingLookupInitializer", "addMissingForgeKnownRegistriesInitializer", "addMissingIngredientInvalidationCounterInitializer", "routeKeyMappingClickToPopulatedLookup", "giveKeyMappingItsMinecraftForgeFace", "routeFabricParticleFactoriesThroughTheLiveMap", "giveFeaturesPerStepItsVanillaDescriptorBack", "letDungeonsGenerateWithoutTheDataMap", "restoreDoublePrecisionToTheRandomSources", "convertRadiansWithVanillasFoldedConstant", "saveTheHeightmapsVanillaSaves", "guardNeoForgesWorldModifierPass", "letForeignResourceConditionsThrough", "letForeignResourceConditionsThroughMinecraftForge", "letFabricResourceConditionsDecide", "translateAGuestsPrivateSkipMarker", "serveDefaultAttributesBothEcosystems", "restoreForgeClientInit", "restoreForgeGeometryReload", "nameTheReloadListenersNeoForgeRefusesToName", "dropInterfaceDefaultShadowingOverrides", "tolerateEmptyCreativeTabStacks", "routePlaceItemHookToNeoForge", "bridgeOrphanedPipRenderers", "keepForgeOutboundProtocolCurrent", "surviveTheMissingForgeModelDataManager", "dropTheWindowTitlesLoaderBrand", "keepTheSaveOffTheTeardownsFailurePath", "postNeoForgesItemTooltipEvent", "askNeoForgeWhatAnItemsAttributesAre", "readTheSpawnReasonThatIsActuallyWritten", "giveTheUnwrittenLoggerAValue", "addTheMissingCapabilityLifecycleStubs", "addTheMissingNbtBuilderFactory", "postMinecraftForgesReloadListenerEvent", "giveMinecraftForgesReloadEventItsConditionContext", "letMinecraftForgeIngredientTypesDecode", "letMinecraftForgeFluidsChooseTheirModel", "giveMinecraftForgesParticleLookupItsFirstVariant", "dropStubsThatBypassARealSuperclassMethod", "inlineTheSwitchMapTheMergeLost", "vetoUnjudgeableOverlayConditions", "hideTheLegacyLootModifierIndexFromTheDirectoryScan", "letModdedFeatureFlagsRegister", "dropTheKeyModifierSuffixBeforeParsingAKeyName", "letTheAtlasLowerItsMipLevelLikeVanilla", "wrapTheStreamsVanillaWraps", "returnFromANestedBootstrapBeforeItsTail", "letBothEcosystemsSetBurnTime", "letMinecraftForgeSeeSpawnerMobs", "letMinecraftForgeAddPackFinders", "giveForgeEventsTheConstructorTheEventBusWants", "readASelfDependencyAsACycle", "routeForeignEntityDataSerializersToNeoForge", "restoreTheRawColourKeysAndRebindTheColourMixins", "letMinecraftForgeReadTheMergedThreadGroups", "rekeyTheForgeRenderLayerRegistration");
 
 	private static final String NEO_EVENT_HOOKS_BINARY = "net.neoforged.neoforge.event.EventHooks";
 
@@ -301,6 +301,14 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 						+ "SidedThreadGroups are different classes — ForgeHooks.onCustomPayload disconnects the player "
 						+ "(\"Illegal packet received, terminating connection\") on the first custom payload a mod "
 						+ "sends upward"));
+		out.add(fixed("rekeyTheForgeRenderLayerRegistration", ITEM_BLOCK_RENDER_TYPES,
+				"MinecraftForge's setRenderLayer(Block, ChunkRenderTypeSet) put BLOCK_RENDER_TYPES's key through "
+						+ "ForgeRegistries.BLOCKS.getDelegateOrThrow — a Holder.Reference — while getRenderLayers "
+						+ "reads the map by the raw Block, so every render layer a Forge mod registered through "
+						+ "that overload was silently ignored and the block drew with the default layer. The raw-key "
+						+ "strip alone would trade that silence for a ClassCastException, because Forge's "
+						+ "ChunkRenderTypeSet is not the NeoForge type the reader casts to, so the value is "
+						+ "converted in the same pass. Client-only: a dedicated server never loads the class"));
 		return List.copyOf(out);
 	}
 
@@ -399,6 +407,7 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 			changed |= claim(reporter, "routeForeignEntityDataSerializersToNeoForge", routeForeignEntityDataSerializersToNeoForge(node));
 			changed |= claim(reporter, "restoreTheRawColourKeysAndRebindTheColourMixins", restoreTheRawColourKeysAndRebindTheColourMixins(node));
 			changed |= claim(reporter, "letMinecraftForgeReadTheMergedThreadGroups", letMinecraftForgeReadTheMergedThreadGroups(node));
+			changed |= claim(reporter, "rekeyTheForgeRenderLayerRegistration", rekeyTheForgeRenderLayerRegistration(node));
 			changed |= namedOldLoader && adoptInteropHooksTheBaseStillNamesAfterTheOldLoader(node);
 
 			byte[] result = classBytes;
@@ -717,6 +726,19 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 	private static final String REGISTRY_GET_ID_DESC = "(Ljava/lang/Object;)I";
 	private static final String MAP_INTERNAL = "java/util/Map";
 	private static final String MAP_GET_DESC = "(Ljava/lang/Object;)Ljava/lang/Object;";
+	private static final String MAP_PUT_DESC = "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;";
+
+	// --- the render-layer map: the base writes it by holder but reads it by raw block -------------------------
+
+	/** 1.21.1's client render-layer map; the merge kept NeoForge's raw-key reader and Forge's holder-key writer. */
+	private static final String ITEM_BLOCK_RENDER_TYPES = "net/minecraft/client/renderer/ItemBlockRenderTypes";
+	private static final String BLOCK_RENDER_TYPES_FIELD = "BLOCK_RENDER_TYPES";
+	/** MinecraftForge's {@code setRenderLayer(Block, ChunkRenderTypeSet)} — the only writer that keys by delegate. */
+	private static final String FORGE_SET_RENDER_LAYER_DESC =
+			"(Lnet/minecraft/world/level/block/Block;Lnet/minecraftforge/client/ChunkRenderTypeSet;)V";
+	private static final String FORGE_CHUNK_RENDER_TYPE_SET = "net/minecraftforge/client/ChunkRenderTypeSet";
+	/** NeoForge's own set type — the map's VALUE type, and the type the surviving reader casts to. */
+	private static final String NEO_CHUNK_RENDER_TYPE_SET = "net/neoforged/neoforge/client/ChunkRenderTypeSet";
 
 	/** Old owner → the kernel class that now carries the method, for hooks the merged base still names. */
 	private static final Map<String, String> LEGACY_INTEROP_OWNERS = Map.of(
@@ -1856,6 +1878,83 @@ public final class ForbricMergedBaseCompatTransformer implements ClassTransforme
 		ForbricLog.info("[Forbric/MergedBaseCompat] %s's @Shadow %s is an IdMapper this base no longer has, so "
 				+ "Mixin could not bind it and discarded the whole mixin; it now reads the live Map by raw key",
 				node.name.replace('/', '.'), fieldName);
+		return true;
+	}
+
+	/**
+	 * Re-keys Forge's render-layer registration to the raw {@code Block} the map is read by, and adapts its
+	 * render-type set to the type the merged map actually holds.
+	 *
+	 * <p>{@code ItemBlockRenderTypes.BLOCK_RENDER_TYPES} merges as two halves that never meet. The field's declared
+	 * value type, {@code getRenderLayers(BlockState)}, NeoForge's own
+	 * {@code setRenderLayer(Block, ChunkRenderTypeSet)} and the filler are all NeoForge's — the map is keyed by the
+	 * raw {@code Block}. MinecraftForge's {@code setRenderLayer(Block, ChunkRenderTypeSet)} overload survived beside
+	 * them and writes through {@code ForgeRegistries.BLOCKS.getDelegateOrThrow(block)}, a {@code Holder.Reference}:
+	 * under the map's identity semantics that key never equals the raw {@code Block}, so a render layer registered
+	 * through Forge's overload is stored where nothing reads it and the block draws with the default layer. Same
+	 * defect as {@link #stripTheForgeRegistryKey}'s colour maps, one class over.
+	 *
+	 * <p>The raw-key strip is only half of it here, and that half alone would be a REGRESSION. Forge's
+	 * {@code ChunkRenderTypeSet} is a different class from the {@code net.neoforged.neoforge.client}
+	 * {@code ChunkRenderTypeSet} the map is typed for and that {@code getRenderLayers} {@code checkcast}s to.
+	 * Storing Forge's set under the raw key would trade a silent no-op for a {@code ClassCastException} on the first
+	 * frame that draws the block. So the value is converted in the same pass —
+	 * {@code NeoChunkRenderTypeSet.of(forgeSet.asList())}, the same set of {@code RenderType}s expressed in the type
+	 * the reader can read. (The two classes index the same {@code RenderType.chunkBufferLayers()} list, so the
+	 * conversion is exact.)
+	 *
+	 * <p>Refuses the class unless the overload's body is EXACTLY the measured generation — {@code checkClientLoading},
+	 * {@code BLOCK_RENDER_TYPES}, {@code ForgeRegistries.BLOCKS}, {@code aload_0}, {@code getDelegateOrThrow},
+	 * {@code aload_1}, {@code Map.put}, {@code pop}, {@code return} — so a generation with a different body is left
+	 * alone rather than half-re-keyed. The other four Forge-delegate sites in the class (the fluid writers, the fluid
+	 * reader and the fluid filler) are a consistent Holder-keyed pair and are NOT touched; only the block writer
+	 * mismatches its reader.
+	 */
+	private static boolean rekeyTheForgeRenderLayerRegistration(ClassNode node) {
+		if (!ITEM_BLOCK_RENDER_TYPES.equals(node.name)) return false;
+		if (!hasField(node, BLOCK_RENDER_TYPES_FIELD, NAME_KEYED)) return false;
+		MethodNode writer = findMethod(node, "setRenderLayer", FORGE_SET_RENDER_LAYER_DESC);
+		if (writer == null) return false; // already re-keyed, or a generation without Forge's block overload
+
+		List<AbstractInsnNode> real = new ArrayList<>();
+		for (AbstractInsnNode insn = writer.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+			if (insn.getOpcode() >= 0) real.add(insn);
+		}
+		if (real.size() != 9) return false;
+		if (!(real.get(0) instanceof MethodInsnNode check) || check.getOpcode() != Opcodes.INVOKESTATIC
+				|| !ITEM_BLOCK_RENDER_TYPES.equals(check.owner) || !"checkClientLoading".equals(check.name)
+				|| !"()V".equals(check.desc)) return false;
+		if (!(real.get(1) instanceof FieldInsnNode map) || map.getOpcode() != Opcodes.GETSTATIC
+				|| !ITEM_BLOCK_RENDER_TYPES.equals(map.owner) || !BLOCK_RENDER_TYPES_FIELD.equals(map.name)
+				|| !NAME_KEYED.equals(map.desc)) return false;
+		if (!(real.get(2) instanceof FieldInsnNode registry) || registry.getOpcode() != Opcodes.GETSTATIC
+				|| !FORGE_REGISTRIES.equals(registry.owner) || !"BLOCKS".equals(registry.name)
+				|| !FORGE_REGISTRY_DESC.equals(registry.desc)) return false;
+		if (!(real.get(3) instanceof VarInsnNode block) || block.getOpcode() != Opcodes.ALOAD || block.var != 0) return false;
+		if (!(real.get(4) instanceof MethodInsnNode delegate) || delegate.getOpcode() != Opcodes.INVOKEINTERFACE
+				|| !I_FORGE_REGISTRY.equals(delegate.owner) || !GET_DELEGATE_OR_THROW.equals(delegate.name)
+				|| !GET_DELEGATE_OR_THROW_DESC.equals(delegate.desc)) return false;
+		if (!(real.get(5) instanceof VarInsnNode set) || set.getOpcode() != Opcodes.ALOAD || set.var != 1) return false;
+		if (!(real.get(6) instanceof MethodInsnNode put) || put.getOpcode() != Opcodes.INVOKEINTERFACE
+				|| !MAP_INTERNAL.equals(put.owner) || !"put".equals(put.name) || !MAP_PUT_DESC.equals(put.desc)) return false;
+		if (real.get(7).getOpcode() != Opcodes.POP || real.get(8).getOpcode() != Opcodes.RETURN) return false;
+
+		writer.instructions.remove(registry);
+		writer.instructions.remove(delegate);
+		InsnList adapt = new InsnList();
+		adapt.add(new VarInsnNode(Opcodes.ALOAD, 1));
+		adapt.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, FORGE_CHUNK_RENDER_TYPE_SET, "asList",
+				"()Ljava/util/List;", false));
+		adapt.add(new MethodInsnNode(Opcodes.INVOKESTATIC, NEO_CHUNK_RENDER_TYPE_SET, "of",
+				"(Ljava/util/Collection;)L" + NEO_CHUNK_RENDER_TYPE_SET + ";", false));
+		writer.instructions.insertBefore(set, adapt);
+		writer.instructions.remove(set);
+		writer.maxStack = Math.max(writer.maxStack, 3);
+		ForbricLog.info("[Forbric/MergedBaseCompat] %s's Forge setRenderLayer(Block, ChunkRenderTypeSet) keyed "
+				+ "BLOCK_RENDER_TYPES by a registry delegate while getRenderLayers reads it by the raw Block, so "
+				+ "every registration through it was invisible; it is now re-keyed to the raw Block and its "
+				+ "ChunkRenderTypeSet converted to NeoForge's — the raw key alone would ClassCastException the reader",
+				node.name.replace('/', '.'));
 		return true;
 	}
 

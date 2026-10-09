@@ -508,6 +508,72 @@ class MixinFitTest {
 				r.unresolved().toString());
 	}
 
+	/**
+	 * Fabric's tiny-remapper writes the member's DESCRIPTOR into the {@code @Accessor}/{@code @Invoker} value
+	 * ({@code "field:desc"}, {@code "name(args)ret"}), and Mixin parses it with {@code TargetSelector.parseName}.
+	 * Reading the whole value as the member name reported every fabric-api accessor as an unresolved anchor on every
+	 * boot — the four fabric-transfer-api storage accessors BugHunt5 chased are this exact shape — while their
+	 * targets are present. Byte-for-byte the shape remapped fabric-transfer-api-v1 carries.
+	 */
+	@Test
+	void aFabricRemappedAccessorAndInvokerValueBindsByItsParsedName() {
+		byte[] target = compoundContainer();
+		MixinFit.Result r = MixinFit.evaluate(fabricAccessorMixin(true),
+				name -> "net/example/Compound.class".equals(name) ? target : null);
+		assertEquals(MixinFit.Verdict.FIT, r.verdict(), r.unresolved().toString());
+		assertTrue(r.unresolved().isEmpty(), r.unresolved().toString());
+	}
+
+	/** The same shape, but a value naming a member the target does NOT have — still reported. */
+	@Test
+	void aFabricRemappedAccessorValueForAMissingMemberIsStillUnresolved() {
+		byte[] target = compoundContainer();
+		MixinFit.Result r = MixinFit.evaluate(fabricAccessorMixin(false),
+				name -> "net/example/Compound.class".equals(name) ? target : null);
+		assertEquals(1, r.unresolved().size(), r.unresolved().toString());
+		assertTrue(r.unresolved().get(0).contains("missing:Lnet/example/Handle;"), r.unresolved().toString());
+	}
+
+	/** {@code CompoundContainer} in miniature: private {@code container1}, and a package-private {@code getWeight}. */
+	private static byte[] compoundContainer() {
+		org.objectweb.asm.ClassWriter cw = new org.objectweb.asm.ClassWriter(0);
+		cw.visit(org.objectweb.asm.Opcodes.V21, org.objectweb.asm.Opcodes.ACC_PUBLIC, "net/example/Compound", null,
+				"java/lang/Object", null);
+		cw.visitField(org.objectweb.asm.Opcodes.ACC_PRIVATE | org.objectweb.asm.Opcodes.ACC_FINAL, "container1",
+				"Lnet/example/Handle;", null, null).visitEnd();
+		cw.visitMethod(org.objectweb.asm.Opcodes.ACC_STATIC, "getWeight", "(Lnet/example/Item;)Lnet/example/Fraction;",
+				null, null).visitEnd();
+		cw.visitEnd();
+		return cw.toByteArray();
+	}
+
+	/** An interface mixin whose values are in Fabric's remapped form; {@code bind} false flips one value to a miss. */
+	private static byte[] fabricAccessorMixin(boolean bind) {
+		org.objectweb.asm.ClassWriter cw = new org.objectweb.asm.ClassWriter(0);
+		int itf = org.objectweb.asm.Opcodes.ACC_PUBLIC | org.objectweb.asm.Opcodes.ACC_INTERFACE
+				| org.objectweb.asm.Opcodes.ACC_ABSTRACT;
+		cw.visit(org.objectweb.asm.Opcodes.V21, itf, "test/TransferAccessor", null, "java/lang/Object", null);
+		org.objectweb.asm.AnnotationVisitor mixin = cw.visitAnnotation("Lorg/spongepowered/asm/mixin/Mixin;", false);
+		org.objectweb.asm.AnnotationVisitor targets = mixin.visitArray("targets");
+		targets.visit(null, "net/example/Compound");
+		targets.visitEnd();
+		mixin.visitEnd();
+
+		org.objectweb.asm.MethodVisitor getter = cw.visitMethod(itf, "fabric_getFirst", "()Lnet/example/Handle;", null, null);
+		getter.visitAnnotation("Lorg/spongepowered/asm/mixin/gen/Accessor;", true)
+				.visit("value", (bind ? "container1" : "missing") + ":Lnet/example/Handle;");
+		getter.visitEnd();
+
+		org.objectweb.asm.MethodVisitor invoker = cw.visitMethod(itf, "getOccupancy",
+				"(Lnet/example/Item;)Lnet/example/Fraction;", null, null);
+		invoker.visitAnnotation("Lorg/spongepowered/asm/mixin/gen/Invoker;", true)
+				.visit("value", "getWeight(Lnet/example/Item;)Lnet/example/Fraction;");
+		invoker.visitEnd();
+
+		cw.visitEnd();
+		return cw.toByteArray();
+	}
+
 	/** A mixin with one @Inject(method="run") HEAD on the given target — every member anchor resolves. */
 	private static byte[] injectRun(String target) {
 		org.objectweb.asm.ClassWriter cw = new org.objectweb.asm.ClassWriter(org.objectweb.asm.ClassWriter.COMPUTE_MAXS);

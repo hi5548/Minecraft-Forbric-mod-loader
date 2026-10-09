@@ -60,14 +60,17 @@ import net.forbric.kernel.util.ForbricLog;
  * deferral is safe is the client arm, not the test: {@code joined world via quick-play} on a client pinned to the
  * commit that carries this. {@code -Dforbric.payloadWorkOrdering=off} leaves {@code enqueueWork} untouched.
  *
- * <p>The {@code enqueueWork(Supplier)} overload carries the same shortcut and is deliberately NOT touched here:
- * the failed join enqueued a {@code Runnable}, and widening the repair to the returning form is a separate change
- * with its own arm.
+ * <p>Both {@code enqueueWork} overloads carry the shortcut, and both branch to a {@code submit(...)} tail, so the
+ * same replacement covers the {@code Runnable} form and the returning {@code Supplier} form. The failed join that
+ * motivated this transform enqueued a {@code Runnable}, but a clientbound-PLAY handler that defers through
+ * {@code ctx.enqueueWork(() -> value)} — the form {@code IPayloadContext} publishes for return values — takes the
+ * inline path on the {@code Supplier} overload just the same, so the repair is applied to both.
  */
 public final class PayloadWorkOrderingTransformer implements ClassTransformer {
 	private static final String OWNER = "net.neoforged.neoforge.network.handling.ClientPayloadContext";
 	private static final String METHOD = "enqueueWork";
-	private static final String DESCRIPTOR = "(Ljava/lang/Runnable;)Ljava/util/concurrent/CompletableFuture;";
+	private static final String RUNNABLE_DESC = "(Ljava/lang/Runnable;)Ljava/util/concurrent/CompletableFuture;";
+	private static final String SUPPLIER_DESC = "(Ljava/util/function/Supplier;)Ljava/util/concurrent/CompletableFuture;";
 
 	/** The switch, read here so that off means the class is not touched at all. */
 	public static final String PROPERTY = "forbric.payloadWorkOrdering";
@@ -85,7 +88,11 @@ public final class PayloadWorkOrderingTransformer implements ClassTransformer {
 
 		boolean changed = false;
 		for (MethodNode method : node.methods) {
-			if (!METHOD.equals(method.name) || !DESCRIPTOR.equals(method.desc)) continue;
+			if (!METHOD.equals(method.name)) continue;
+			// Both overloads carry the shortcut and both branch to a submit(...) tail, so the POP+GOTO replacement
+			// is identical. The Supplier form is the one a handler uses when it needs the work's return value; left
+			// inline it is the same defect under a different name, so the repair covers it too.
+			if (!RUNNABLE_DESC.equals(method.desc) && !SUPPLIER_DESC.equals(method.desc)) continue;
 
 			AbstractInsnNode call = nextIsSameThread(method.instructions);
 			if (call == null) continue;

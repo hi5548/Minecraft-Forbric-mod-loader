@@ -54,15 +54,15 @@ import net.forbric.kernel.TestFixtures;
  * The shape test the ordering repair owes: the real {@code ClientPayloadContext} comes out of the NeoForge
  * carrier with its {@code isSameThread()} shortcut gone, on no JVM.
  *
- * <p><b>What this proves, and what it must not be read as proving.</b> It proves the branch is gone — the
- * transformed {@code enqueueWork(Runnable)} has no {@code INVOKEVIRTUAL isSameThread} followed by a conditional
- * jump, and the {@code GOTO} that replaced the {@code IFEQ} lands on the same submit-path block the {@code IFEQ}
- * targeted — and, in {@link #theTransformedClassLinksUnderTheRealVerifier()}, that the class the transform writes
- * still links under the JVM verifier. It does <b>not</b> prove that removing the branch is semantically safe for
- * handlers that rely on the inline form: work enqueued on the main thread now runs at the next queue drain instead
- * of at that moment, and no shape test can see a handler that depended on the old immediacy. That is why the
- * falsification is a client arm ({@code joined world via quick-play} on a kernel pinned to the commit carrying the
- * transform), not this test.
+ * <p><b>What this proves, and what it must not be read as proving.</b> It proves the branch is gone from both
+ * {@code enqueueWork} overloads — the transformed method has no {@code INVOKEVIRTUAL isSameThread} followed by a
+ * conditional jump, and the {@code GOTO} that replaced the {@code IFEQ} lands on the same submit-path block the
+ * {@code IFEQ} targeted — and, in {@link #theTransformedClassLinksUnderTheRealVerifier()}, that the class the
+ * transform writes still links under the JVM verifier. It does <b>not</b> prove that removing the branch is
+ * semantically safe for handlers that rely on the inline form: work enqueued on the main thread now runs at the next
+ * queue drain instead of at that moment, and no shape test can see a handler that depended on the old immediacy. That
+ * is why the falsification is a client arm ({@code joined world via quick-play} on a kernel pinned to the commit
+ * carrying the transform), not this test.
  *
  * <p>The link gate exists because the shape assertions are not enough: the first landed form of this transform
  * replaced the branch with {@code POP}+{@code GOTO} but preserved the carrier's {@code StackMapTable}, and the
@@ -75,39 +75,42 @@ class PayloadWorkOrderingTransformerTest {
 	private static final String ENTRY = "net/neoforged/neoforge/network/handling/ClientPayloadContext.class";
 	private static final String METHOD = "enqueueWork";
 	private static final String RUNNABLE_DESC = "(Ljava/lang/Runnable;)Ljava/util/concurrent/CompletableFuture;";
+	private static final String SUPPLIER_DESC = "(Ljava/util/function/Supplier;)Ljava/util/concurrent/CompletableFuture;";
 
 	@Test
 	void theSameThreadShortcutIsReplacedByAnUnconditionalJumpToTheSubmitPath() throws Exception {
 		byte[] raw = clientPayloadContext();
 
-		MethodNode before = method(parse(raw), RUNNABLE_DESC);
-		assertNotNull(before, "the carrier must still carry enqueueWork(Runnable)");
-		JumpInsnNode shortcut = isSameThreadThenConditionalJump(before);
-		assertNotNull(shortcut, "the real class must still carry the isSameThread shortcut, or this test measures "
-				+ "nothing — a carrier bump that changed the shape must fail here, not pass");
-		List<String> submitPath = blockAfter(before, shortcut.label, 8);
+		for (String descriptor : List.of(RUNNABLE_DESC, SUPPLIER_DESC)) {
+			MethodNode before = method(parse(raw), descriptor);
+			assertNotNull(before, "the carrier must still carry enqueueWork " + descriptor);
+			JumpInsnNode shortcut = isSameThreadThenConditionalJump(before);
+			assertNotNull(shortcut, "the real class must still carry the isSameThread shortcut in " + descriptor
+					+ ", or this test measures nothing — a carrier bump that changed the shape must fail here, not pass");
+			List<String> submitPath = blockAfter(before, shortcut.label, 8);
 
-		byte[] transformed = new PayloadWorkOrderingTransformer().transform(OWNER, raw, null);
-		assertNotSame(raw, transformed, "the transform must edit the real class, not hand it back");
+			byte[] transformed = new PayloadWorkOrderingTransformer().transform(OWNER, raw, null);
+			assertNotSame(raw, transformed, "the transform must edit the real class, not hand it back");
 
-		// Step 4 of the receipt: read the transformed class back with ASM. CheckClassAdapter is not on the boot
-		// classpath, so a ClassReader round-trip plus the assertions below is the honest equivalent available.
-		MethodNode after = method(parse(roundTrip(transformed)), RUNNABLE_DESC);
-		assertNotNull(after, "the transformed class must still carry enqueueWork(Runnable)");
+			// Step 4 of the receipt: read the transformed class back with ASM. CheckClassAdapter is not on the boot
+			// classpath, so a ClassReader round-trip plus the assertions below is the honest equivalent available.
+			MethodNode after = method(parse(roundTrip(transformed)), descriptor);
+			assertNotNull(after, "the transformed class must still carry enqueueWork " + descriptor);
 
-		assertNull(isSameThreadThenConditionalJump(after),
-				"no isSameThread-then-conditional-jump may remain in the transformed method");
+			assertNull(isSameThreadThenConditionalJump(after),
+					"no isSameThread-then-conditional-jump may remain in " + descriptor);
 
-		JumpInsnNode go = popThenGoto(after);
-		assertNotNull(go, "the removed IFEQ must be replaced by POP + GOTO");
-		// Object identity of the label does not survive serialization, so "the GOTO names the IFEQ's label" is
-		// checked as "it lands on the same block": the instructions at the target must be the submit path.
-		assertEquals(submitPath, blockAfter(after, go.label, 8),
-				"the GOTO must land on the submit-path block the IFEQ targeted");
-		assertTrue(submitPath.stream().anyMatch(step -> step.contains("BlockableEventLoop.submit")),
-				"the target must be the submit call, not the inline block: " + submitPath);
-		assertTrue(submitPath.stream().anyMatch(step -> step.contains("NetworkRegistry.guard")),
-				"and the submit path is guarded, as it is on a real network thread: " + submitPath);
+			JumpInsnNode go = popThenGoto(after);
+			assertNotNull(go, "the removed IFEQ must be replaced by POP + GOTO in " + descriptor);
+			// Object identity of the label does not survive serialization, so "the GOTO names the IFEQ's label" is
+			// checked as "it lands on the same block": the instructions at the target must be the submit path.
+			assertEquals(submitPath, blockAfter(after, go.label, 8),
+					"the GOTO must land on the submit-path block the IFEQ targeted in " + descriptor);
+			assertTrue(submitPath.stream().anyMatch(step -> step.contains("BlockableEventLoop.submit")),
+					"the target must be the submit call, not the inline block: " + submitPath);
+			assertTrue(submitPath.stream().anyMatch(step -> step.contains("NetworkRegistry.guard")),
+					"and the submit path is guarded, as it is on a real network thread: " + submitPath);
+		}
 	}
 
 	/** {@code -Dforbric.payloadWorkOrdering=off} is a documented switch, and off means the class is untouched. */

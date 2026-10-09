@@ -1,0 +1,143 @@
+Compiled from "DataPackRegistriesHooks.java"
+public final class net.neoforged.neoforge.registries.DataPackRegistriesHooks {
+  private static final java.util.List<net.minecraft.resources.RegistryDataLoader$RegistryData<?>> NETWORKABLE_REGISTRIES;
+
+  private static final java.util.List<net.minecraft.resources.RegistryDataLoader$RegistryData<?>> DATA_PACK_REGISTRIES;
+
+  private static final java.util.List<net.minecraft.resources.RegistryDataLoader$RegistryData<?>> DATA_PACK_REGISTRIES_VIEW;
+
+  private static final java.util.Set<net.minecraft.resources.ResourceKey<? extends net.minecraft.core.Registry<?>>> SYNCED_CUSTOM_REGISTRIES;
+
+  private static final java.util.Set<net.minecraft.resources.ResourceKey<? extends net.minecraft.core.Registry<?>>> SYNCED_CUSTOM_REGISTRIES_VIEW;
+
+  private net.neoforged.neoforge.registries.DataPackRegistriesHooks();
+    Code:
+         0: aload_0
+         1: invokespecial #1                  // Method java/lang/Object."<init>":()V
+         4: return
+
+  public static java.util.List<net.minecraft.resources.RegistryDataLoader$RegistryData<?>> grabNetworkableRegistries(java.util.List<net.minecraft.resources.RegistryDataLoader$RegistryData<?>>);
+    Code:
+         0: getstatic     #7                  // Field java/lang/StackWalker$Option.RETAIN_CLASS_REFERENCE:Ljava/lang/StackWalker$Option;
+         3: invokestatic  #13                 // Method java/lang/StackWalker.getInstance:(Ljava/lang/StackWalker$Option;)Ljava/lang/StackWalker;
+         6: invokevirtual #19                 // Method java/lang/StackWalker.getCallerClass:()Ljava/lang/Class;
+         9: ldc           #23                 // class net/minecraft/resources/RegistryDataLoader
+        11: invokevirtual #25                 // Method java/lang/Object.equals:(Ljava/lang/Object;)Z
+        14: ifne          27
+        17: new           #29                 // class java/lang/IllegalCallerException
+        20: dup
+        21: ldc           #31                 // String Attempted to call DataPackRegistriesHooks#grabNetworkableRegistries!
+        23: invokespecial #33                 // Method java/lang/IllegalCallerException."<init>":(Ljava/lang/String;)V
+        26: athrow
+        27: new           #36                 // class java/util/ArrayList
+        30: dup
+        31: aload_0
+        32: invokespecial #38                 // Method java/util/ArrayList."<init>":(Ljava/util/Collection;)V
+        35: astore_1
+        36: aload_1
+        37: getstatic     #41                 // Field NETWORKABLE_REGISTRIES:Ljava/util/List;
+        40: invokeinterface #47,  2           // InterfaceMethod java/util/List.addAll:(Ljava/util/Collection;)Z
+        45: pop
+        46: getstatic     #41                 // Field NETWORKABLE_REGISTRIES:Ljava/util/List;
+        49: invokeinterface #53,  1           // InterfaceMethod java/util/List.clear:()V
+        54: getstatic     #41                 // Field NETWORKABLE_REGISTRIES:Ljava/util/List;
+        57: aload_1
+        58: invokeinterface #47,  2           // InterfaceMethod java/util/List.addAll:(Ljava/util/Collection;)Z
+        63: pop
+        64: getstatic     #41                 // Field NETWORKABLE_REGISTRIES:Ljava/util/List;
+        67: invokestatic  #56                 // Method java/util/Collections.unmodifiableList:(Ljava/util/List;)Ljava/util/List;
+        70: areturn
+
+  static <T> void addRegistryCodec(net.neoforged.neoforge.registries.DataPackRegistryEvent$DataPackRegistryData<T>);
+    Code:
+         0: aload_0
+         1: invokevirtual #62                 // Method net/neoforged/neoforge/registries/DataPackRegistryEvent$DataPackRegistryData.loaderData:()Lnet/minecraft/resources/RegistryDataLoader$RegistryData;
+         4: astore_1
+         5: getstatic     #68                 // Field DATA_PACK_REGISTRIES:Ljava/util/List;
+         8: aload_1
+         9: invokeinterface #71,  2           // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+        14: pop
+        15: aload_0
+        16: invokevirtual #74                 // Method net/neoforged/neoforge/registries/DataPackRegistryEvent$DataPackRegistryData.networkCodec:()Lcom/mojang/serialization/Codec;
+        19: ifnull        60
+        22: getstatic     #78                 // Field SYNCED_CUSTOM_REGISTRIES:Ljava/util/Set;
+        25: aload_1
+        26: invokevirtual #82                 // Method net/minecraft/resources/RegistryDataLoader$RegistryData.key:()Lnet/minecraft/resources/ResourceKey;
+        29: invokeinterface #88,  2           // InterfaceMethod java/util/Set.add:(Ljava/lang/Object;)Z
+        34: pop
+        35: getstatic     #41                 // Field NETWORKABLE_REGISTRIES:Ljava/util/List;
+        38: new           #83                 // class net/minecraft/resources/RegistryDataLoader$RegistryData
+        41: dup
+        42: aload_1
+        43: invokevirtual #82                 // Method net/minecraft/resources/RegistryDataLoader$RegistryData.key:()Lnet/minecraft/resources/ResourceKey;
+        46: aload_0
+        47: invokevirtual #74                 // Method net/neoforged/neoforge/registries/DataPackRegistryEvent$DataPackRegistryData.networkCodec:()Lcom/mojang/serialization/Codec;
+        50: iconst_0
+        51: invokespecial #91                 // Method net/minecraft/resources/RegistryDataLoader$RegistryData."<init>":(Lnet/minecraft/resources/ResourceKey;Lcom/mojang/serialization/Codec;Z)V
+        54: invokeinterface #71,  2           // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+        59: pop
+        60: return
+
+  public static java.util.List<net.minecraft.resources.RegistryDataLoader$RegistryData<?>> getDataPackRegistries();
+    Code:
+         0: getstatic     #94                 // Field DATA_PACK_REGISTRIES_VIEW:Ljava/util/List;
+         3: areturn
+
+  public static java.util.stream.Stream<net.minecraft.resources.RegistryDataLoader$RegistryData<?>> getDataPackRegistriesWithDimensions();
+    Code:
+         0: getstatic     #94                 // Field DATA_PACK_REGISTRIES_VIEW:Ljava/util/List;
+         3: invokeinterface #97,  1           // InterfaceMethod java/util/List.stream:()Ljava/util/stream/Stream;
+         8: getstatic     #101                // Field net/minecraft/resources/RegistryDataLoader.DIMENSION_REGISTRIES:Ljava/util/List;
+        11: invokeinterface #97,  1           // InterfaceMethod java/util/List.stream:()Ljava/util/stream/Stream;
+        16: invokestatic  #104                // InterfaceMethod java/util/stream/Stream.concat:(Ljava/util/stream/Stream;Ljava/util/stream/Stream;)Ljava/util/stream/Stream;
+        19: areturn
+
+  public static java.util.Set<net.minecraft.resources.ResourceKey<? extends net.minecraft.core.Registry<?>>> getSyncedCustomRegistries();
+    Code:
+         0: getstatic     #110                // Field SYNCED_CUSTOM_REGISTRIES_VIEW:Ljava/util/Set;
+         3: areturn
+
+  public static <T> net.minecraft.resources.RegistryDataLoader$RegistryData<T> getSyncedRegistry(net.minecraft.resources.ResourceKey<? extends net.minecraft.core.Registry<T>>);
+    Code:
+         0: getstatic     #41                 // Field NETWORKABLE_REGISTRIES:Ljava/util/List;
+         3: invokeinterface #97,  1           // InterfaceMethod java/util/List.stream:()Ljava/util/stream/Stream;
+         8: aload_0
+         9: invokedynamic #113,  0            // InvokeDynamic #0:test:(Lnet/minecraft/resources/ResourceKey;)Ljava/util/function/Predicate;
+        14: invokeinterface #117,  2          // InterfaceMethod java/util/stream/Stream.filter:(Ljava/util/function/Predicate;)Ljava/util/stream/Stream;
+        19: invokeinterface #121,  1          // InterfaceMethod java/util/stream/Stream.findFirst:()Ljava/util/Optional;
+        24: aconst_null
+        25: invokevirtual #125                // Method java/util/Optional.orElse:(Ljava/lang/Object;)Ljava/lang/Object;
+        28: checkcast     #83                 // class net/minecraft/resources/RegistryDataLoader$RegistryData
+        31: areturn
+
+  private static boolean lambda$getSyncedRegistry$0(net.minecraft.resources.ResourceKey, net.minecraft.resources.RegistryDataLoader$RegistryData);
+    Code:
+         0: aload_1
+         1: invokevirtual #82                 // Method net/minecraft/resources/RegistryDataLoader$RegistryData.key:()Lnet/minecraft/resources/ResourceKey;
+         4: aload_0
+         5: invokevirtual #25                 // Method java/lang/Object.equals:(Ljava/lang/Object;)Z
+         8: ireturn
+
+  static {};
+    Code:
+         0: new           #36                 // class java/util/ArrayList
+         3: dup
+         4: invokespecial #131                // Method java/util/ArrayList."<init>":()V
+         7: putstatic     #41                 // Field NETWORKABLE_REGISTRIES:Ljava/util/List;
+        10: new           #36                 // class java/util/ArrayList
+        13: dup
+        14: getstatic     #132                // Field net/minecraft/resources/RegistryDataLoader.WORLDGEN_REGISTRIES:Ljava/util/List;
+        17: invokespecial #38                 // Method java/util/ArrayList."<init>":(Ljava/util/Collection;)V
+        20: putstatic     #68                 // Field DATA_PACK_REGISTRIES:Ljava/util/List;
+        23: getstatic     #68                 // Field DATA_PACK_REGISTRIES:Ljava/util/List;
+        26: invokestatic  #56                 // Method java/util/Collections.unmodifiableList:(Ljava/util/List;)Ljava/util/List;
+        29: putstatic     #94                 // Field DATA_PACK_REGISTRIES_VIEW:Ljava/util/List;
+        32: new           #135                // class java/util/HashSet
+        35: dup
+        36: invokespecial #137                // Method java/util/HashSet."<init>":()V
+        39: putstatic     #78                 // Field SYNCED_CUSTOM_REGISTRIES:Ljava/util/Set;
+        42: getstatic     #78                 // Field SYNCED_CUSTOM_REGISTRIES:Ljava/util/Set;
+        45: invokestatic  #138                // Method java/util/Collections.unmodifiableSet:(Ljava/util/Set;)Ljava/util/Set;
+        48: putstatic     #110                // Field SYNCED_CUSTOM_REGISTRIES_VIEW:Ljava/util/Set;
+        51: return
+}

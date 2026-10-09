@@ -1,0 +1,15 @@
+# 这个整合包里有些 mod 装了两份(Fabric 版和 NeoForge 版各一份)。
+# 每个 mod 只会启用一份 —— 两份同时跑会互相覆盖类、重复施加 mixin。
+#
+# 下面列出了所有这样的 mod,以及内核当前选用的那一份。
+# 想换成另一边,把那一行前面的 # 去掉,并把等号后面改成想要的加载器。
+#   可填:fabric / neoforge / minecraftforge
+#
+# 详细说明(谁依赖谁、出问题怎么办)见 .forbric-kernel/merge-report.txt
+
+# placeholder-api = fabric
+# fabric-resource-loader-v0 = fabric
+# fabric-screen-api-v1 = fabric
+# fabric-api-base = fabric
+# fabric-key-binding-api-v1 = fabric
+# fabric-lifecycle-events-v1 = fabric

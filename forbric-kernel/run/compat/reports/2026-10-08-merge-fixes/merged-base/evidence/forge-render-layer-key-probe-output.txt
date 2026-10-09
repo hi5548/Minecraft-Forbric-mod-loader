@@ -1,0 +1,47 @@
+== merged class ==
+net.minecraft.client.renderer.ItemBlockRenderTypes  from /Applications/.minecraft/.forbric-build/out/patched-mc-merged-1.21.1.jar
+sha256(bytes) = 3c1e092119da0452e71fa099763f5997d538ebbe6b67dd7748248b5578cfc88c
+
+== 1. premise ==
+Forge block writer delegate sites = 1
+whole-class Forge delegate sites  = 4
+  ok   the Forge block overload keys by a registry delegate
+  ok   four delegate sites (block writer + fluid writer/reader/filler)
+
+== 2. repair ==
+[Forbric/INFO] [Forbric/MergedBaseCompat] net.minecraft.client.renderer.ItemBlockRenderTypes's Forge setRenderLayer(Block, ChunkRenderTypeSet) keyed BLOCK_RENDER_TYPES by a registry delegate while getRenderLayers reads it by the raw Block, so every registration through it was invisible; it is now re-keyed to the raw Block and its ChunkRenderTypeSet converted to NeoForge's — the raw key alone would ClassCastException the reader
+  ok   the repair applies to the measured generation
+writer body after repair:
+    INVOKESTATIC net/minecraft/client/renderer/ItemBlockRenderTypes.checkClientLoading()V
+    GETSTATIC net/minecraft/client/renderer/ItemBlockRenderTypes.BLOCK_RENDER_TYPES:Ljava/util/Map;
+    ALOAD 0
+    ALOAD 1
+    INVOKEVIRTUAL net/minecraftforge/client/ChunkRenderTypeSet.asList()Ljava/util/List;
+    INVOKESTATIC net/neoforged/neoforge/client/ChunkRenderTypeSet.of(Ljava/util/Collection;)Lnet/neoforged/neoforge/client/ChunkRenderTypeSet;
+    INVOKEINTERFACE java/util/Map.put(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+    POP
+    RETURN
+  ok   no registry delegate in the writer after the repair
+  ok   no ForgeRegistries.BLOCKS read in the writer
+  ok   the Forge set is read as a list
+  ok   and rebuilt as NeoForge's ChunkRenderTypeSet (the type the reader casts to)
+  ok   same instruction count (two removed, two inserted)
+  ok   the map load is still first
+  ok   the raw Block (aload_0) is the key handed to put
+
+== 3. the fluid pair is not touched ==
+  ok   the three fluid delegate sites survive
+  ok   exactly one delegate site removed
+
+== 4. verifier ==
+  ok   ASM structural check is silent: 
+BasicVerifier: every method of net/minecraft/client/renderer/ItemBlockRenderTypes analyses clean
+
+== 5. idempotence ==
+  ok   a second pass is refused (nothing left to match)
+
+== 6. negative control ==
+  ok   a perturbed shape is refused rather than half-re-keyed
+  ok   and the class is handed back unchanged
+
+ALL CHECKS PASSED

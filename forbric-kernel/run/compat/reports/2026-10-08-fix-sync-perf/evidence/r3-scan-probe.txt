@@ -1,0 +1,5 @@
+### R3 offline probe: four passes (before) vs one GuestClassScan (after), real jars
+jars=62
+BEFORE reads=20052 ms=833 fabricUsers=3 fieldHits=0 abiFindings=11
+AFTER  reads=5013 ms=421 fabricUsers=3 fieldHits=0 abiFindings=11
+ratio=1.98

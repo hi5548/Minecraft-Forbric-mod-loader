@@ -123,3 +123,53 @@
 ## §Adjudication
 
 *（在全部臂跑完之后追加；以上判据原文未改）*
+
+**§0 形状 —— 达成。** `release-kernel.jar` sha `c9c6abea…`、3297731 B、737 条目、0 条 stale；干净 worktree 里
+`clean jar` 产出，canonical worktree 同装配复现同一 sha。入口集相对已发布 0.3.8：added 1（`GuestClassScan`）、
+removed 0、differing 26（25 boot 类 + nested runtime）。逐条见 `build-provenance.txt`。
+
+**§1 共同 gate 行 —— 三臂全部达成。**
+
+| 臂 | run | exit | world | frames | stopped | killed | strict | confirmed_required | mod | cause | s |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| A | PASS | 0 | true | 1 | true | false | **TRUE** | 0 | OK | None | 194 |
+| B | PASS | 0 | true | 1 | true | false | **TRUE** | 0 | OK | None | 179 |
+| C | PASS | 0 | true | 1 | true | false | **TRUE** | 0 | OK | None | 139 |
+
+三臂 0 份 crash-report、`catalog_failures=[]`、闭包依赖全 `OK`；逐字行与 marker 计数在 `gate-reading.txt`。
+
+**§2 七条新 marker —— 6 条达成、2 条被证伪（同名 marker 按各自条目算，共 8 条）**：
+- #1 payload-ordering ≥1：达成（三臂各 2，均为 `[Forbric/PayloadOrdering]` 说明行；除该行外 `Network Protocol Error`
+  0 次 —— 该串只出现在这两行的引述里）。
+- #2 damage seams：达成（三臂 `[Forbric/Damage]` 各 **4**；`forbric-forge-damage-seams … made no edit` 各 **0**）。
+- #3 registry-sync flush：达成（三臂各 1 次
+  `… at 1 return(s) of net.fabricmc.fabric.impl.registry.sync.RegistrySyncManager.apply`；出厂 0.3.8 实例日志 0 次）。
+- #4 abi audit 单遍：达成（三臂各 **1** 次 `[Forbric/AbiAudit] scanned 66/67 jar(s) …`）。
+- #5 accessor cannot bind = 0：**被证伪** —— arm B 读 **1**。逐字：
+  `guest accessor mixin create (create.mixins.json):accessor.SystemReportAccessor cannot bind — @Accessor field
+  SystemReport.oPERATING_SYSTEM / jAVA_VERSION`。这是 Create 自己的 accessor 真 miss（合并基底重写了那两个字段），
+  **不是** R4 修掉的那类 transfer-api 误报（出厂日志 56 行 → 本版 arm A 0、arm C 0、arm B 仅此 1 条真 miss）。
+- #6 seeder：达成（三臂各 1 次 populated 行 + read-back）。
+- #7 render-layer 行 = 0：**被证伪** —— 三臂各读 **2**（修复在合并基底类 `ItemBlockRenderTypes` 本身改写，
+  与语料无关）。修复的行为半仍只有离线探针证据。
+- #8 AbiAudit findings = 0：达成（三臂 `… 0 with dangling Forge-family references`）。
+
+**§3 不得回归 —— 逐条成立**：`created 9 custom registr(ies)` 恰 9、`NewRegistryEvent could not reach`/`Failed to
+apply some object holders`/`Unable to find registry with key forge:` 各 0；Sodium cutout `ForgeTextureMetadata`
+targets 恰 2、`applies only partially … SpriteContents.originalImage` 0；颜色四条 marker 全在
+（re-keyed getBlock ×2、getItem ×2、IdMapper ×2）；`@Mixin target type mismatch`/`ParticleEngine is not an interface`
+各 0、`SYNTHETIC default method over ParticleEngine` 2；`Unknown addon`/`lost connection` 各 0；`load-report.txt` 存在。
+
+**§4 arm B —— 达成**：`mod=OK cause=None catalog_failures=[]`、0 crash、`create failed during client setup` 0、
+`Render layers can only be set` 0。
+
+**§5 arm C —— 被证伪（往好的方向）**：预登记 `DEGRADED/strict=FALSE`，读数 `mod=OK strict=TRUE`、`loaded=true`、
+`catalog_failures=[]`。归因：abi-audit finding #5 修好后 AbiAudit 不再判罚 `the-shooting-star-demo` 被仲裁丢弃的
+Forge 半边（该 jar 是 universal 双半 jar），其 DEGRADED 随之消失。判据未改，如实记本次证伪为“本版的改进”。
+
+**§6 撤回判据**：未触发 —— 三臂 `confirmed_required=0`、0 份 crash-report。`handleServerStopped forward failed`
+按例外预登记，三臂各 1 次。
+
+> 过程教训（W7Harness 主动记录，值得转抄）：判据里的 MUST-BE-PRESENT 串必须取**代码为“想要的结果”所打印的那一个**。
+> payload-damage 的 A1 曾在两次回填里用过 transformer **名字**（只出现在 miss 行里），于是修好了反而“看不见”；
+> 更正后改读 `[Forbric/Damage]`（生效形态）与 `forbric-forge-damage-seams … made no edit`=0（miss 形态的缺席）。

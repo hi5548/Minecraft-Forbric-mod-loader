@@ -1,0 +1,65 @@
+2026-10-09 0.3.9-beta — 装配与入口集（build provenance）
+
+release commit（报告）      : 见 README §发布结果回填 / release-result.txt（tag 指向它）
+version commit              : 289af0b8 升版本到 0.3.9-beta
+源码尖端                    : 289af0b8（七条修车道全部合入 main 之后）
+merge commits（main 4b565f01 → 289af0b8）
+  0561549f  Merge branch 'fix-sync-perf'
+  bdd5dbca  Merge branch 'merge-fixes-seeder'
+  50da1817  Merge branch 'merge-fixes-abi-audit'
+  69c567cf  Merge branch 'merge-fixes-merged-base'
+  836d148f  Merge branch 'inert-apis'          （空合并：main 已含等价提交）
+  e4a6154f  Merge branch 'inert-main-fix'      （空合并：main 已含等价提交）
+  5aec8773  Merge branch 'fix-payload-damage'  （d0a2ec22 + 7b2dbf2a 的读数回填）
+
+构建（boot 半 + 游戏侧，同一趟）：
+  worktree  : /tmp/rel039/wt-rel（git worktree add --detach … 289af0b8；干净树）
+  script    : /Users/charlescai/Desktop/dsh/实验/forbric/w7/harness/build-kernel.sh
+  command   : ./gradlew --offline -q clean jar
+              -Pforbric.stagedRoot=/tmp/rel039/stage
+              -Pforbric.fabricApi=/tmp/rel039/fixtures/fabric-api-0.116.17+1.21.1-named.jar
+              -Pforbric.rebornEnergy=/tmp/rel039/fixtures/energy-4.1.0-named.jar
+              -Pforbric.mcLibraries=<forbric>/stubtable/mc/libraries
+  JDK       : 25.0.1（Oracle，aarch64）——固定 25，与 0.3.6/0.3.7/0.3.8 的 boot 半同编译器，使入口集 delta 是源码而非编译器噪声
+
+release kernel（客户端 boot jar，带游戏侧）
+  path      : /tmp/rel039/release-kernel.jar
+  sha256    : c9c6abea9f81e9adf3ee363e53473067400749d25c3ace3f0b593cd594441cc8
+  size      : 3297731 B
+  entries   : 737（699 文件 + 38 目录），0 条 'X N.class' 陈旧重名条目
+  nested runtime half : META-INF/jars/forbric-kernel-runtime.jar
+                        sha256 ffcffd1106a3e015a9a3a8892e31505a1ad91d953429262ac7eda02f8c4132c4（535542 B，292 条目）
+  可复现    : 同一提交在 canonical worktree 用同一装配构建，sha 逐字节相同（c9c6abea）
+
+staged 输入 sha256（构建与三臂共用）
+  46af05299bafd3140321b25246138def88dd4f938b9ae9451f976b57bd1c587f  merged-base/patched-mc-merged-1.21.1.jar
+  0f53e530b978c1c822249c3d6d0ef6528f6ee55743e275e16bdea9a22fbd5d0b  merged-base/forge-runtime-interop.jar
+  3d862fd92a42efddca77ba3d97d7a53229b4386b9fa8b4bdf6f8ffa01d1d0494  neoforge-runtime/neoforge-runtime.jar
+  dd64a728ee69eaeffd3c575ca50ed23b16575aabb5a44981616a2e53d56b8d44  forge-runtime/forge-runtime.jar（仅编译用）
+  221986a81c0d3d30c5f0b0e1bf7b1f4ff7a29ee4f04971115082e9c2f092193a  fixtures/fabric-api-0.116.17+1.21.1-named.jar
+  cec89d1c2e1d1eed9a43ccf60a049668900232c9ef7387a32dd670d20cd297d3  fixtures/energy-4.1.0-named.jar（= build.gradle:91 钉值）
+
+恢复的 energy 夹具（本版与 0.3.8 唯一的构建输入差别）
+  0.3.8 的游戏侧不可编译（energy-4.1.0-named.jar 丢失，钉值 cec89d1c…），runtime 半是从 0.3.7 逐字节借来的。
+  ORICO 卷重挂后夹具复现：/Volumes/ORICO/forbric/p0/p0/fixtures/energy-4.1.0-named.jar（sha = 钉值）。
+  本版因此是全量内核：游戏侧从源码编出，含 guards 车道触到的四条 runtime 修复。
+
+入口集（entry set）相对已发布 0.3.8-beta（libraries/net/forbric/forbric-kernel/0.3.8-beta/…，sha 97d894f5…）
+  比较方式：逐条目 sha256（解压后内容，非 zip 字节）
+  added    : 1  = net/forbric/kernel/boot/GuestClassScan.class
+  removed  : 0
+  differing: 26 = 25 个 boot 类 + META-INF/jars/forbric-kernel-runtime.jar
+    boot 25:
+      AbiLinkAudit, AbiLinkAudit$Finding, FabricApiModuleLossAudit, FabricApiModuleLossAudit$Loss,
+      FieldDriftAudit, KernelBoot, KernelBoot$ForgeFamilyMods, KernelBusSupport,
+      KernelForgeWrapperSync, KernelRegistryRevert, PassiveSeeder,
+      KernelFabricLoader + 3 inner, KernelLanguageAdapters + 1 inner, ClientShutdown,
+      MergedBaseUncalledMethods, MixinFit,
+      ForbricMergedBaseCompatTransformer + 1 inner, ForgeDamageSeamsInjector, PayloadWorkOrderingTransformer,
+      RegistrySyncParityInjector
+    nested runtime half：guards 车道的四条 src/runtime 修复
+      （KernelFabricConditions, KernelPacketContext, BlockTransferBridge, RebornEnergyBridge）
+  归属：sync-perf（AbiLinkAudit/FabricApiModuleLossAudit/FieldDriftAudit/KernelBoot/GuestClassScan/
+        KernelForgeWrapperSync/KernelRegistryRevert/MergedBaseUncalledMethods/MixinFit/RegistrySyncParityInjector）、
+        seeder（PassiveSeeder）、guards（KernelBusSupport/KernelFabricLoader/KernelLanguageAdapters/ClientShutdown + 四条 runtime）、
+        merged-base（ForbricMergedBaseCompatTransformer）、payload-damage（ForgeDamageSeamsInjector/PayloadWorkOrderingTransformer）。

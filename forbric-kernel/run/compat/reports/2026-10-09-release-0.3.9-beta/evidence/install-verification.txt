@@ -1,0 +1,78 @@
+headless install verification — 2026-10-09 0.3.9-beta
+
+command : java -jar forbric-kernel-installer-0.3.9-beta.jar --dir /Applications/.minecraft
+exit    : 0
+(doctor first: java -jar forbric-kernel-installer-0.3.9-beta.jar --doctor --dir /Applications/.minecraft → exit 0,
+ "RESULT: ready to install")
+installer: /Applications/.../forbric-kernel-installer/build/libs/forbric-kernel-installer-0.3.9-beta.jar
+           sha256 4b87876a3a481da7742757327896508524c9e42d5a400449892d355e4348eb94, 105 entries, 0 stale-numeric
+
+installer's own summary (verbatim, tail):
+  [merge] [link-check] loaded 14379 classes (8287 from the merged jar); dangling references: 36 (known 36, new 0); baseline entries now fixed: 0
+  game artifacts ready:
+    net.forbric:patched-mc-merged  →  patched-mc-merged-1.21.1.jar (27 MB)
+    net.forbric:forge-runtime  →  forge-runtime-interop.jar (6 MB)
+    net.forbric:neoforge-runtime  →  neoforge-runtime.jar (7 MB)
+  staged 17 Forbric and kernel-dependency jar(s) into /Applications/.minecraft/libraries
+  staged 3 game artifact(s) built on this machine
+  staged the mapping data the kernel remaps Fabric mods with:
+    /Applications/.minecraft/.forbric/mappings/intermediary-1.21.1.jar
+    /Applications/.minecraft/.forbric/mappings/client-1.21.1.txt
+  wrote /Applications/.minecraft/versions/1.21.1-forbric/1.21.1-forbric.json
+  Installed. In your launcher, pick the version "1.21.1-forbric".
+  INSTALL_EXIT=0
+
+== the user's 14 mods — byte-for-byte unchanged (14/14) ==
+  15bf9bd6d8e3…  ImmediatelyFast-NeoForge-1.6.14+1.21.1.jar
+  38b48dd62313…  appleskin-neoforge-mc1.21-3.0.9.jar
+  65e722e0d984…  cloth-config-15.0.140-neoforge.jar
+  3983b981da4a…  entityculling-neoforge-1.11.2-mc1.21.1.jar
+  79ac44b40780…  fabric-api-0.116.17+1.21.1.jar
+  d87ea2826271…  ferritecore-7.0.3-neoforge.jar
+  238b20c943bb…  jei-1.21.1-neoforge-19.57.0.450.jar
+  488f33216030…  lithium-neoforge-0.15.4+mc1.21.1.jar
+  e6e9446890f0…  modernfix-neoforge-5.27.24+mc1.21.1.jar
+  afa55fe4e7c4…  modmenu-11.0.5.jar
+  c0187ee29952…  placeholder-api-2.4.2+1.21.jar
+  9b2ce1b10449…  shooting_star_addition-1.1.0.jar
+  575d187b1532…  sodium-neoforge-0.8.13+mc1.21.1.jar
+  8b972bcef153…  the-shooting-star-demo-1.3.1-neoforge.jar
+  (before == after, sha256: 14/14 IDENTICAL)
+
+== instance files NOT touched (mtimes before-install == after-install) ==
+  mods/ (Oct 8 10:21), config/ (Oct 8 11:49), options.txt (Oct 8 11:46), saves/ (Oct 4 11:59),
+  resourcepacks/ (Oct 4 11:58), defaultconfigs/ (Oct 4 08:14), data/ (Oct 4 08:14), downloads/ (Oct 4 08:14),
+  logs/ (Oct 8 11:48), log4j2.xml (Oct 8 11:48), natives-macos-arm64/ (Oct 8 11:49), .forbric-kernel/ (Oct 8 12:01),
+  forbric-mods.txt (Oct 4 08:11), usercache.json/usernamecache.json, shooting_star.log (Oct 8 12:00), .hmcl/ (Oct 4 14:23)
+  global mods/ : 129 jar, untouched
+
+== the one intended change: the profile json ==
+  before sha256 4af30f564994bfa06e70ff734b9e564cc1f8d3badb6667644f8eba632be6892c  (0.3.8-beta)
+  after  sha256 df15cea81ffe09e0…  (0.3.9-beta)   mtime Oct 9 09:57
+
+== new libraries ==
+  libraries/net/forbric/forbric-kernel/0.3.9-beta/forbric-kernel-0.3.9-beta.jar
+      sha256 c9c6abea9f81e9adf3ee363e53473067400749d25c3ace3f0b593cd594441cc8
+      == this gate's frozen kernel artifact c9c6abea… == the installer's embedded kernel == the built boot jar
+  libraries/net/forbric/forbric-loader/0.3.9-beta/forbric-loader-0.3.9-beta.jar
+      sha256 412944e9a0024364d0c9b3b5eb0804b6e4c67ee57a71bb4ee565050cff0e7bb2  (== 0.3.7/0.3.8's)
+  libraries/net/forbric/forbricruntime/0.3.9-beta/forbricruntime-0.3.9-beta.jar
+      sha256 cea81430cefa5f44fbefa9b26766697f3c49b5cd8b4fb7d4cb271adb23420188  (== 0.3.7/0.3.8's)
+  (forbric-loader/src unchanged since v0.3.6-beta-1.21.1)
+
+== the three game artifacts: rebuilt on this machine, CONTENT-IDENTICAL to the gate's stage ==
+  the installer rebuilds patched-mc-merged / forge-runtime / neoforge-runtime from the pinned MC + Forge + NeoForge
+  (link-check: 36 dangling, all known, 0 new). Their zip bytes differ from the gate stage's (entry metadata), so
+  they are compared per ENTRY (name → sha256), the way the gate's own base was judged:
+
+    artifact            stage entries   installed entries   added  removed  content-diff
+    patched-mc-merged        23535            23535            0       0          0
+    forge-runtime             4166             4166            0       0          0
+    neoforge-runtime          5030             5030            0       0          0
+
+  ⇒ 0 content difference on all three: the three arms ran on the same game bytes the installed instance now holds.
+  (zip shas: merged ae73f61c…, forge 286ebafe…, neo b6f0e546…; sizes equal the stage's: 29299260 / 6361811 / 7485542)
+
+Scope note: this is a file-level install verification. No second launch was done on the installed instance; the
+startup-level reading is the three arms above, on the identical kernel bytes (c9c6abea…) and a content-identical
+game side.

@@ -1,0 +1,17 @@
+/Users/charlescai/Desktop/dsh/实验/forbric/w7/.stage-scratch/mc/libraries/net/forbric/forbric-kernel/0.3.6-beta/forbric-kernel-0.3.6-beta.jar
+/Users/charlescai/Desktop/dsh/实验/forbric/w7/.stage-scratch/mc/libraries/net/forbric/forbric-loader/0.3.6-beta/forbric-loader-0.3.6-beta.jar
+/Users/charlescai/Desktop/dsh/实验/forbric/w7/.stage-scratch/mc/libraries/net/forbric/forbricruntime/0.3.6-beta/forbricruntime-0.3.6-beta.jar
+/Users/charlescai/Desktop/dsh/实验/forbric/w7/.stage-scratch/mc/libraries/net/fabricmc/sponge-mixin/0.17.3+mixin.0.8.7/sponge-mixin-0.17.3+mixin.0.8.7.jar
+/Users/charlescai/Desktop/dsh/实验/forbric/w7/.stage-scratch/mc/libraries/net/fabricmc/class-tweaker/0.3.0-beta.2/class-tweaker-0.3.0-beta.2.jar
+/Users/charlescai/Desktop/dsh/实验/forbric/w7/.stage-scratch/mc/libraries/net/fabricmc/tiny-remapper/0.14.0/tiny-remapper-0.14.0.jar
+/Users/charlescai/Desktop/dsh/实验/forbric/w7/.stage-scratch/mc/libraries/org/ow2/asm/asm-commons/9.10.1/asm-commons-9.10.1.jar
+/Users/charlescai/Desktop/dsh/实验/forbric/w7/.stage-scratch/mc/libraries/org/ow2/asm/asm-util/9.10.1/asm-util-9.10.1.jar
+/Users/charlescai/Desktop/dsh/实验/forbric/w7/.stage-scratch/mc/libraries/org/ow2/asm/asm-analysis/9.10.1/asm-analysis-9.10.1.jar
+/Users/charlescai/Desktop/dsh/实验/forbric/w7/.stage-scratch/mc/libraries/org/ow2/asm/asm-tree/9.10.1/asm-tree-9.10.1.jar
+/Users/charlescai/Desktop/dsh/实验/forbric/w7/.stage-scratch/mc/libraries/org/ow2/asm/asm/9.10.1/asm-9.10.1.jar
+/Users/charlescai/Desktop/dsh/实验/forbric/w7/.stage-scratch/mc/libraries/org/ow2/sat4j/org.ow2.sat4j.pb/2.3.6/org.ow2.sat4j.pb-2.3.6.jar
+/Users/charlescai/Desktop/dsh/实验/forbric/w7/.stage-scratch/mc/libraries/org/ow2/sat4j/org.ow2.sat4j.core/2.3.6/org.ow2.sat4j.core-2.3.6.jar
+/Users/charlescai/Desktop/dsh/实验/forbric/w7/.stage-scratch/mc/libraries/net/fabricmc/mapping-io/0.7.1/mapping-io-0.7.1.jar
+/Users/charlescai/Desktop/dsh/实验/forbric/w7/.stage-scratch/mc/libraries/com/electronwill/night-config/toml/3.8.1/toml-3.8.1.jar
+/Users/charlescai/Desktop/dsh/实验/forbric/w7/.stage-scratch/mc/libraries/com/electronwill/night-config/json/3.8.1/json-3.8.1.jar
+/Users/charlescai/Desktop/dsh/实验/forbric/w7/.stage-scratch/mc/libraries/com/electronwill/night-config/core/3.8.1/core-3.8.1.jar

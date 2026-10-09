@@ -182,13 +182,17 @@ public final class KernelFabricConditions {
 			if (evaluatorResolved) return evaluator;
 			try {
 				Class<?> impl = Class.forName(IMPL, false, KernelFabricConditions.class.getClassLoader());
-				evaluator = MethodHandles.lookup().findStatic(impl, "applyResourceConditions",
+				MethodHandle found = MethodHandles.lookup().findStatic(impl, "applyResourceConditions",
 						MethodType.methodType(boolean.class, JsonObject.class, String.class, ResourceLocation.class,
 								RegistryOps.RegistryInfoLookup.class));
+				evaluator = found;
+				// Spent only once the evaluator is actually in hand. A decode can run before fabric-api's classes
+				// are reachable from this loader, and latching "off" on that first failure would keep every later
+				// fabric:load_conditions file unjudged for the whole session.
+				evaluatorResolved = true;
 			} catch (Throwable absent) {
 				evaluator = null;
 			}
-			evaluatorResolved = true;
 			return evaluator;
 		}
 	}

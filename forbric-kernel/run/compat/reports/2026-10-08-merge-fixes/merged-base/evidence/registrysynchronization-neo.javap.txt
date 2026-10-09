@@ -1,0 +1,179 @@
+Compiled from "RegistrySynchronization.java"
+public class net.minecraft.core.RegistrySynchronization {
+  public static final java.util.Set<net.minecraft.resources.ResourceKey<? extends net.minecraft.core.Registry<?>>> NETWORKABLE_REGISTRIES;
+
+  public net.minecraft.core.RegistrySynchronization();
+    Code:
+         0: aload_0
+         1: invokespecial #38                 // Method java/lang/Object."<init>":()V
+         4: return
+
+  public static void packRegistries(com.mojang.serialization.DynamicOps<net.minecraft.nbt.Tag>, net.minecraft.core.RegistryAccess, java.util.Set<net.minecraft.server.packs.repository.KnownPack>, java.util.function.BiConsumer<net.minecraft.resources.ResourceKey<? extends net.minecraft.core.Registry<?>>, java.util.List<net.minecraft.core.RegistrySynchronization$PackedRegistryEntry>>);
+    Code:
+         0: getstatic     #47                 // Field net/minecraft/resources/RegistryDataLoader.SYNCHRONIZED_REGISTRIES:Ljava/util/List;
+         3: aload_0
+         4: aload_1
+         5: aload_2
+         6: aload_3
+         7: invokedynamic #67,  0             // InvokeDynamic #0:accept:(Lcom/mojang/serialization/DynamicOps;Lnet/minecraft/core/RegistryAccess;Ljava/util/Set;Ljava/util/function/BiConsumer;)Ljava/util/function/Consumer;
+        12: invokeinterface #73,  2           // InterfaceMethod java/util/List.forEach:(Ljava/util/function/Consumer;)V
+        17: return
+
+  private static <T> void packRegistry(com.mojang.serialization.DynamicOps<net.minecraft.nbt.Tag>, net.minecraft.resources.RegistryDataLoader$RegistryData<T>, net.minecraft.core.RegistryAccess, java.util.Set<net.minecraft.server.packs.repository.KnownPack>, java.util.function.BiConsumer<net.minecraft.resources.ResourceKey<? extends net.minecraft.core.Registry<?>>, java.util.List<net.minecraft.core.RegistrySynchronization$PackedRegistryEntry>>);
+    Code:
+         0: aload_2
+         1: aload_1
+         2: invokevirtual #90                 // Method net/minecraft/resources/RegistryDataLoader$RegistryData.key:()Lnet/minecraft/resources/ResourceKey;
+         5: invokeinterface #94,  2           // InterfaceMethod net/minecraft/core/RegistryAccess.registry:(Lnet/minecraft/resources/ResourceKey;)Ljava/util/Optional;
+        10: aload_3
+        11: aload_1
+        12: aload_0
+        13: aload         4
+        15: invokedynamic #104,  0            // InvokeDynamic #1:accept:(Ljava/util/Set;Lnet/minecraft/resources/RegistryDataLoader$RegistryData;Lcom/mojang/serialization/DynamicOps;Ljava/util/function/BiConsumer;)Ljava/util/function/Consumer;
+        20: invokevirtual #109                // Method java/util/Optional.ifPresent:(Ljava/util/function/Consumer;)V
+        23: return
+
+  private static java.util.stream.Stream<net.minecraft.core.RegistryAccess$RegistryEntry<?>> ownedNetworkableRegistries(net.minecraft.core.RegistryAccess);
+    Code:
+         0: aload_0
+         1: invokeinterface #123,  1          // InterfaceMethod net/minecraft/core/RegistryAccess.registries:()Ljava/util/stream/Stream;
+         6: invokedynamic #135,  0            // InvokeDynamic #2:test:()Ljava/util/function/Predicate;
+        11: invokeinterface #141,  2          // InterfaceMethod java/util/stream/Stream.filter:(Ljava/util/function/Predicate;)Ljava/util/stream/Stream;
+        16: areturn
+
+  public static java.util.stream.Stream<net.minecraft.core.RegistryAccess$RegistryEntry<?>> networkedRegistries(net.minecraft.core.LayeredRegistryAccess<net.minecraft.server.RegistryLayer>);
+    Code:
+         0: aload_0
+         1: getstatic     #151                // Field net/minecraft/server/RegistryLayer.WORLDGEN:Lnet/minecraft/server/RegistryLayer;
+         4: invokevirtual #157                // Method net/minecraft/core/LayeredRegistryAccess.getAccessFrom:(Ljava/lang/Object;)Lnet/minecraft/core/RegistryAccess$Frozen;
+         7: invokestatic  #159                // Method ownedNetworkableRegistries:(Lnet/minecraft/core/RegistryAccess;)Ljava/util/stream/Stream;
+        10: areturn
+
+  public static java.util.stream.Stream<net.minecraft.core.RegistryAccess$RegistryEntry<?>> networkSafeRegistries(net.minecraft.core.LayeredRegistryAccess<net.minecraft.server.RegistryLayer>);
+    Code:
+         0: aload_0
+         1: getstatic     #166                // Field net/minecraft/server/RegistryLayer.STATIC:Lnet/minecraft/server/RegistryLayer;
+         4: invokevirtual #169                // Method net/minecraft/core/LayeredRegistryAccess.getLayer:(Ljava/lang/Object;)Lnet/minecraft/core/RegistryAccess$Frozen;
+         7: invokeinterface #170,  1          // InterfaceMethod net/minecraft/core/RegistryAccess$Frozen.registries:()Ljava/util/stream/Stream;
+        12: astore_1
+        13: aload_0
+        14: invokestatic  #172                // Method networkedRegistries:(Lnet/minecraft/core/LayeredRegistryAccess;)Ljava/util/stream/Stream;
+        17: astore_2
+        18: aload_2
+        19: aload_1
+        20: invokestatic  #176                // InterfaceMethod java/util/stream/Stream.concat:(Ljava/util/stream/Stream;Ljava/util/stream/Stream;)Ljava/util/stream/Stream;
+        23: areturn
+
+  private static boolean lambda$ownedNetworkableRegistries$4(net.minecraft.core.RegistryAccess$RegistryEntry);
+    Code:
+         0: getstatic     #183                // Field NETWORKABLE_REGISTRIES:Ljava/util/Set;
+         3: aload_0
+         4: invokevirtual #184                // Method net/minecraft/core/RegistryAccess$RegistryEntry.key:()Lnet/minecraft/resources/ResourceKey;
+         7: invokeinterface #189,  2          // InterfaceMethod java/util/Set.contains:(Ljava/lang/Object;)Z
+        12: ireturn
+
+  private static void lambda$packRegistry$3(java.util.Set, net.minecraft.resources.RegistryDataLoader$RegistryData, com.mojang.serialization.DynamicOps, java.util.function.BiConsumer, net.minecraft.core.Registry);
+    Code:
+         0: new           #193                // class java/util/ArrayList
+         3: dup
+         4: aload         4
+         6: invokeinterface #199,  1          // InterfaceMethod net/minecraft/core/Registry.size:()I
+        11: invokespecial #202                // Method java/util/ArrayList."<init>":(I)V
+        14: astore        5
+        16: aload         4
+        18: invokeinterface #205,  1          // InterfaceMethod net/minecraft/core/Registry.holders:()Ljava/util/stream/Stream;
+        23: aload         4
+        25: aload_0
+        26: aload_1
+        27: aload_2
+        28: aload         5
+        30: invokedynamic #215,  0            // InvokeDynamic #3:accept:(Lnet/minecraft/core/Registry;Ljava/util/Set;Lnet/minecraft/resources/RegistryDataLoader$RegistryData;Lcom/mojang/serialization/DynamicOps;Ljava/util/List;)Ljava/util/function/Consumer;
+        35: invokeinterface #216,  2          // InterfaceMethod java/util/stream/Stream.forEach:(Ljava/util/function/Consumer;)V
+        40: aload_3
+        41: aload         4
+        43: invokeinterface #217,  1          // InterfaceMethod net/minecraft/core/Registry.key:()Lnet/minecraft/resources/ResourceKey;
+        48: aload         5
+        50: invokeinterface #222,  3          // InterfaceMethod java/util/function/BiConsumer.accept:(Ljava/lang/Object;Ljava/lang/Object;)V
+        55: return
+
+  private static void lambda$packRegistry$2(net.minecraft.core.Registry, java.util.Set, net.minecraft.resources.RegistryDataLoader$RegistryData, com.mojang.serialization.DynamicOps, java.util.List, net.minecraft.core.Holder$Reference);
+    Code:
+         0: aload_0
+         1: aload         5
+         3: invokevirtual #231                // Method net/minecraft/core/Holder$Reference.key:()Lnet/minecraft/resources/ResourceKey;
+         6: invokeinterface #234,  2          // InterfaceMethod net/minecraft/core/Registry.registrationInfo:(Lnet/minecraft/resources/ResourceKey;)Ljava/util/Optional;
+        11: invokedynamic #249,  0            // InvokeDynamic #4:apply:()Ljava/util/function/Function;
+        16: invokevirtual #253                // Method java/util/Optional.flatMap:(Ljava/util/function/Function;)Ljava/util/Optional;
+        19: aload_1
+        20: dup
+        21: invokestatic  #258                // Method java/util/Objects.requireNonNull:(Ljava/lang/Object;)Ljava/lang/Object;
+        24: pop
+        25: invokedynamic #264,  0            // InvokeDynamic #5:test:(Ljava/util/Set;)Ljava/util/function/Predicate;
+        30: invokevirtual #267                // Method java/util/Optional.filter:(Ljava/util/function/Predicate;)Ljava/util/Optional;
+        33: invokevirtual #271                // Method java/util/Optional.isPresent:()Z
+        36: istore        6
+        38: iload         6
+        40: ifeq          51
+        43: invokestatic  #274                // Method java/util/Optional.empty:()Ljava/util/Optional;
+        46: astore        7
+        48: goto          90
+        51: aload_2
+        52: invokevirtual #280                // Method net/minecraft/resources/RegistryDataLoader$RegistryData.elementCodec:()Lcom/mojang/serialization/Codec;
+        55: aload_3
+        56: aload         5
+        58: invokevirtual #284                // Method net/minecraft/core/Holder$Reference.value:()Ljava/lang/Object;
+        61: invokeinterface #290,  3          // InterfaceMethod com/mojang/serialization/Codec.encodeStart:(Lcom/mojang/serialization/DynamicOps;Ljava/lang/Object;)Lcom/mojang/serialization/DataResult;
+        66: aload         5
+        68: invokedynamic #300,  0            // InvokeDynamic #6:apply:(Lnet/minecraft/core/Holder$Reference;)Ljava/util/function/Function;
+        73: invokeinterface #306,  2          // InterfaceMethod com/mojang/serialization/DataResult.getOrThrow:(Ljava/util/function/Function;)Ljava/lang/Object;
+        78: checkcast     #308                // class net/minecraft/nbt/Tag
+        81: astore        8
+        83: aload         8
+        85: invokestatic  #312                // Method java/util/Optional.of:(Ljava/lang/Object;)Ljava/util/Optional;
+        88: astore        7
+        90: aload         4
+        92: new           #7                  // class net/minecraft/core/RegistrySynchronization$PackedRegistryEntry
+        95: dup
+        96: aload         5
+        98: invokevirtual #231                // Method net/minecraft/core/Holder$Reference.key:()Lnet/minecraft/resources/ResourceKey;
+       101: invokevirtual #318                // Method net/minecraft/resources/ResourceKey.location:()Lnet/minecraft/resources/ResourceLocation;
+       104: aload         7
+       106: invokespecial #321                // Method net/minecraft/core/RegistrySynchronization$PackedRegistryEntry."<init>":(Lnet/minecraft/resources/ResourceLocation;Ljava/util/Optional;)V
+       109: invokeinterface #324,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+       114: pop
+       115: return
+
+  private static java.lang.IllegalArgumentException lambda$packRegistry$1(net.minecraft.core.Holder$Reference, java.lang.String);
+    Code:
+         0: new           #341                // class java/lang/IllegalArgumentException
+         3: dup
+         4: aload_0
+         5: invokevirtual #231                // Method net/minecraft/core/Holder$Reference.key:()Lnet/minecraft/resources/ResourceKey;
+         8: invokestatic  #347                // Method java/lang/String.valueOf:(Ljava/lang/Object;)Ljava/lang/String;
+        11: aload_1
+        12: invokedynamic #359,  0            // InvokeDynamic #7:makeConcatWithConstants:(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+        17: invokespecial #362                // Method java/lang/IllegalArgumentException."<init>":(Ljava/lang/String;)V
+        20: areturn
+
+  private static void lambda$packRegistries$0(com.mojang.serialization.DynamicOps, net.minecraft.core.RegistryAccess, java.util.Set, java.util.function.BiConsumer, net.minecraft.resources.RegistryDataLoader$RegistryData);
+    Code:
+         0: aload_0
+         1: aload         4
+         3: aload_1
+         4: aload_2
+         5: aload_3
+         6: invokestatic  #367                // Method packRegistry:(Lcom/mojang/serialization/DynamicOps;Lnet/minecraft/resources/RegistryDataLoader$RegistryData;Lnet/minecraft/core/RegistryAccess;Ljava/util/Set;Ljava/util/function/BiConsumer;)V
+         9: return
+
+  static {};
+    Code:
+         0: getstatic     #47                 // Field net/minecraft/resources/RegistryDataLoader.SYNCHRONIZED_REGISTRIES:Ljava/util/List;
+         3: invokeinterface #376,  1          // InterfaceMethod java/util/List.stream:()Ljava/util/stream/Stream;
+         8: invokedynamic #380,  0            // InvokeDynamic #8:apply:()Ljava/util/function/Function;
+        13: invokeinterface #384,  2          // InterfaceMethod java/util/stream/Stream.map:(Ljava/util/function/Function;)Ljava/util/stream/Stream;
+        18: invokestatic  #390                // Method java/util/stream/Collectors.toUnmodifiableSet:()Ljava/util/stream/Collector;
+        21: invokeinterface #394,  2          // InterfaceMethod java/util/stream/Stream.collect:(Ljava/util/stream/Collector;)Ljava/lang/Object;
+        26: checkcast     #186                // class java/util/Set
+        29: putstatic     #183                // Field NETWORKABLE_REGISTRIES:Ljava/util/Set;
+        32: return
+}

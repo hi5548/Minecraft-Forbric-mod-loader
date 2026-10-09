@@ -1,0 +1,191 @@
+---- Minecraft Crash Report ----
+// You're mean.
+
+Time: 2026-10-09 08:29:02
+Description: Batching sections
+
+java.lang.NullPointerException: Cannot invoke "net.fabricmc.fabric.impl.client.indigo.renderer.render.TerrainRenderContext.tessellateBlock(net.minecraft.world.level.block.state.BlockState, net.minecraft.core.BlockPos, net.minecraft.client.resources.model.BakedModel, com.mojang.blaze3d.vertex.PoseStack)" because the return value of "net.fabricmc.fabric.impl.client.indigo.renderer.accessor.AccessChunkRendererRegion.fabric_getRenderer()" is null
+	at forbric/net.minecraft.client.renderer.chunk.SectionCompiler.redirect$zjm000$fabric-renderer-indigo$hookBuildRenderBlock(SectionCompiler.java:608) ~[patched-mc-merged-1.21.1.jar:?]
+	at forbric/net.minecraft.client.renderer.chunk.SectionCompiler.compile(SectionCompiler.java:90) ~[patched-mc-merged-1.21.1.jar:?]
+	at forbric/net.minecraft.client.renderer.chunk.SectionRenderDispatcher$RenderSection$RebuildTask.doTask(SectionRenderDispatcher.java:565) ~[patched-mc-merged-1.21.1.jar:?]
+	at forbric/net.minecraft.client.renderer.chunk.SectionRenderDispatcher.lambda$runTask$0(SectionRenderDispatcher.java:102) ~[patched-mc-merged-1.21.1.jar:?]
+	at java.base/java.util.concurrent.CompletableFuture$AsyncSupply.run(CompletableFuture.java:1768) ~[?:?]
+	at java.base/java.util.concurrent.CompletableFuture$AsyncSupply.exec(CompletableFuture.java:1760) ~[?:?]
+	at java.base/java.util.concurrent.ForkJoinTask.doExec(ForkJoinTask.java:387) ~[?:?]
+	at java.base/java.util.concurrent.ForkJoinPool$WorkQueue.topLevelExec(ForkJoinPool.java:1310) ~[?:?]
+	at java.base/java.util.concurrent.ForkJoinPool.scan(ForkJoinPool.java:1841) ~[?:?]
+	at java.base/java.util.concurrent.ForkJoinPool.runWorker(ForkJoinPool.java:1806) ~[?:?]
+	at java.base/java.util.concurrent.ForkJoinWorkerThread.run(ForkJoinWorkerThread.java:188) ~[?:?]
+
+
+A detailed walkthrough of the error, its code path and all known details is as follows:
+---------------------------------------------------------------------------------------
+
+-- Head --
+Thread: Render thread
+Stacktrace:
+	at forbric/net.minecraft.client.Minecraft.fillReport(Minecraft.java:2395) ~[patched-mc-merged-1.21.1.jar:?]
+-- Uptime --
+Details:
+	JVM uptime: 34.535s
+	Wall uptime: 9.866s
+	High-res time: 8.908s
+	Client ticks: 70 ticks / 3.500s
+Stacktrace:
+	at forbric/net.minecraft.client.Minecraft.fillReport(Minecraft.java:2395) ~[patched-mc-merged-1.21.1.jar:?]
+	at forbric/net.minecraft.client.Minecraft.lambda$delayCrash$17(Minecraft.java:854) ~[patched-mc-merged-1.21.1.jar:?]
+	at forbric/net.minecraft.client.Minecraft.handleDelayedCrash(Minecraft.java:863) ~[patched-mc-merged-1.21.1.jar:?]
+	at forbric/net.minecraft.client.Minecraft.run(Minecraft.java:799) ~[patched-mc-merged-1.21.1.jar:?]
+	at forbric/net.minecraft.client.main.Main.main(Main.java:230) ~[patched-mc-merged-1.21.1.jar:?]
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[?:?]
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[?:?]
+	at net.forbric.kernel.boot.KernelBoot.launch(KernelBoot.java:1192) ~[forbric-kernel-client.jar:?]
+	at net.forbric.kernel.boot.KernelClientLaunch.lambda$main$0(KernelClientLaunch.java:34) ~[forbric-kernel-client.jar:?]
+	at net.forbric.kernel.boot.CompatibilityLaunchBoundary.run(CompatibilityLaunchBoundary.java:23) [forbric-kernel-client.jar:?]
+	at net.forbric.kernel.boot.KernelClientLaunch.main(KernelClientLaunch.java:34) [forbric-kernel-client.jar:?]
+
+
+-- Affected level --
+Details:
+	All players: 1 total; [LocalPlayer['ForbricKernel'/17, l='ClientLevel', x=-37.50, y=68.00, z=53.50]]
+	Chunk stats: 961, 25
+	Level dimension: minecraft:overworld
+	Level spawn location: World: (-32,66,48), Section: (at 0,2,0 in -2,4,3; chunk contains blocks -32,-64,48 to -17,319,63), Region: (-1,0; contains chunks -32,0 to -1,31, blocks -512,-64,0 to -1,319,511)
+	Level time: 1410 game time, 1410 day time
+	Server brand: neoforge
+	Server type: Integrated singleplayer server
+	Tracked entity count: 28
+
+-- Last reload --
+Details:
+	Reload number: 1
+	Reload reason: initial
+	Finished: Yes
+	Packs: vanilla, fabric, fabric-api, fabric-api-base, fabric-api-lookup-api-v1, fabric-biome-api-v1, fabric-block-api-v1, fabric-block-view-api-v2, fabric-blockrenderlayer-v1, fabric-client-tags-api-v1, fabric-command-api-v1, fabric-command-api-v2, fabric-commands-v0, fabric-content-registries-v0, fabric-convention-tags-v1, fabric-convention-tags-v2, fabric-crash-report-info-v1, fabric-data-attachment-api-v1, fabric-data-generation-api-v1, fabric-dimensions-v1, fabric-entity-events-v1, fabric-events-interaction-v0, fabric-game-rule-api-v1, fabric-item-api-v1, fabric-item-group-api-v1, fabric-key-binding-api-v1, fabric-keybindings-v0, fabric-lifecycle-events-v1, fabric-loot-api-v2, fabric-loot-api-v3, fabric-message-api-v1, fabric-model-loading-api-v1, fabric-networking-api-v1, fabric-object-builder-api-v1, fabric-particles-v1, fabric-recipe-api-v1, fabric-registry-sync-v0, fabric-renderer-api-v1, fabric-renderer-indigo, fabric-renderer-registries-v1, fabric-rendering-data-attachment-v1, fabric-rendering-fluids-v1, fabric-rendering-v0, fabric-rendering-v1, fabric-resource-conditions-api-v1, fabric-resource-loader-v0, fabric-screen-api-v1, fabric-screen-handler-api-v1, fabric-sound-api-v1, fabric-tag-api-v1, fabric-transfer-api-v1, fabric-transitive-access-wideners-v1, modmenu, placeholder-api, forbric/mod_resources, forbric/forge-runtime-interop, forbric/neoforge-runtime, forbric/forbric-kernel-runtime
+
+-- System Details --
+Details:
+	Minecraft Version: 1.21.1
+	Minecraft Version ID: 1.21.1
+	Operating System: Mac OS X (aarch64) version 27.0
+	Java Version: 21.0.7, Oracle Corporation
+	Java VM Version: Java HotSpot(TM) 64-Bit Server VM (mixed mode, sharing), Oracle Corporation
+	Memory: 800307712 bytes (763 MiB) / 1556086784 bytes (1484 MiB) up to 4294967296 bytes (4096 MiB)
+	CPUs: 8
+	Processor Vendor: Apple Inc.
+	Processor Name: Apple M2
+	Identifier: Apple Inc. Family 0xda33d83d Model 0 Stepping 0
+	Microarchitecture: ARM64 SoC: Avalanche + Blizzard
+	Frequency (GHz): 3.50
+	Number of physical packages: 1
+	Number of physical CPUs: 8
+	Number of logical CPUs: 8
+	Graphics card #0 name: Apple M2
+	Graphics card #0 vendor: Apple (0x106b)
+	Graphics card #0 VRAM (MiB): 0.00
+	Graphics card #0 deviceId: unknown
+	Graphics card #0 versionInfo: unknown
+	Memory slot #0 capacity (MiB): 0.00
+	Memory slot #0 clockSpeed (GHz): 0.00
+	Memory slot #0 type: unknown
+	Virtual memory max (MiB): 16384.00
+	Virtual memory used (MiB): 10259.63
+	Swap memory total (MiB): 0.00
+	Swap memory used (MiB): 0.00
+	Space in storage for jna.tmpdir (MiB): <path not set>
+	Space in storage for org.lwjgl.system.SharedLibraryExtractPath (MiB): <path not set>
+	Space in storage for io.netty.native.workdir (MiB): <path not set>
+	Space in storage for java.io.tmpdir (MiB): available: 41879.98, total: 233752.44
+	Space in storage for workdir (MiB): available: 41879.98, total: 233752.44
+	JVM Flags: 0 total; 
+	Fabric Mods: 
+		fabric-api: Fabric API 0.116.17+1.21.1
+			fabric-api-base: Fabric API Base 0.4.42+6573ed8c19
+			fabric-api-lookup-api-v1: Fabric API Lookup API (v1) 1.6.72+7b3d111d19
+			fabric-biome-api-v1: Fabric Biome API (v1) 13.0.31+d527f9fd19
+			fabric-block-api-v1: Fabric Block API (v1) 1.1.0+0bc3503219
+			fabric-block-view-api-v2: Fabric BlockView API (v2) 1.0.11+ebb2264e19
+			fabric-blockrenderlayer-v1: Fabric BlockRenderLayer Registration (v1) 1.1.52+0af3f5a719
+			fabric-client-tags-api-v1: Fabric Client Tags 1.2.0+1eb36c0719
+			fabric-command-api-v1: Fabric Command API (v1) 1.2.49+f71b366f19
+			fabric-command-api-v2: Fabric Command API (v2) 2.2.28+6ced4dd919
+			fabric-commands-v0: Fabric Commands (v0) 0.2.66+df3654b319
+			fabric-content-registries-v0: Fabric Content Registries (v0) 8.0.19+b559734419
+			fabric-convention-tags-v1: Fabric Convention Tags 2.1.7+7f945d5b19
+			fabric-convention-tags-v2: Fabric Convention Tags (v2) 2.12.0+c3656daa19
+			fabric-crash-report-info-v1: Fabric Crash Report Info (v1) 0.2.29+0af3f5a719
+			fabric-data-attachment-api-v1: Fabric Data Attachment API (v1) 1.4.7+5b36e0f719
+			fabric-data-generation-api-v1: Fabric Data Generation API (v1) 20.3.0+1eb36c0719
+			fabric-dimensions-v1: Fabric Dimensions API (v1) 4.0.1+65213ef819
+			fabric-entity-events-v1: Fabric Entity Events (v1) 1.8.0+2b27e0a419
+			fabric-events-interaction-v0: Fabric Events Interaction (v0) 0.7.14+ba9dae0619
+			fabric-game-rule-api-v1: Fabric Game Rule API (v1) 1.0.53+6ced4dd919
+			fabric-item-api-v1: Fabric Item API (v1) 11.3.0+467044f319
+			fabric-item-group-api-v1: Fabric Item Group API (v1) 4.1.7+def88e3a19
+			fabric-keybindings-v0: Fabric Key Bindings (v0) 0.2.45+df3654b319
+			fabric-lifecycle-events-v1: Fabric Lifecycle Events (v1) 2.6.0+0865547519
+			fabric-loot-api-v2: Fabric Loot API (v2) 3.0.15+3f89f5a519
+			fabric-loot-api-v3: Fabric Loot API (v3) 1.0.3+3f89f5a519
+			fabric-message-api-v1: Fabric Message API (v1) 6.0.14+8aaf3aca19
+			fabric-model-loading-api-v1: Fabric Model Loading API (v1) 2.1.0+b4d813fc19
+			fabric-networking-api-v1: Fabric Networking API (v1) 4.3.1+d30f6a7919
+			fabric-object-builder-api-v1: Fabric Object Builder API (v1) 15.2.1+40875a9319
+			fabric-particles-v1: Fabric Particles (v1) 4.0.2+6573ed8c19
+			fabric-recipe-api-v1: Fabric Recipe API (v1) 5.0.16+2475392c19
+			fabric-registry-sync-v0: Fabric Registry Sync (v0) 5.3.2+e3eddc2119
+			fabric-renderer-api-v1: Fabric Renderer API (v1) 3.4.1+b4d813fc19
+			fabric-renderer-indigo: Fabric Renderer - Indigo 1.7.1+c705a49c19
+			fabric-renderer-registries-v1: Fabric Renderer Registries (v1) 3.2.71+df3654b319
+			fabric-rendering-data-attachment-v1: Fabric Rendering Data Attachment (v1) 0.3.49+73761d2e19
+			fabric-rendering-fluids-v1: Fabric Rendering Fluids (v1) 3.1.6+1daea21519
+			fabric-rendering-v0: Fabric Rendering (v0) 1.1.74+df3654b319
+			fabric-rendering-v1: Fabric Rendering (v1) 5.2.1+f44c2eea19
+			fabric-resource-conditions-api-v1: Fabric Resource Conditions API (v1) 4.3.0+8dc279b119
+			fabric-resource-loader-v0: Fabric Resource Loader (v0) 1.3.1+5b5275af19
+			fabric-screen-api-v1: Fabric Screen API (v1) 2.0.26+639b4c0719
+			fabric-screen-handler-api-v1: Fabric Screen Handler API (v1) 1.3.91+b559734419
+			fabric-sound-api-v1: Fabric Sound API (v1) 1.0.23+6573ed8c19
+			fabric-tag-api-v1: Fabric Tag API (v1) 1.3.0+1eb36c0719
+			fabric-transfer-api-v1: Fabric Transfer API (v1) 5.4.4+7b3d111d19
+			fabric-transitive-access-wideners-v1: Fabric Transitive Access Wideners (v1) 6.2.0+45b9699719
+		fabricloader: Fabric Loader (Forbric kernel) 0.19.3
+		java: Java 21
+		minecraft: Minecraft 1.21.1
+		modmenu: Mod Menu 11.0.5
+			fabric-key-binding-api-v1: Fabric Key Binding API (v1) 1.0.47+0af3f5a790
+		placeholder-api: Placeholder API 2.4.2+1.21
+	Launched Version: 1.21.1-forbric-kernel
+	Backend library: LWJGL version 3.3.3+5
+	Backend API: Apple M2 GL version 4.1 Metal - 91.7, Apple
+	Window size: 1708x960
+	GFLW Platform: cocoa
+	GL Caps: Using framebuffer using OpenGL 3.2
+	GL debug messages: <disabled>
+	Is Modded: Definitely; Client brand changed to 'neoforge'; Server brand changed to 'neoforge'
+	Universe: 400921fb54442d18
+	Type: Integrated Server (map_client.txt)
+	GPU Warnings: version: Metal
+	Graphics mode: fancy
+	Render Distance: 12/12 chunks
+	Resource Packs: vanilla, fabric, fabric-api, fabric-api-base, fabric-api-lookup-api-v1, fabric-biome-api-v1, fabric-block-api-v1, fabric-block-view-api-v2, fabric-blockrenderlayer-v1, fabric-client-tags-api-v1, fabric-command-api-v1, fabric-command-api-v2, fabric-commands-v0, fabric-content-registries-v0, fabric-convention-tags-v1, fabric-convention-tags-v2, fabric-crash-report-info-v1, fabric-data-attachment-api-v1, fabric-data-generation-api-v1, fabric-dimensions-v1, fabric-entity-events-v1, fabric-events-interaction-v0, fabric-game-rule-api-v1, fabric-item-api-v1, fabric-item-group-api-v1, fabric-key-binding-api-v1, fabric-keybindings-v0, fabric-lifecycle-events-v1, fabric-loot-api-v2, fabric-loot-api-v3, fabric-message-api-v1, fabric-model-loading-api-v1, fabric-networking-api-v1, fabric-object-builder-api-v1, fabric-particles-v1, fabric-recipe-api-v1, fabric-registry-sync-v0, fabric-renderer-api-v1, fabric-renderer-indigo, fabric-renderer-registries-v1, fabric-rendering-data-attachment-v1, fabric-rendering-fluids-v1, fabric-rendering-v0, fabric-rendering-v1, fabric-resource-conditions-api-v1, fabric-resource-loader-v0, fabric-screen-api-v1, fabric-screen-handler-api-v1, fabric-sound-api-v1, fabric-tag-api-v1, fabric-transfer-api-v1, fabric-transitive-access-wideners-v1, modmenu, placeholder-api, forbric/mod_resources, forbric/forge-runtime-interop, forbric/neoforge-runtime, forbric/forbric-kernel-runtime
+	Current Language: en_us
+	Locale: zh_HK_#Hans
+	System encoding: UTF-8
+	File encoding: UTF-8
+	CPU: 8x Apple M2
+	Server Running: true
+	Player Count: 1 / 8; [ServerPlayer['ForbricKernel'/17, l='ServerLevel[W7Client]', x=-37.50, y=68.00, z=53.50]]
+	Active Data Packs: vanilla, mod_data, forbric/carrier/1-forge-runtime-interop, forbric/carrier/2-neoforge-runtime, fabric, fabric-convention-tags-v2
+	Available Data Packs: bundle, trade_rebalance, vanilla, fabric, fabric-convention-tags-v2, forbric/carrier/1-forge-runtime-interop, forbric/carrier/2-neoforge-runtime, mod_data
+	Enabled Feature Flags: minecraft:vanilla
+	World Generation: Experimental
+	World Seed: 5470272552231928636
+	Mod List: 
+		
+	Crash Report UUID: 287dd22a-b246-453a-9c91-ee00a2874ea6
+	FML: null
+	NeoForge: 21.1.252
+	ModLauncher: ERR
+	ModLauncher launch target: null
+	ModLauncher services: ERR
+	FML Language Providers: ERR

@@ -1,0 +1,25 @@
+== 1. the merged clinit is Forge's route ==
+   [net/minecraftforge/registries/DataPackRegistriesHooks.grabNetworkableRegistries]
+  ok   the merged clinit calls Forge's grabNetworkableRegistries
+  ok   ...with a Supplier argument (its own lambda$static$0)
+
+== 2. that supplier IS NeoForge's expression ==
+   merged lambda$static$0 : net/minecraft/resources/RegistryDataLoader.SYNCHRONIZED_REGISTRIES | java/util/List.stream()Ljava/util/stream/Stream; | INVOKEDYNAMIC | java/util/stream/Stream.map(Ljava/util/function/Function;)Ljava/util/stream/Stream; | java/util/stream/Collectors.toUnmodifiableSet()Ljava/util/stream/Collector; | java/util/stream/Stream.collect(Ljava/util/stream/Collector;)Ljava/lang/Object; | CHECKCAST | ARETURN
+   neo (discarded) clinit : net/minecraft/resources/RegistryDataLoader.SYNCHRONIZED_REGISTRIES | java/util/List.stream()Ljava/util/stream/Stream; | INVOKEDYNAMIC | java/util/stream/Stream.map(Ljava/util/function/Function;)Ljava/util/stream/Stream; | java/util/stream/Collectors.toUnmodifiableSet()Ljava/util/stream/Collector; | java/util/stream/Stream.collect(Ljava/util/stream/Collector;)Ljava/lang/Object; | CHECKCAST | net/minecraft/core/RegistrySynchronization.NETWORKABLE_REGISTRIES | RETURN
+  ok   merged lambda$static$0 is byte-for-byte NeoForge's clinit expression
+  ok   ...reading RegistryDataLoader.SYNCHRONIZED_REGISTRIES (the base's live union, set by NeoForge's hook)
+
+== 3. Forge's hook UNIONS, it does not replace ==
+  ok   Forge's hook does Set.addAll(supplier.get())
+  ok   and returns unmodifiableSet(that union)
+  ok   ...over Forge's own NETWORKABLE_REGISTRIES set
+
+== 4. conclusion (recorded, not repaired) ==
+   merged NETWORKABLE_REGISTRIES = NeoForge's SYNCHRONIZED_REGISTRIES keys
+                                  ∪ MinecraftForge's custom synced-registry keys
+   -> a superset of NeoForge's; only the membership filter in ownedNetworkableRegistries reads
+      it, so extra keys are inert unless that registry is loaded — and then syncing it is correct.
+   -> rewriting the clinit to NeoForge's route would DROP Forge's custom synced registries: a
+      regression for Forge mods, not a repair. Recorded as a benign divergence (no loss).
+
+ALL CHECKS PASSED

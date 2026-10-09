@@ -1,0 +1,49 @@
+### merged ItemBlockRenderTypes: the Forge writer (before)
+  public static synchronized void setRenderLayer(net.minecraft.world.level.block.Block, net.minecraftforge.client.ChunkRenderTypeSet);
+    Code:
+         0: invokestatic  #203                // Method checkClientLoading:()V
+         3: getstatic     #168                // Field BLOCK_RENDER_TYPES:Ljava/util/Map;
+         6: getstatic     #1308               // Field net/minecraftforge/registries/ForgeRegistries.BLOCKS:Lnet/minecraftforge/registries/IForgeRegistry;
+         9: aload_0
+        10: invokeinterface #151,  2          // InterfaceMethod net/minecraftforge/registries/IForgeRegistry.getDelegateOrThrow:(Ljava/lang/Object;)Lnet/minecraft/core/Holder$Reference;
+        15: aload_1
+        16: invokeinterface #207,  3          // InterfaceMethod java/util/Map.put:(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+        21: pop
+        22: return
+
+
+### merged getRenderLayers (reader)
+  public static net.neoforged.neoforge.client.ChunkRenderTypeSet getRenderLayers(net.minecraft.world.level.block.state.BlockState);
+    Code:
+         0: aload_0
+         1: invokevirtual #48                 // Method net/minecraft/world/level/block/state/BlockState.getBlock:()Lnet/minecraft/world/level/block/Block;
+         4: astore_1
+         5: aload_1
+         6: instanceof    #50                 // class net/minecraft/world/level/block/LeavesBlock
+         9: ifeq          28
+        12: getstatic     #52                 // Field renderCutout:Z
+        15: ifeq          24
+        18: getstatic     #162                // Field CUTOUT_MIPPED:Lnet/neoforged/neoforge/client/ChunkRenderTypeSet;
+        21: goto          27
+        24: getstatic     #164                // Field SOLID:Lnet/neoforged/neoforge/client/ChunkRenderTypeSet;
+        27: areturn
+        28: getstatic     #168                // Field BLOCK_RENDER_TYPES:Ljava/util/Map;
+        31: aload_1
+        32: invokeinterface #69,  2           // InterfaceMethod java/util/Map.get:(Ljava/lang/Object;)Ljava/lang/Object;
+        37: checkcast     #166                // class net/neoforged/neoforge/client/ChunkRenderTypeSet
+        40: areturn
+
+
+### forge ItemBlockRenderTypes Forge writer (reference)
+  public static synchronized void setRenderLayer(net.minecraft.world.level.block.Block, net.minecraftforge.client.ChunkRenderTypeSet);
+    Code:
+         0: invokestatic  #214                // Method checkClientLoading:()V
+         3: getstatic     #176                // Field BLOCK_RENDER_TYPES:Ljava/util/Map;
+         6: getstatic     #179                // Field net/minecraftforge/registries/ForgeRegistries.BLOCKS:Lnet/minecraftforge/registries/IForgeRegistry;
+         9: aload_0
+        10: invokeinterface #156,  2          // InterfaceMethod net/minecraftforge/registries/IForgeRegistry.getDelegateOrThrow:(Ljava/lang/Object;)Lnet/minecraft/core/Holder$Reference;
+        15: aload_1
+        16: invokeinterface #218,  3          // InterfaceMethod java/util/Map.put:(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+        21: pop
+        22: return
+

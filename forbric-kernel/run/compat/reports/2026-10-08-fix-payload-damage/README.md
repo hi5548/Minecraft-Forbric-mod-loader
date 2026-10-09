@@ -1,26 +1,29 @@
 # 2026-10-08-fix-payload-damage — BugHunt5 R1 and A1, fixed on bytes
 
 **Verdict (EN).** Both BugHunt5 items are fixed, each in its own commit, each verified by a no-JVM offline probe
-over the **real** carrier bytes (red before, green after); both client arms were preregistered to the letter before
-any run, but they are **blocked today by a missing build fixture** (§5) and are reported as such rather than
-worked around. **R1** (`31da5fa1`): `PayloadWorkOrderingTransformer` now removes the `isSameThread()` inline
-shortcut from **both** `enqueueWork` overloads — the `Runnable` one and the returning `Supplier` one — so a
-clientbound-PLAY handler that defers through `ctx.enqueueWork(() -> value)` can no longer run its work before
-`ClientPacketListener.handleLogin` created the level. **A1** (`975774d8`): `ForgeDamageSeamsInjector` now reads the
-carrier's shape instead of hardcoding 26.2's, so on 1.21.1 its Hurt, Damage and player-Attack seams place in
-`actuallyHurt(DamageSource,float)` and `Player.hurt(DamageSource,float)` and MinecraftForge's damage events are
-delivered again.
+over the **real** carrier bytes (red before, green after), and each then run once on W7Harness's client rig against
+a kernel built from this commit (sha `c6e47ce9…`). **R1 is a STRICT PASS** (join reaches a world; no `Network
+Protocol Error` failure). **A1's boot reading is MET via the landed path** (both damage classes edited, no
+`made no edit`, while two other kernels show the miss) — the written criteria's "MUST-BE-PRESENT" string turned out
+to be the *miss* form and is corrected in the adjudication, not by rewriting them. **R1** (`31da5fa1`):
+`PayloadWorkOrderingTransformer` now removes the `isSameThread()` inline shortcut from **both** `enqueueWork`
+overloads — the `Runnable` one and the returning `Supplier` one — so a clientbound-PLAY handler that defers through
+`ctx.enqueueWork(() -> value)` can no longer run its work before `ClientPacketListener.handleLogin` created the
+level. **A1** (`975774d8`): `ForgeDamageSeamsInjector` now reads the carrier's shape instead of hardcoding 26.2's,
+so on 1.21.1 its Hurt, Damage and player-Attack seams place in `actuallyHurt(DamageSource,float)` and
+`Player.hurt(DamageSource,float)` and MinecraftForge's damage events are delivered again.
 
-**答案（中文）。** BugHunt5 的两条都已修，各自一个提交，各自先用**无 JVM** 的离线探针在**真**载体字节上验红再验绿；
-两个客户端臂的读数在任何运行之前都已逐字预登记，但**今天被缺失的构建夹具挡住**（§5），如实记录而不绕行。
-**R1**（`31da5fa1`）：两个 `enqueueWork` 重载（`Runnable` 与返回值的 `Supplier`）的同线程捷径都摘掉。
+**答案（中文）。** BugHunt5 的两条都已修，各自一个提交，各自先用**无 JVM** 的离线探针在**真**载体字节上验红再验绿，
+随后各自在本提交构建的内核（sha `c6e47ce9…`）上由 W7Harness 的客户端装置跑了一次：**R1 严格通过**（进世界、
+无 `Network Protocol Error` 失败）；**A1 的启动读数通过「生效路径」**（两具伤害类都被编辑、没有
+`made no edit`，而另外两个内核显示的是 miss）。预订判据里那行 "MUST-BE-PRESENT" 字符串其实是 **miss** 形态，
+在裁决里更正，而不是改判据。**R1**（`31da5fa1`）：两个 `enqueueWork` 重载的同线程捷径都摘掉。
 **A1**（`975774d8`）：`ForgeDamageSeamsInjector` 改为从类里读形状；1.21.1 上接缝落进
 `actuallyHurt(DamageSource,float)` 与 `Player.hurt(DamageSource,float)`。
 
 Base: branch `fix-payload-damage` off `main` `4b565f01`, own worktree `../payload-damage-wt`. Method: read-only
-`javap` of the real carrier, then the shipped transformers run over those exact classes by an offline probe. No game
-launch was done by this lane; the two client arms are preregistered and owned by W7Harness, and their status (blocked
-on an absent build fixture) is in §5.
+`javap` of the real carrier, then the shipped transformers run over those exact classes by an offline probe, then one
+W7Harness client arm per item on a kernel built from this commit (§5).
 
 ---
 
@@ -106,35 +109,73 @@ jars (JUnit used only for its annotations and `TestAbortedException`):
 |---|---|---|
 | `evidence/module-tests-red.txt` / `-green.txt` | `pass=3 fail=3` (the three A1/R1 shape assertions) | `pass=6 fail=0 skip=0` |
 
-## 5. Pre-registration and the W7Harness arms — blocked today
+## 5. Pre-registration and the W7Harness arms — both run, both adjudicated
 
-`evidence/preregistration.md` was written before the probe or any arm ran; nothing in it is edited afterwards
-(adjudication is appended). It states the two expected readings and, so a passing row is not read as more than it
+`evidence/preregistration.md` was written before the probe or any arm ran; nothing in it is edited afterwards (the
+adjudication is appended). It states the two expected readings and, so a passing row is not read as more than it
 measured: a constant-pool scan cannot tell the `Supplier` from the `Runnable` overload, so the R1 arm proves
 **"the widened repair does not break a join"**, and the harness cannot drive combat, so the A1 arm proves the
-**anchor pair** (the absence of `made no edit — its anchor is gone` plus the positive per-class line) while the
-**firing** half is the offline shape probe. The arms are owned by W7Harness, one client arm per item.
+**anchor** reading while the **firing** half is the offline shape probe. The arms are owned by W7Harness, one client
+arm per item.
 
-**Outcome: impossible today, stated rather than worked around.** Both arms are blocked on the kernel's game-side
-build. It needs `energy-4.1.0-named.jar`, pinned at sha256 `cec89d1c…` (`build.gradle:91`), and that file is absent
-from the machine — it lived on the ORICO volume, now unmounted. W7Harness measured `:verifyRebornEnergy` failing in
-seconds on a clean detached worktree at `975774d8`. Neither workaround is honest here: a boot-half-only build leaves
-the bundled runtime half empty, and injecting the released runtime half fails its own gate — `git diff --stat
-v0.3.8-beta-1.21.1 975774d8 -- forbric-kernel/src/runtime` is 4 files (`KernelFabricConditions`,
-`KernelPacketContext`, `BlockTransferBridge`, `RebornEnergyBridge`), as it is against `v0.3.4`–`v0.3.7`, so no
-released tag matches; and the only compiled runtime classes on disk are dated before those four commits. **World-depth
-verification impossible today: the pinned build fixture is absent from the machine.** No gate was weakened and no
-jar was frozen from a different tree; the arms stand preregistered and run within minutes of the file appearing at
-`<kernel>/.dev/api/`.
+**Outcome.** Both arms ran on W7Harness's rig (`--stage .stage-orico`, `--mc .stage-scratch/mc`, window hiding on),
+on a real kernel built from `975774d8`: sha256
+`c6e47ce91c6658a31669afee06657b68918d01631e6fd4c1614eb0108fcbd594`, 3,291,447 B, embedded runtime half 535,542 B
+built against the verified `energy-4.1.0-named.jar` (`cec89d1c…`), so **both halves are this commit's source** —
+not a borrowed runtime half.
+
+| arm | row | reading | verdict |
+|---|---|---|---|
+| **R1** (`--only modmenu`, `corpus-user12`) | `run=PASS exit=0 world=true frames=1 stopped=true killed=false strict=TRUE confirmed_required=0 seconds=46` | `joined world via quick-play: W7Client`; `client-ready after 200 world tick(s)`; `requesting clean disconnect after 220 world tick(s)`; `crash-reports/*.txt` 0; no `lost connection`/crash markers. `Network Protocol Error`: 2 occurrences, **both** inside the fix's own `[Forbric/PayloadOrdering]` line quoting the failure mode it removes — 0 as a failure. | **MET** |
+| **A1** (`cherishedworlds-forge-10.1.1`, a real `mods.toml`-only Forge subject + its three Forge deps) | `run=PASS exit=0 world=true frames=1 strict=TRUE confirmed_required=0` | Forge family genuinely active: `[Forbric/Catalog] … 0 Fabric, 0 NeoForge, 4 MinecraftForge`. Landed path: `[Forbric/Damage] net.minecraft.world.entity.LivingEntity: MinecraftForge's Hurt and Damage in actuallyHurt back in NeoForge's damage pipeline` and the `player.Player … player Attack in hurt …` line — **both classes edited**. `forbric-forge-damage-seams … made no edit`: **0**. Anchor summary `68 of 201 declared repair(s) landed`, **no damage-seam miss**. | **MET** |
+
+The A1 landed reading is also in the R1/modmenu console (the seams are placed on the **merged** classes at boot,
+independent of the subject's ecosystem): `[Forbric/Damage]` appears there too, and its anchor summary carries no
+damage-seam miss.
+
+**Cross-kernel contrast — what makes it a repair and not a coincidence** (same rig, stage and corpus; only the
+kernel differs; evidence `w7-cross-kernel.txt`):
+
+| kernel | `[Forbric/Damage]` landed lines | damage-seam miss entries (classes declined) |
+|---|---|---|
+| `16bcd602` | 0 | 2 |
+| `117edc56` | 0 | 2 |
+| **`975774d8`** | **2** (forge arm; **4** in the `--only modmenu` arm) | **0** |
+
+The seams are placed on the merged classes at boot, so every arm carries the landed reading regardless of subject
+ecosystem; the `--only modmenu` console shows 4 landed lines (two per class across two transform passes) and the
+forge arm 2. The transformer *name* `forbric-forge-damage-seams` appears only in miss lines, which is why a grep for
+it reads 0 on a working kernel and 4 on a declining one (2 `made no edit` per-class lines + 2 miss-list lines).
+
+**Adjudication of the written criteria — corrected in the adjudication, not by rewriting them.**
+
+- **R1.** The literal `Network Protocol Error` occurs only inside the fix's own log line (both occurrences are that
+  one line, on `[Forbric/PayloadOrdering]`, describing the failure it prevents). The criterion's intent — the error
+  does not occur — is met; the qualifier for future readers is **"absent outside `[Forbric/PayloadOrdering]`
+  lines"**.
+- **A1.** The string I pinned as MUST-BE-PRESENT, `[Forbric/Anchor]   forbric-forge-damage-seams on <class>: …`, is
+  the **miss** listing, emitted only inside the `else` of `if (r.clean())` (`transform/TransformChain.java:207-212`),
+  i.e. it is what a *failing* kernel prints. W7Harness built that string from a console where it appeared without
+  checking which branch emitted it and handed it to me as the thing a working fix should produce, so the written
+  criteria could not be satisfied by a correct outcome. The landed form is
+  `[Forbric/Damage] <class>: MinecraftForge's … back in NeoForge's damage pipeline`. This is recorded as the reason
+  the criteria's two halves disagree **and as W7Harness's error, not the fix's**; the criterion is unchanged. The
+  A1-forge arm was chosen only after screening the subject's metadata (`META-INF/mods.toml`, no
+  `neoforge.mods.toml`/`fabric.mod.json`) and confirming the Forge family was active — the condition was not
+  assumed.
 
 ## 6. Limits
 
-- No client run: the two arms are blocked on the missing fixture (§5). The transformer/injector were run over the
-  real classes by the offline probe, which is what is claimed here.
-- `./gradlew --offline test` is not runnable on this machine for the game-side suite (the same missing fixture); the
+- No combat is drivable by the rig (no input, no mob, no attack), so A1 proves the **seam placed at MinecraftForge's
+  1.21.1 position** (the landed lines, no miss), **not that a `LivingHurt`/`LivingDamage` listener fired**; the
+  firing half is the offline shape probe, and that limit is unchanged.
+- The R1 arm proves **"the widened repair does not break a join"**, not **"the returning `enqueueWork(Supplier)`
+  overload was exercised in a session"** — a constant-pool scan cannot tell the two overloads apart. The offline
+  probe is the half that sees them separately.
+- `corpus-user12` has grown past its name (another lane added subjects); both arms still ran `--only modmenu`, so
+  the rows are unaffected.
+- `./gradlew --offline test` is not runnable on this machine for the game-side suite without the energy fixture; the
   two affected test classes were run directly instead (§4).
-- The R1 arm, once run, cannot show the returning overload being *exercised in a session* (§5); the offline probe is
-  the half that sees the two overloads separately.
 
 ## 7. Evidence (`evidence/`)
 
@@ -148,3 +189,7 @@ jar was frozen from a different tree; the arms stand preregistered and run withi
 | `javap-payload.txt` | both `enqueueWork` overloads from `neoforge-runtime.jar` |
 | `javap-merged-121.txt` | merged 1.21.1 `LivingEntity.actuallyHurt` and `Player.hurt` |
 | `javap-forge-121.txt` | MinecraftForge 1.21.1's own seam positions (the reference the seams reproduce) |
+| `w7-arm-r1.txt` / `w7-r1-results.jsonl` | W7Harness ARM R1 on kernel `c6e47ce9…`: the row, the console lines, the `Network Protocol Error` occurrences (both the fix's own line) |
+| `w7-arm-a1-forge.txt` / `w7-a1-forge-results.jsonl` | W7Harness ARM A1-forge (`cherishedworlds-forge`): the `[Forbric/Damage]` landed lines, the anchor summary, the Forge-active proofs |
+| `w7-arm-a1-modmenu.txt` / `w7-a1-modmenu-results.jsonl` | the `--only modmenu` arm — same landed reading (the seams are placed on the merged classes at boot); the `0` for the transformer *name* is the miss-form count, not "not visited" |
+| `w7-cross-kernel.txt` | the contrast (`16bcd602`/`117edc56` 0 landed / 2 miss vs `975774d8` 2 landed / 0 miss) |

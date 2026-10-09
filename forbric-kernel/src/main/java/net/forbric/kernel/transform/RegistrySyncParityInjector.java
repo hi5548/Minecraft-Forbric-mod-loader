@@ -83,7 +83,20 @@ public final class RegistrySyncParityInjector implements ClassTransformer {
 	private static final String PENDING_BINDINGS = "val$newBindings";
 	private static final String IMMUTABLE_MAP = "Lcom/google/common/collect/ImmutableMap;";
 	private static final String NEO_REGISTRY_MANAGER = ForeignType.REGISTRY_MANAGER.binary(Ecosystem.NEOFORGE);
+	/**
+	 * fabric-api's client-side registry-sync entry: the class whose {@code apply} returns flush the wrapper's staged
+	 * ids. Two generations, two shapes, and the shipped 1.21.1 base had only the 26.2 name:
+	 * <ul>
+	 *   <li>26.2-era (fabric-api 0.154.x): {@code impl.client.registry.sync.ClientRegistrySyncHandler.apply(RegistrySyncPayload)V}.</li>
+	 *   <li>1.21.1 (fabric-api 0.116.17): {@code impl.registry.sync.RegistrySyncManager.apply(Map, RemapMode)V} — the
+	 *       class named by the 26.2 constant does not exist here, so it was never loaded, the flush was never
+	 *       injected, and (because the transform was never handed the class) not even the "re-derive" warning fired.
+	 *       Against a pure Fabric 1.21.1 server the seventeen wrapped registries therefore kept their local ids.
+	 *       This is the PORT(1.21.1) twin of the same 26.2-shaped staleness the merge audit found elsewhere.</li>
+	 * </ul>
+	 */
 	private static final String FABRIC_CLIENT_SYNC = "net.fabricmc.fabric.impl.client.registry.sync.ClientRegistrySyncHandler";
+	private static final String FABRIC_SYNC_MANAGER = "net.fabricmc.fabric.impl.registry.sync.RegistrySyncManager";
 
 	private static final String HOOK_OWNER = "net/forbric/kernel/boot/KernelForgeWrapperSync";
 	private static final String RESOURCE_KEY = "Lnet/minecraft/resources/ResourceKey;";
@@ -100,10 +113,19 @@ public final class RegistrySyncParityInjector implements ClassTransformer {
 
 	/** fabric-api's {@code RemappableRegistry.remap}, which its mixin adds to {@code MappedRegistry} and the wrapper inherits. */
 	private static final String REMAP = "remap";
+	/** 26.2-era signature: {@code remap(Object2IntMap<ResourceLocation>, RemapMode)V}. */
 	private static final String REMAP_DESC =
 			"(Lit/unimi/dsi/fastutil/objects/Object2IntMap;Lnet/fabricmc/fabric/impl/registry/sync/RemappableRegistry$RemapMode;)V";
+	/** 1.21.1 signature: {@code remap(String registryName, Object2IntMap<ResourceLocation>, RemapMode)V} — a registry name is the first parameter. */
+	private static final String REMAP_1211_DESC =
+			"(Ljava/lang/String;Lit/unimi/dsi/fastutil/objects/Object2IntMap;"
+					+ "Lnet/fabricmc/fabric/impl/registry/sync/RemappableRegistry$RemapMode;)V";
 	private static final String FABRIC_APPLY = "apply";
+	/** 26.2-era entry descriptor: {@code ClientRegistrySyncHandler.apply(RegistrySyncPayload)V}. */
 	private static final String FABRIC_APPLY_DESC = "(Lnet/fabricmc/fabric/impl/registry/sync/packet/RegistrySyncPayload;)V";
+	/** 1.21.1 entry descriptor: {@code RegistrySyncManager.apply(Map, RemapMode)V}. */
+	private static final String REGISTRY_SYNC_APPLY_DESC =
+			"(Ljava/util/Map;Lnet/fabricmc/fabric/impl/registry/sync/RemappableRegistry$RemapMode;)V";
 
 	@Override
 	public String name() {
@@ -127,7 +149,17 @@ public final class RegistrySyncParityInjector implements ClassTransformer {
 								+ "where its absence would kill a world load inside NeoForge's condition context"),
 				new AnchorSet.Anchor(NEO_REGISTRY_MANAGER, AnchorSet.Severity.REQUIRED,
 						"the kernel's own pre-connection registry snapshot would never be applied, so ids would "
-								+ "not revert after a multiplayer disconnect"));
+								+ "not revert after a multiplayer disconnect"),
+				// The two generations' client-sync entries. Exactly one is present per base, so these are HEDGEs:
+				// the absent one is the healthy answer, the present one must be transformed or the wrapper's
+				// fabric staging is never applied (the 1.21.1 defect this pair exists to catch — the 26.2 name was
+				// the only one, it never loaded, and not even the transformer's own warning fired).
+				new AnchorSet.Anchor(FABRIC_SYNC_MANAGER, AnchorSet.Severity.HEDGE,
+						"fabric-api's 1.21.1 client sync (RegistrySyncManager.apply) would keep the wrapper's staged "
+								+ "ids and never apply them: a pure Fabric server's blocks/items decode to the wrong ones"),
+				new AnchorSet.Anchor(FABRIC_CLIENT_SYNC, AnchorSet.Severity.HEDGE,
+						"the 26.2 client sync entry; absent on a 1.21.1 base, where RegistrySyncManager is the live "
+								+ "one instead"));
 	}
 
 	@Override
@@ -137,20 +169,10 @@ public final class RegistrySyncParityInjector implements ClassTransformer {
 		if (WRAPPER_PENDING_TAGS.equals(className)) return giveWrapperPendingTagsItsContents(className, classBytes);
 		if (NEO_REGISTRY_MANAGER.equals(className)) return flushAroundApplySnapshot(className, classBytes);
 		if (FABRIC_CLIENT_SYNC.equals(className)) return flushAroundFabricApply(className, classBytes);
+		if (FABRIC_SYNC_MANAGER.equals(className)) return flushAroundFabricApply(className, classBytes);
 		return classBytes;
 	}
 
-	/**
-	 * Adds NeoForge's {@code clear(Z)} / {@code registerIdMapping(ResourceKey, I)} and fabric-api's
-	 * {@code remap(Object2IntMap, RemapMode)} to the wrapper — unless it grew its own.
-	 *
-	 * <p>fabric-api's half is the same disease with a quieter symptom: its {@code remap} is a mixin method that
-	 * rewrites the {@code MappedRegistry} fields it shadows, and on the wrapper those are the same empty fields —
-	 * so against a PURE Fabric server (where only fabric-api's sync runs) the seventeen wrapped registries kept
-	 * their local ids and nothing said so. With mod sets that differ between client and server, every block, item,
-	 * entity type and sound in those registries then decodes to the wrong one. The override stages the server's
-	 * ids exactly as the NeoForge one does, and {@code ClientRegistrySyncHandler.apply} flushes them.
-	 */
 	/**
 	 * Adds {@code contents()} to MinecraftForge's pending-tags class: the map of tag key to the holders that tag is
 	 * about to hold.
@@ -196,6 +218,22 @@ public final class RegistrySyncParityInjector implements ClassTransformer {
 		return writer.toByteArray();
 	}
 
+	/**
+	 * Adds NeoForge's {@code clear(Z)} / {@code registerIdMapping(ResourceKey, I)} and fabric-api's {@code remap} to
+	 * the wrapper — unless it grew its own.
+	 *
+	 * <p>fabric-api's half is the same disease with a quieter symptom: its {@code remap} is a mixin method that
+	 * rewrites the {@code MappedRegistry} fields it shadows, and on the wrapper those are the same empty fields —
+	 * so against a PURE Fabric server (where only fabric-api's sync runs) the seventeen wrapped registries kept
+	 * their local ids and nothing said so. With mod sets that differ between client and server, every block, item,
+	 * entity type and sound in those registries then decodes to the wrong one. The override stages the server's ids
+	 * exactly as the NeoForge one does, and fabric-api's client sync entry flushes them.
+	 *
+	 * <p>BOTH {@code remap} signatures are added: the 26.2 two-arg {@code remap(Object2IntMap, RemapMode)} and the
+	 * 1.21.1 three-arg {@code remap(String, Object2IntMap, RemapMode)} that {@code RemappableRegistry} declares on
+	 * this base. Whichever the loaded fabric-api's interface asks for, the {@code invokeinterface} in its sync
+	 * resolves to the wrapper's override rather than to fabric's own empty-field mixin method.
+	 */
 	private static byte[] giveWrapperBothContracts(String className, byte[] classBytes) {
 		ClassNode node = new ClassNode();
 		new ClassReader(classBytes).accept(node, 0);
@@ -203,7 +241,7 @@ public final class RegistrySyncParityInjector implements ClassTransformer {
 		for (MethodNode m : node.methods) {
 			if ((m.name.equals(REGISTER_ID_MAPPING) && m.desc.equals(REGISTER_ID_MAPPING_DESC))
 					|| (m.name.equals(CLEAR) && m.desc.equals(CLEAR_DESC))
-					|| (m.name.equals(REMAP) && m.desc.equals(REMAP_DESC))) {
+					|| (m.name.equals(REMAP) && (m.desc.equals(REMAP_DESC) || m.desc.equals(REMAP_1211_DESC)))) {
 				// A wrapper that overrides these itself has closed the gap natively; adding a second copy would
 				// be a duplicate-method ClassFormatError, so leave it be and say so.
 				ForbricLog.warn("[Forbric/RegistrySync] %s already declares %s%s — leaving Forge's own version in "
@@ -247,9 +285,27 @@ public final class RegistrySyncParityInjector implements ClassTransformer {
 		remap.maxLocals = 3;
 		node.methods.add(remap);
 
+		// public void remap(String registryName, Object2IntMap<Identifier> ids, RemapMode mode) {
+		//     KernelForgeWrapperSync.stageFabricRemap(this, registryName, ids, mode);
+		// }
+		// The 1.21.1 signature. Without it, RegistrySyncManager.apply's `invokeinterface RemappableRegistry.remap`
+		// resolves to fabric's OWN mixin method on MappedRegistry — which rewrites the fields the wrapper never
+		// fills — so a pure Fabric 1.21.1 server's ids were accepted and silently not applied.
+		MethodNode remap1211 = new MethodNode(Opcodes.ACC_PUBLIC, REMAP, REMAP_1211_DESC, null, null);
+		remap1211.instructions.add(new VarInsnNode(Opcodes.ALOAD, 0));
+		remap1211.instructions.add(new VarInsnNode(Opcodes.ALOAD, 1));
+		remap1211.instructions.add(new VarInsnNode(Opcodes.ALOAD, 2));
+		remap1211.instructions.add(new VarInsnNode(Opcodes.ALOAD, 3));
+		remap1211.instructions.add(new MethodInsnNode(Opcodes.INVOKESTATIC, HOOK_OWNER, "stageFabricRemap",
+				"(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)V", false));
+		remap1211.instructions.add(new InsnNode(Opcodes.RETURN));
+		remap1211.maxStack = 4;
+		remap1211.maxLocals = 4;
+		node.methods.add(remap1211);
+
 		ForbricLog.info("[Forbric/RegistrySync] gave %s NeoForge's id-remap contract (clear, registerIdMapping) and "
-				+ "fabric-api's (remap) — the server's ids are staged and applied through Forge's own injectSnapshot",
-				className);
+				+ "fabric-api's (remap, both the 26.2 two-arg and the 1.21.1 three-arg form) — the server's ids are "
+				+ "staged and applied through Forge's own injectSnapshot", className);
 		ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
 		node.accept(writer);
 		return writer.toByteArray();
@@ -319,18 +375,25 @@ public final class RegistrySyncParityInjector implements ClassTransformer {
 	}
 
 	/**
-	 * The fabric-api twin of {@link #flushAroundApplySnapshot}: {@code ClientRegistrySyncHandler.apply(payload)} is
-	 * where the client calls {@code remap} on every synced registry, so its returns are where the wrapped ones get
-	 * theirs applied. {@code void}, so a bare call before each {@code RETURN}; an exception path leaves the staging
-	 * to the next {@code beginSnapshotApplication}.
+	 * The fabric-api twin of {@link #flushAroundApplySnapshot}: fabric's client-side sync calls {@code remap} on
+	 * every synced registry, so the returns of that entry are where the wrapped ones get theirs applied. {@code void},
+	 * so a bare call before each {@code RETURN}; an exception path leaves the staging to the next
+	 * {@code beginSnapshotApplication}.
+	 *
+	 * <p>Two generations, two entries: 26.2's {@code ClientRegistrySyncHandler.apply(RegistrySyncPayload)} and
+	 * 1.21.1's {@code RegistrySyncManager.apply(Map, RemapMode)}. Both are accepted; on any given base exactly one of
+	 * the classes exists and is loaded, so this fires once.
 	 */
 	private static byte[] flushAroundFabricApply(String className, byte[] classBytes) {
 		ClassNode node = new ClassNode();
 		new ClassReader(classBytes).accept(node, 0);
 
+		String method = FABRIC_APPLY;
+		String desc = FABRIC_SYNC_MANAGER.equals(className) ? REGISTRY_SYNC_APPLY_DESC : FABRIC_APPLY_DESC;
+
 		MethodNode target = null;
 		for (MethodNode m : node.methods) {
-			if (m.name.equals(FABRIC_APPLY) && m.desc.equals(FABRIC_APPLY_DESC) && (m.access & Opcodes.ACC_STATIC) != 0) {
+			if (m.name.equals(method) && m.desc.equals(desc) && (m.access & Opcodes.ACC_STATIC) != 0) {
 				target = m;
 				break;
 			}
@@ -338,7 +401,7 @@ public final class RegistrySyncParityInjector implements ClassTransformer {
 		if (target == null) {
 			ForbricLog.warn("[Forbric/RegistrySync] %s has no static %s%s — fabric-api's registry sync will stage ids on "
 					+ "the Forge-wrapped registries and never apply them; re-derive RegistrySyncParityInjector",
-					className, FABRIC_APPLY, FABRIC_APPLY_DESC);
+					className, method, desc);
 			return classBytes;
 		}
 
@@ -356,7 +419,7 @@ public final class RegistrySyncParityInjector implements ClassTransformer {
 		}
 
 		ForbricLog.info("[Forbric/RegistrySync] flushing the Forge-wrapped registries' staged ids at %d return(s) of "
-				+ "%s.%s", returns, className, FABRIC_APPLY);
+				+ "%s.%s", returns, className, method);
 		ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
 		node.accept(writer);
 		return writer.toByteArray();

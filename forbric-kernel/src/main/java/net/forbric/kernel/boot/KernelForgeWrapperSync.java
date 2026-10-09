@@ -31,9 +31,9 @@ import net.forbric.kernel.util.ForbricLog;
 import net.forbric.kernel.util.IdentifierNames;
 
 /**
- * The boot-side half of {@link net.forbric.kernel.transform.RegistrySyncParityInjector}: stages the ids NeoForge's
- * registry sync assigns to a MinecraftForge-wrapped registry, then applies them all at once through Forge's own
- * {@code GameData.injectSnapshot}.
+ * The boot-side half of {@link net.forbric.kernel.transform.RegistrySyncParityInjector}: stages the ids a registry
+ * sync assigns to a MinecraftForge-wrapped registry — NeoForge's snapshot <em>and</em> fabric-api's remap — then
+ * applies them all at once through Forge's own {@code GameData.injectSnapshot}.
  *
  * <p>Why stage rather than apply per entry: NeoForge hands ids over one {@code registerIdMapping(key, id)} at a
  * time, while Forge remaps a registry whole — {@code loadIds} onto a STAGING copy, then {@code sync} back into
@@ -47,11 +47,23 @@ import net.forbric.kernel.util.IdentifierNames;
  * block registry moved, the block-state id map is rebuilt in the new registry order — on the merged base
  * {@code Block.BLOCK_STATE_REGISTRY} IS NeoForge's map, and its bake callback is not on the wrapper's freeze path.
  *
- * <p>Known limit, on purpose: fabric-api's {@code remap} is a mixin on {@code MappedRegistry}'s fields, so on a
- * wrapped registry it is a silent no-op — a Forbric client against a PURE Fabric server gets no remap of these
- * seventeen registries from either ecosystem. Against a Forbric server, NeoForge's sync carries the same ids and
- * this class applies them. {@code -Dforbric.forgeWrapperSync=off} turns the staging into a no-op, which is the old
- * behaviour minus the crash.
+ * <p>Both ecosystems are covered, and each through the entry point it actually drives. Against a <b>Forbric
+ * server</b> NeoForge's sync runs and the flush happens after {@code RegistryManager.applySnapshot}'s loop. Against
+ * a <b>pure Fabric server</b> — where only fabric-api's sync runs — the wrapper is given fabric-api's own
+ * {@code remap} override ({@code RegistrySyncParityInjector.giveWrapperBothContracts}), which stages the server's
+ * whole id map here via {@link #stageFabricRemap}, and the returns of fabric-api's client sync entry flush it with
+ * {@link #finishFabricRemap}. fabric-api's mixin method would have rewritten the wrapper's empty inherited
+ * {@code MappedRegistry} fields and been a silent no-op, which is why the override exists.
+ *
+ * <p>That fabric half was re-derived for 1.21.1 after arriving 26.2-shaped: the wrapper now carries <b>both</b>
+ * {@code remap} signatures — the 26.2 two-arg {@code remap(Object2IntMap, RemapMode)} and the 1.21.1 three-arg
+ * {@code remap(String, Object2IntMap, RemapMode)} that {@code RemappableRegistry} actually declares here — and the
+ * flush is injected at <b>both</b> client-sync entries (26.2's {@code ClientRegistrySyncHandler.apply} and 1.21.1's
+ * {@code RegistrySyncManager.apply}). Before that, on the shipped 1.21.1 base the entry class named by the kernel
+ * did not exist, so the flush was never injected (and, the transform never being handed the class, not even its
+ * "re-derive" warning fired): a pure Fabric 1.21.1 server's ids were staged by the wrapper and silently never
+ * applied. {@code -Dforbric.forgeWrapperSync=off} turns the staging into a no-op, which is the old behaviour minus
+ * the crash.
  */
 public final class KernelForgeWrapperSync {
 	private static final String PROPERTY = "forbric.forgeWrapperSync";
@@ -67,8 +79,9 @@ public final class KernelForgeWrapperSync {
 	}
 
 	/**
-	 * Head of every remap entry point ({@code RegistryManager.applySnapshot}, {@code ClientRegistrySyncHandler.apply}):
-	 * nothing staged by an aborted earlier pass survives, and the pre-connection ids get captured for the disconnect
+	 * Head of every remap entry point — NeoForge's {@code RegistryManager.applySnapshot} and fabric-api's client-side
+	 * sync ({@code RegistrySyncManager.apply} on 1.21.1, {@code ClientRegistrySyncHandler.apply} on 26.2): nothing
+	 * staged by an aborted earlier pass survives, and the pre-connection ids get captured for the disconnect
 	 * ({@link KernelRegistryRevert}). {@code gameClass} is the hooked class itself, pushed as a constant — the loader
 	 * to reflect through.
 	 */
@@ -116,9 +129,19 @@ public final class KernelForgeWrapperSync {
 	}
 
 	/**
-	 * The wrapper's fabric-api {@code remap(Object2IntMap<Identifier> ids, RemapMode mode)}: stage the whole map.
-	 * fabric-api's {@code checkRemoteRemap} has already refused a server whose entries the client lacks, so every
-	 * name here resolves locally; local-only entries are Forge's to place after the server's, in {@code loadIds}.
+	 * The 1.21.1 form of the wrapper's fabric-api {@code remap(String registryName, Object2IntMap<Identifier> ids,
+	 * RemapMode mode)}: same staging as {@link #stageFabricRemap(Object, Object, Object)}, which leads with a
+	 * registry name. The name is redundant here — the wrapper object is the key — so it is dropped.
+	 */
+	public static void stageFabricRemap(Object wrapper, Object name, Object ids, Object mode) {
+		stageFabricRemap(wrapper, ids, mode);
+	}
+
+	/**
+	 * The 26.2 form of the wrapper's fabric-api {@code remap(Object2IntMap<Identifier> ids, RemapMode mode)}: stage
+	 * the whole map. fabric-api's {@code checkRemoteRemap} has already refused a server whose entries the client
+	 * lacks, so every name here resolves locally; local-only entries are Forge's to place after the server's, in
+	 * {@code loadIds}.
 	 */
 	public static void stageFabricRemap(Object wrapper, Object ids, Object mode) {
 		if (!ENABLED || wrapper == null || !(ids instanceof Map<?, ?> map)) return;
@@ -133,7 +156,7 @@ public final class KernelForgeWrapperSync {
 				describe(wrapper));
 	}
 
-	/** Every return of {@code ClientRegistrySyncHandler.apply}: fabric-api has remapped the rest; apply the wrapped ones. */
+	/** Every return of fabric-api's client sync entry (1.21.1 {@code RegistrySyncManager.apply}, 26.2 {@code ClientRegistrySyncHandler.apply}): fabric-api has remapped the rest; apply the wrapped ones. */
 	public static void finishFabricRemap() {
 		finishSnapshotApplication(Set.of());
 	}

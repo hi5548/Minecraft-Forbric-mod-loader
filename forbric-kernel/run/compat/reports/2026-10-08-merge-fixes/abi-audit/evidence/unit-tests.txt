@@ -1,0 +1,7 @@
+# Fix-surface tests (offline). AbiLinkAuditStagedTest skips by design: its 97-jar staged pack is absent on this machine.
+$ ./gradlew test --offline --tests net.forbric.kernel.boot.AbiLinkAuditTest --tests net.forbric.kernel.boot.AbiLinkAuditStagedTest --tests net.forbric.kernel.boot.MultiLoaderEntrypointsTest --tests net.forbric.kernel.compat.AbiAuditCompatTest --tests net.forbric.kernel.compat.FabricApiUsageCompatTest
+compileRuntimeJava: SKIPPED — staged game jars absent. Run prepareDev first (or python3 ../tools/dev.py prepare), then build in a second invocation.
+test: 32 tests, 2 skipped, 0 failed
+BUILD SUCCESSFUL in 2s
+6 actionable tasks: 1 executed, 5 up-to-date
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.1.0/userguide/configuration_cache_enabling.html

@@ -220,7 +220,6 @@ public final class AbiLinkAudit {
 		String first = missing.iterator().next();
 		return new Finding(jarName, familyOf(first).displayName(), List.copyOf(missing));
 	}
-
 	/**
 	 * The loader families {@code jar} declares but arbitration did not give it — the half {@link MultiLoaderArbiter}
 	 * drops. Empty when the jar declares one family or none: a single-family jar is never dropped for its own

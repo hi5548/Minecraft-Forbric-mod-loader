@@ -32,6 +32,12 @@ import org.junit.jupiter.api.Test;
  * the pack itself, the audit finds NOTHING. A real pack has CustomSkinLoader naming fml/loading and fml/relauncher,
  * universal jars naming both families, Fabric ports shipping net.minecraftforge.* for their dependants — every one
  * of those is a shape a naive audit cries wolf on.
+ *
+ * <p>Two of those shapes are handled by different rules, and both must hold for this to be 0: the out-of-scope
+ * loading/bootstrap packages ({@link AbiLinkAudit#inScope}), and the dropped half of a universal jar
+ * ({@link AbiLinkAudit#droppedFamilies}) — a family the jar declares but arbitration did not give it, which the
+ * staged pack's own universal jars carry. {@code AbiLinkAuditTest} pins each rule separately; this pins that the
+ * live pack, with both applied, still reads clean.
  */
 class AbiLinkAuditStagedTest {
 	@Test

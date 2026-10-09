@@ -1,0 +1,462 @@
+diff --git a/forbric-kernel/run/compat/abi-audit.py b/forbric-kernel/run/compat/abi-audit.py
+index 3f33be5d..f2647abc 100755
+--- a/forbric-kernel/run/compat/abi-audit.py
++++ b/forbric-kernel/run/compat/abi-audit.py
+@@ -4,6 +4,12 @@
+ Usage: abi-audit.py <mods-dir-or-jar> <carrier-jar>...
+ CONSTANT_Class references and nested META-INF/jars are read without loading Java.
+ Findings are a report (exit 0); unreadable input is an incomplete audit (exit 2).
++
++A jar that declares several loaders is loaded as exactly one of them (MultiLoaderArbiter), so the half
++arbitration drops is in the file but never on the runtime classpath: a 1.20.1 Forge half naming
++net.minecraftforge.client.event.RenderGuiEvent* must not mark the live 1.21.1 NeoForge mod. A dangling name in a
++family the archive declares but does not own is therefore skipped; a name in a family it does not declare (a
++NeoForge-only jar's stray net.minecraftforge reference) is still a finding.
+ """
+ import argparse
+ import io
+@@ -12,6 +18,52 @@ import struct
+ import sys
+ import zipfile
+ 
++# The loader families a manifest can claim, and the spelling -Dforbric.multiLoaderPreference takes. The default
++# order must match MultiLoaderArbiter.DEFAULT_PREFERENCE.
++FORGE, NEOFORGE, FABRIC = "minecraftforge", "neoforge", "fabric"
++DEFAULT_PREFERENCE = (NEOFORGE, FORGE, FABRIC)
++_MANIFEST_FAMILIES = (
++    ("META-INF/neoforge.mods.toml", NEOFORGE),
++    ("META-INF/mods.toml", FORGE),
++    ("fabric.mod.json", FABRIC),
++)
++_CLASS_FAMILIES = (
++    ("net/neoforged/", NEOFORGE),
++    ("net/minecraftforge/", FORGE),
++    ("net/fabricmc/", FABRIC),
++)
++
++
++def family_of(internal):
++    """The loader family a class name belongs to, or None. Shared with the Fabric API consumer probe."""
++    for prefix, family in _CLASS_FAMILIES:
++        if internal.startswith(prefix):
++            return family
++    return None
++
++
++def declared_families(archive):
++    """The loader families the archive's own manifests declare, in preference-independent order."""
++    names = set(archive.namelist())
++    return [family for manifest, family in _MANIFEST_FAMILIES if manifest in names]
++
++
++def dropped_families(archive, preference=None):
++    """The loader families arbitration drops for this archive: declared, but not the one that owns it.
++
++    Mirrors MultiLoaderArbiter's manifest-level decision (that class's initializer refinement can only narrow a
++    claim further, and needs the @Mod/entrypoint scan this probe deliberately does not repeat). A single-manifest
++    archive, or one with no manifest at all, drops nothing -- so a plain library and a genuine wrong-Forge
++    single-half jar are still judged.
++    """
++    declared = declared_families(archive)
++    if len(declared) < 2:
++        return frozenset()
++    for family in (preference or DEFAULT_PREFERENCE):
++        if family in declared:
++            return frozenset(f for f in declared if f != family)
++    return frozenset(declared[1:])
++
+ 
+ def class_refs(data):
+     """Read CONSTANT_Class entries, shared with the Fabric API consumer probe."""
+@@ -63,11 +115,13 @@ def jar_paths(path):
+ 
+ 
+ def scan_classes(archive, label):
+-    """Yield label, class entry and type references, recursively through jar-in-jar."""
++    """Yield label, class entry, type references and the families arbitration DROPS for the archive the class
++    came from, recursively through jar-in-jar. A nested jar arbitrates on its OWN manifests, not its parent's."""
++    dropped = dropped_families(archive)
+     for name in sorted(archive.namelist()):
+         if name.endswith(".class"):
+             try:
+-                yield label, name, class_refs(archive.read(name))
++                yield label, name, class_refs(archive.read(name)), dropped
+             except (IndexError, KeyError, ValueError, struct.error) as exc:
+                 raise ValueError("%s :: %s: %s" % (label, name, exc)) from exc
+         elif name.endswith(".jar") and name.startswith("META-INF/jars/"):
+@@ -89,9 +143,12 @@ def main():
+         jars = jar_paths(args.mods)
+         for jar in jars:
+             with zipfile.ZipFile(jar) as archive:
+-                for label, name, refs in scan_classes(archive, jar.name):
++                for label, name, refs, dropped in scan_classes(archive, jar.name):
+                     for ref in refs:
+-                        if ref.startswith(("net/neoforged/", "net/minecraftforge/")) and ref not in owned:
++                        if not ref.startswith(("net/neoforged/", "net/minecraftforge/")): continue
++                        # A family this archive drops is the dead half's; its references are not the live mod's.
++                        if family_of(ref) in dropped: continue
++                        if ref not in owned:
+                             findings.setdefault(label, {}).setdefault(ref, set()).add(name)
+         print("carrier classes: %d\n" % len(owned))
+         for label in sorted(findings):
+diff --git a/forbric-kernel/run/compat/fapi-usage.py b/forbric-kernel/run/compat/fapi-usage.py
+index 1c0974db..8fe3a344 100755
+--- a/forbric-kernel/run/compat/fapi-usage.py
++++ b/forbric-kernel/run/compat/fapi-usage.py
+@@ -7,10 +7,14 @@ Usage: fapi-usage.py [--preset NAME | --symbols FILE] [--list-presets] <jar-or-m
+ Only class references are evidence; resource strings and dependency declarations
+ do not establish API use. Nested META-INF/jars are scanned with their parent label.
+ 
++A jar that declares several loaders is loaded as exactly one of them (MultiLoaderArbiter); the half arbitration
++drops never reaches the classpath, so a reference from that half is not this mod's use of the API and is skipped.
++
+ WHY THE SYMBOL SET IS A PARAMETER. This script answered exactly one question --
+ "who consumes the four suppressed Fabric API surfaces" -- with the answer's
+-prefixes frozen in a constant. The same two judgements it already gets right
+-(constant-pool references only; a bundled API defining itself is not a use of it)
++prefixes frozen in a constant. The same judgements it already gets right
++(constant-pool references only; a bundled API defining itself is not a use of it;
++a loader half arbitration dropped is not the live mod's reference)
+ are what "which mods are actually WAITING on this Forge event" needs, and that
+ question has no tool at all: the event-hook censuses in this project were done by
+ hand with `javap` and written into javadoc, so they are true on the day they are
+@@ -33,7 +37,7 @@ from pathlib import Path
+ import sys
+ import zipfile
+ 
+-# Keep the bytecode parser identical to abi-audit, including nested-jar handling.
++# Keep the bytecode parser and the multi-loader drop rule identical to abi-audit, including nested-jar handling.
+ _spec = importlib.util.spec_from_file_location("forbric_abi_audit", Path(__file__).with_name("abi-audit.py"))
+ abi = importlib.util.module_from_spec(_spec)
+ _spec.loader.exec_module(abi)
+@@ -144,12 +148,15 @@ def main():
+             for jar in abi.jar_paths(candidate):
+                 count += 1
+                 with zipfile.ZipFile(jar) as archive:
+-                    for label, name, refs in abi.scan_classes(archive, jar.name):
++                    for label, name, refs, dropped in abi.scan_classes(archive, jar.name):
+                         # A bundled API defining itself is not evidence that the candidate uses it.
+                         if definers and name.startswith(definers):
+                             continue
+                         for ref in refs:
+                             if ref.startswith(surfaces):
++                                # A dropped loader half is not the live mod consuming the API.
++                                if abi.family_of(ref) in dropped:
++                                    continue
+                                 findings.setdefault(label, {}).setdefault(ref, set()).add(name)
+         # Say what was asked before saying what was found: a census with an unstated question
+         # is the same trap as a count nobody compares.
+diff --git a/forbric-kernel/src/main/java/net/forbric/kernel/boot/AbiLinkAudit.java b/forbric-kernel/src/main/java/net/forbric/kernel/boot/AbiLinkAudit.java
+index 6b449466..7abe497b 100644
+--- a/forbric-kernel/src/main/java/net/forbric/kernel/boot/AbiLinkAudit.java
++++ b/forbric-kernel/src/main/java/net/forbric/kernel/boot/AbiLinkAudit.java
+@@ -31,6 +31,7 @@ import java.util.zip.ZipFile;
+ 
+ import org.objectweb.asm.ClassReader;
+ 
++import net.forbric.api.Ecosystem;
+ import net.forbric.api.ModCatalog;
+ import net.forbric.kernel.util.ByteScan;
+ import net.forbric.kernel.util.ForbricLog;
+@@ -48,6 +49,13 @@ import net.forbric.kernel.util.ForbricLog;
+  * {@code fml/loading}, {@code fml/relauncher} and the {@code locating} SPIs are absent here by design and a mod
+  * naming them (CustomSkinLoader's six references) is not compiled against the wrong Forge.
+  *
++ * <p>A universal jar carries one half per loader family and {@link MultiLoaderArbiter} loads exactly one of them.
++ * The half it drops is still in the file, and its references — a 1.20.1 Forge half naming
++ * {@code net.minecraftforge.client.event.RenderGuiEvent*} against a 1.21.1 merged base — are not the live mod's,
++ * so judging the whole jar marks the row DEGRADED for code the kernel never loads. A dangling name in a family
++ * arbitration dropped for THIS jar is therefore not a finding; a name in a family the jar did not declare (a
++ * NeoForge-only jar's stray {@code net.minecraftforge} reference) still is.
++ *
+  * <p>Never throws, never refuses a jar; {@code -Dforbric.abiAudit=off}. Scanned at boot while the jar names are
+  * in hand, reported after the catalog is published so the rows reach load-report.txt.
+  */
+@@ -108,7 +116,7 @@ public final class AbiLinkAudit {
+ 		return present;
+ 	}
+ 
+-	/** The findings over {@code jars}, given the set of classes that exist. Pure; the test's entry point. */
++	/** The findings over {@code jars}, given the set of classes that exist. The test's entry point. */
+ 	static List<Finding> audit(List<Path> jars, Set<String> present) {
+ 		List<Finding> out = new ArrayList<>();
+ 		for (Path jar : jars) {
+@@ -130,13 +138,37 @@ public final class AbiLinkAudit {
+ 				continue;
+ 			}
+ 			if (missing.isEmpty()) continue;
++			// A universal jar's DROPPED half is in the file but never loaded, so its dangling Forge-family names
++			// belong to the half arbitration removed, not to this row. Only names in a family the jar declared
++			// and arbitration did not give it are removed; a family it never declared stays judged.
++			Set<Ecosystem> dropped = droppedFamilies(jar);
++			if (!dropped.isEmpty()) missing.removeIf(named -> dropped.contains(familyOf(named)));
++			if (missing.isEmpty()) continue;
+ 			String first = missing.iterator().next();
+-			out.add(new Finding(jar.getFileName().toString(), first.startsWith("net/neoforged/") ? "NeoForge" : "MinecraftForge",
+-					List.copyOf(missing)));
++			out.add(new Finding(jar.getFileName().toString(), familyOf(first).displayName(), List.copyOf(missing)));
+ 		}
+ 		return out;
+ 	}
+ 
++	/**
++	 * The loader families {@code jar} declares but arbitration did not give it — the half {@link MultiLoaderArbiter}
++	 * drops. Empty when the jar declares one family or none: a single-family jar is never dropped for its own
++	 * family, so its dangling references are still judged. Asked only of a jar that already has a finding, so the
++	 * common path pays nothing.
++	 */
++	static Set<Ecosystem> droppedFamilies(Path jar) {
++		List<Ecosystem> declared = MultiLoaderArbiter.declaredBy(jar);
++		if (declared.size() < 2) return Set.of();
++		Set<Ecosystem> dropped = new LinkedHashSet<>(declared);
++		dropped.remove(MultiLoaderArbiter.ownerOf(jar));
++		return dropped;
++	}
++
++	/** The loader family a judged class name belongs to; the audit judges only these two. */
++	static Ecosystem familyOf(String internal) {
++		return internal.startsWith("net/minecraftforge/") ? Ecosystem.FORGE : Ecosystem.NEOFORGE;
++	}
++
+ 	/** Whether {@code internal} is a Forge-family class this audit judges. */
+ 	static boolean inScope(String internal) {
+ 		boolean family = false;
+diff --git a/forbric-kernel/src/test/java/net/forbric/kernel/boot/AbiLinkAuditStagedTest.java b/forbric-kernel/src/test/java/net/forbric/kernel/boot/AbiLinkAuditStagedTest.java
+index ba5b12e6..4b73b282 100644
+--- a/forbric-kernel/src/test/java/net/forbric/kernel/boot/AbiLinkAuditStagedTest.java
++++ b/forbric-kernel/src/test/java/net/forbric/kernel/boot/AbiLinkAuditStagedTest.java
+@@ -32,6 +32,12 @@ import org.junit.jupiter.api.Test;
+  * the pack itself, the audit finds NOTHING. A real pack has CustomSkinLoader naming fml/loading and fml/relauncher,
+  * universal jars naming both families, Fabric ports shipping net.minecraftforge.* for their dependants — every one
+  * of those is a shape a naive audit cries wolf on.
++ *
++ * <p>Two of those shapes are handled by different rules, and both must hold for this to be 0: the out-of-scope
++ * loading/bootstrap packages ({@link AbiLinkAudit#inScope}), and the dropped half of a universal jar
++ * ({@link AbiLinkAudit#droppedFamilies}) — a family the jar declares but arbitration did not give it, which the
++ * staged pack's own universal jars carry. {@code AbiLinkAuditTest} pins each rule separately; this pins that the
++ * live pack, with both applied, still reads clean.
+  */
+ class AbiLinkAuditStagedTest {
+ 	@Test
+diff --git a/forbric-kernel/src/test/java/net/forbric/kernel/boot/AbiLinkAuditTest.java b/forbric-kernel/src/test/java/net/forbric/kernel/boot/AbiLinkAuditTest.java
+index 4ebd9350..df29b1a3 100644
+--- a/forbric-kernel/src/test/java/net/forbric/kernel/boot/AbiLinkAuditTest.java
++++ b/forbric-kernel/src/test/java/net/forbric/kernel/boot/AbiLinkAuditTest.java
+@@ -20,14 +20,17 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
+ import static org.junit.jupiter.api.Assertions.assertTrue;
+ 
+ import java.io.OutputStream;
++import java.nio.charset.StandardCharsets;
+ import java.nio.file.Files;
+ import java.nio.file.Path;
+ import java.util.List;
++import java.util.Map;
+ import java.util.Set;
+ import java.util.zip.ZipEntry;
+ import java.util.zip.ZipOutputStream;
+ 
+ import org.junit.jupiter.api.AfterEach;
++import org.junit.jupiter.api.BeforeEach;
+ import org.junit.jupiter.api.Test;
+ import org.junit.jupiter.api.io.TempDir;
+ import org.objectweb.asm.ClassWriter;
+@@ -45,10 +48,20 @@ class AbiLinkAuditTest {
+ 	private static final String LOADING = "net/neoforged/fml/loading/moddiscovery/ModsFolderLocator";
+ 	private List<ModCatalog.Entry> previous;
+ 
++	@BeforeEach
++	void resetArbitration() {
++		MultiLoaderArbiter.reset();
++		System.clearProperty("forbric.multiLoaderPreference");
++		System.clearProperty(MultiLoaderArbiter.ENTRYPOINT_SWITCH);
++	}
++
+ 	@AfterEach
+ 	void forget() {
+ 		AbiLinkAudit.reset();
+ 		System.clearProperty(AbiLinkAudit.SWITCH);
++		MultiLoaderArbiter.reset();
++		System.clearProperty("forbric.multiLoaderPreference");
++		System.clearProperty(MultiLoaderArbiter.ENTRYPOINT_SWITCH);
+ 		if (previous != null) ModCatalog.publish(previous);
+ 	}
+ 
+@@ -98,6 +111,37 @@ class AbiLinkAuditTest {
+ 		assertTrue(named.contains(GONE), named.toString());
+ 	}
+ 
++	@Test
++	void aUniversalJarsDroppedForgeHalfIsNotAFinding(@TempDir Path dir) throws Exception {
++		Path mod = multiLoaderJar(dir.resolve("universal.jar"), "a/b/DroppedForgeHalf",
++				"net/minecraftforge/client/event/RenderGuiEvent");
++		assertEquals(Set.of(Ecosystem.FORGE), AbiLinkAudit.droppedFamilies(mod),
++				"the jar declares both families, so arbitration drops the one it did not give the jar");
++		assertTrue(AbiLinkAudit.audit(List.of(mod), AbiLinkAudit.classesOf(List.of(mod))).isEmpty(),
++				"a dangling name in the half the kernel never loads is not the live mod's");
++	}
++
++	@Test
++	void aUniversalJarsLiveHalfIsStillAFinding(@TempDir Path dir) throws Exception {
++		Path mod = multiLoaderJar(dir.resolve("universal.jar"), "a/b/LiveNeoHalf", GONE);
++		List<AbiLinkAudit.Finding> findings = AbiLinkAudit.audit(List.of(mod), AbiLinkAudit.classesOf(List.of(mod)));
++		assertEquals(1, findings.size(), findings.toString());
++		assertEquals("NeoForge", findings.get(0).family(), "NeoForge owns the jar, so its half is judged");
++		assertEquals(List.of(GONE), findings.get(0).missing());
++	}
++
++	@Test
++	void aFamilyTheJarNeverDeclaresIsStillJudged(@TempDir Path dir) throws Exception {
++		Path mod = dir.resolve("neoforge-only.jar");
++		try (OutputStream out = Files.newOutputStream(mod); ZipOutputStream zip = new ZipOutputStream(out)) {
++			putText(zip, "META-INF/neoforge.mods.toml", neoForgeManifest());
++			put(zip, "a/b/Uses", caller("a/b/Uses", "net/minecraftforge/client/event/RenderGuiEvent"));
++		}
++		assertEquals(Set.of(), AbiLinkAudit.droppedFamilies(mod), "a single-manifest jar drops nothing");
++		assertEquals(1, AbiLinkAudit.audit(List.of(mod), AbiLinkAudit.classesOf(List.of(mod))).size(),
++				"a stray Forge reference in a NeoForge-only jar is not explained away by arbitration");
++	}
++
+ 	@Test
+ 	void reportMarksEveryRowFromTheJarAndSaysSo(@TempDir Path dir) throws Exception {
+ 		previous = ModCatalog.everything();
+@@ -134,6 +178,45 @@ class AbiLinkAuditTest {
+ 		return file;
+ 	}
+ 
++	/**
++	 * A jar declaring BOTH Forge-family manifests and carrying a NeoForge {@code @Mod}, as the real universal
++	 * jars do: arbitration gives it NEOFORGE and drops FORGE, the half {@code uses} belongs to.
++	 */
++	private static Path multiLoaderJar(Path file, String uses, String target) throws Exception {
++		try (OutputStream out = Files.newOutputStream(file); ZipOutputStream zip = new ZipOutputStream(out)) {
++			putText(zip, "META-INF/mods.toml", forgeManifest());
++			putText(zip, "META-INF/neoforge.mods.toml", neoForgeManifest());
++			put(zip, "example/NeoEntry", mod("example/NeoEntry", "Lnet/neoforged/fml/common/Mod;", "example"));
++			put(zip, uses, caller(uses, target));
++		}
++		return file;
++	}
++
++	private static String forgeManifest() {
++		return "# the file NeoForge 1.20.1/Forge reads\nmodLoader=\"lowcodefml\"\nloaderVersion=\"[1,)\"\n[[mods]]\nmodId=\"example\"\nversion=\"1\"\n";
++	}
++
++	private static String neoForgeManifest() {
++		return "modLoader=\"javafml\"\nloaderVersion=\"[1,)\"\n[[mods]]\nmodId=\"example\"\nversion=\"1\"\n";
++	}
++
++	private static void putText(ZipOutputStream zip, String name, String text) throws Exception {
++		zip.putNextEntry(new ZipEntry(name));
++		zip.write(text.getBytes(StandardCharsets.UTF_8));
++		zip.closeEntry();
++	}
++
++	/** An entrypoint class carrying a loader's {@code @Mod} annotation, which is what names its family. */
++	private static byte[] mod(String internal, String descriptor, String modId) {
++		ClassWriter cw = new ClassWriter(0);
++		cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, internal, null, "java/lang/Object", null);
++		var annotation = cw.visitAnnotation(descriptor, true);
++		annotation.visit("value", modId);
++		annotation.visitEnd();
++		cw.visitEnd();
++		return cw.toByteArray();
++	}
++
+ 	private static void put(ZipOutputStream zip, String internal, byte[] bytes) throws Exception {
+ 		zip.putNextEntry(new ZipEntry(internal + ".class"));
+ 		zip.write(bytes);
+diff --git a/forbric-kernel/src/test/java/net/forbric/kernel/compat/AbiAuditCompatTest.java b/forbric-kernel/src/test/java/net/forbric/kernel/compat/AbiAuditCompatTest.java
+index 000f8346..123934c1 100644
+--- a/forbric-kernel/src/test/java/net/forbric/kernel/compat/AbiAuditCompatTest.java
++++ b/forbric-kernel/src/test/java/net/forbric/kernel/compat/AbiAuditCompatTest.java
+@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
+ import static org.junit.jupiter.api.Assertions.assertFalse;
+ import static org.junit.jupiter.api.Assertions.assertTrue;
+ 
++import java.nio.charset.StandardCharsets;
+ import java.nio.file.Files;
+ import java.nio.file.Path;
+ import java.util.Map;
+@@ -47,4 +48,51 @@ class AbiAuditCompatTest {
+ 		assertEquals(2, result.exitCode(), result.output());
+ 		assertTrue(result.output().contains("unreadable:"), result.output());
+ 	}
++
++	@Test void aUniversalJarsDroppedHalfIsNotAFindingButASingleManifestJarStillFires() throws Exception {
++		Path carrier = CompatProbeJars.write(temporary.resolve("carrier.jar"), Map.of());
++		Path single = CompatProbeJars.write(temporary.resolve("neoforge-only.jar"), Map.of(
++				"META-INF/neoforge.mods.toml", manifest(),
++				"mod/Uses.class", CompatProbeJars.type("mod/Uses", "net/minecraftforge/Missing")));
++		Path universal = CompatProbeJars.write(temporary.resolve("universal.jar"), Map.of(
++				"META-INF/mods.toml", manifest(),
++				"META-INF/neoforge.mods.toml", manifest(),
++				"mod/Uses.class", CompatProbeJars.type("mod/Uses", "net/minecraftforge/Missing")));
++
++		var singleResult = CompatProbeProcess.run(temporary, "python3", "abi-audit.py", single.toString(), carrier.toString());
++		assertTrue(singleResult.output().contains("net/minecraftforge/Missing"), singleResult.output());
++		assertTrue(singleResult.output().contains("finding groups: 1"), singleResult.output());
++
++		var universalResult = CompatProbeProcess.run(temporary, "python3", "abi-audit.py", universal.toString(), carrier.toString());
++		assertFalse(universalResult.output().contains("net/minecraftforge/Missing"), universalResult.output());
++		assertTrue(universalResult.output().contains("finding groups: 0"), universalResult.output());
++	}
++
++	@Test void aNestedJarArbitratesOnItsOwnManifestsNotItsParents() throws Exception {
++		Path carrier = CompatProbeJars.write(temporary.resolve("carrier.jar"), Map.of());
++		// The parent declares both families (so arbitration drops FORGE for the parent), but the nested jar
++		// declares NONE of its own: its dangling Forge name is the nested mod's, and must still be reported.
++		Path parentDropsForge = CompatProbeJars.write(temporary.resolve("parent.jar"), Map.of(
++				"META-INF/mods.toml", manifest(),
++				"META-INF/neoforge.mods.toml", manifest(),
++				"META-INF/jars/inner.jar", CompatProbeJars.bytes(Map.of(
++						"mod/Nested.class", CompatProbeJars.type("mod/Nested", "net/minecraftforge/Missing")))));
++		var parentResult = CompatProbeProcess.run(temporary, "python3", "abi-audit.py", parentDropsForge.toString(), carrier.toString());
++		assertTrue(parentResult.output().contains("net/minecraftforge/Missing"), parentResult.output());
++		assertTrue(parentResult.output().contains("finding groups: 1"), parentResult.output());
++
++		// A manifest-less parent with a universal nested jar: the nested half is dropped, so its own name is not.
++		Path nestedIsUniversal = CompatProbeJars.write(temporary.resolve("plain.jar"), Map.of(
++				"META-INF/jars/inner.jar", CompatProbeJars.bytes(Map.of(
++						"META-INF/mods.toml", manifest(),
++						"META-INF/neoforge.mods.toml", manifest(),
++						"mod/Nested.class", CompatProbeJars.type("mod/Nested", "net/minecraftforge/Missing")))));
++		var nestedResult = CompatProbeProcess.run(temporary, "python3", "abi-audit.py", nestedIsUniversal.toString(), carrier.toString());
++		assertFalse(nestedResult.output().contains("net/minecraftforge/Missing"), nestedResult.output());
++		assertTrue(nestedResult.output().contains("finding groups: 0"), nestedResult.output());
++	}
++
++	private static byte[] manifest() {
++		return "[[mods]]\nmodId=\"example\"\nversion=\"1\"\n".getBytes(StandardCharsets.UTF_8);
++	}
+ }
+diff --git a/forbric-kernel/src/test/java/net/forbric/kernel/compat/FabricApiUsageCompatTest.java b/forbric-kernel/src/test/java/net/forbric/kernel/compat/FabricApiUsageCompatTest.java
+index 71c252c6..e7f2e5e5 100644
+--- a/forbric-kernel/src/test/java/net/forbric/kernel/compat/FabricApiUsageCompatTest.java
++++ b/forbric-kernel/src/test/java/net/forbric/kernel/compat/FabricApiUsageCompatTest.java
+@@ -96,4 +96,26 @@ class FabricApiUsageCompatTest {
+ 		// Zero surfaces would make every jar read clean, which is the shape of a green that means nothing.
+ 		assertEquals(2, result.exitCode(), result.output());
+ 	}
++
++	@Test void aDroppedLoaderHalfIsNotAConsumerOfItsOwnFamilysApi() throws Exception {
++		byte[] manifest = "[[mods]]\nmodId=\"example\"\nversion=\"1\"\n".getBytes(StandardCharsets.UTF_8);
++		Path universal = CompatProbeJars.write(temporary.resolve("universal.jar"), Map.of(
++				"META-INF/mods.toml", manifest,
++				"META-INF/neoforge.mods.toml", manifest,
++				"mod/ForgeListener.class", CompatProbeJars.type("mod/ForgeListener", "net/minecraftforge/event/ServerChatEvent")));
++		var universalResult = CompatProbeProcess.run(temporary, "python3", "fapi-usage.py",
++				"--preset", "minecraftforge-events", universal.toString());
++		assertEquals(0, universalResult.exitCode(), universalResult.output());
++		assertTrue(universalResult.output().contains("API consumer groups: 0"), universalResult.output());
++		assertFalse(universalResult.output().contains("ForgeListener"), universalResult.output());
++
++		// The control: a jar declaring only the Forge manifest keeps its Forge half, so the listener still counts.
++		Path forgeOnly = CompatProbeJars.write(temporary.resolve("forge-only.jar"), Map.of(
++				"META-INF/mods.toml", manifest,
++				"mod/ForgeListener.class", CompatProbeJars.type("mod/ForgeListener", "net/minecraftforge/event/ServerChatEvent")));
++		var controlResult = CompatProbeProcess.run(temporary, "python3", "fapi-usage.py",
++				"--preset", "minecraftforge-events", forgeOnly.toString());
++		assertEquals(0, controlResult.exitCode(), controlResult.output());
++		assertTrue(controlResult.output().contains("mod/ForgeListener.class"), controlResult.output());
++	}
+ }

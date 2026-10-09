@@ -96,4 +96,26 @@ class FabricApiUsageCompatTest {
 		// Zero surfaces would make every jar read clean, which is the shape of a green that means nothing.
 		assertEquals(2, result.exitCode(), result.output());
 	}
+
+	@Test void aDroppedLoaderHalfIsNotAConsumerOfItsOwnFamilysApi() throws Exception {
+		byte[] manifest = "[[mods]]\nmodId=\"example\"\nversion=\"1\"\n".getBytes(StandardCharsets.UTF_8);
+		Path universal = CompatProbeJars.write(temporary.resolve("universal.jar"), Map.of(
+				"META-INF/mods.toml", manifest,
+				"META-INF/neoforge.mods.toml", manifest,
+				"mod/ForgeListener.class", CompatProbeJars.type("mod/ForgeListener", "net/minecraftforge/event/ServerChatEvent")));
+		var universalResult = CompatProbeProcess.run(temporary, "python3", "fapi-usage.py",
+				"--preset", "minecraftforge-events", universal.toString());
+		assertEquals(0, universalResult.exitCode(), universalResult.output());
+		assertTrue(universalResult.output().contains("API consumer groups: 0"), universalResult.output());
+		assertFalse(universalResult.output().contains("ForgeListener"), universalResult.output());
+
+		// The control: a jar declaring only the Forge manifest keeps its Forge half, so the listener still counts.
+		Path forgeOnly = CompatProbeJars.write(temporary.resolve("forge-only.jar"), Map.of(
+				"META-INF/mods.toml", manifest,
+				"mod/ForgeListener.class", CompatProbeJars.type("mod/ForgeListener", "net/minecraftforge/event/ServerChatEvent")));
+		var controlResult = CompatProbeProcess.run(temporary, "python3", "fapi-usage.py",
+				"--preset", "minecraftforge-events", forgeOnly.toString());
+		assertEquals(0, controlResult.exitCode(), controlResult.output());
+		assertTrue(controlResult.output().contains("mod/ForgeListener.class"), controlResult.output());
+	}
 }

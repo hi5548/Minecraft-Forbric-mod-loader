@@ -25,7 +25,7 @@ import java.lang.reflect.InvocationTargetException;
  * JVM and the GAME side can call it too. That is why it lives here rather than beside its callers: it started in
  * {@code KernelBusSupport}, which is package-private in {@code net.forbric.kernel.boot} and therefore invisible
  * to {@code net.forbric.kernel.runtime}. Moving the one member the game side needs is the alternative to making
- * that whole class public, which would export {@code makeModBus} and {@code singleArgMethod} along with it.
+ * that whole class public, which would export {@code makeModBus} along with it.
  */
 public final class Reflect {
 	private Reflect() {

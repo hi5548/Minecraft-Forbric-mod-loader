@@ -16,14 +16,10 @@
 
 package net.forbric.kernel.boot;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.InputStream;
-import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.zip.ZipEntry;
@@ -75,27 +71,6 @@ class KernelBusSupportTest {
 				"IModBusEvent is gone — the mod bus would lose its marker type, silently");
 	}
 
-	/** Found by SHAPE on purpose: a bus's post() erases to its own event bound, which moves. */
-	@Test
-	void singleArgMethodMatchesOnArityNotSignature() throws Exception {
-		Method m = KernelBusSupport.singleArgMethod(Sample.class, "post");
-
-		assertEquals(1, m.getParameterCount());
-		assertEquals("post", m.getName());
-	}
-
-	@Test
-	void singleArgMethodIgnoresTheSameNameAtOtherArities() throws Exception {
-		assertEquals(1, KernelBusSupport.singleArgMethod(Sample.class, "overloaded").getParameterCount(),
-				"the two-argument overload must not be picked");
-	}
-
-	@Test
-	void singleArgMethodSaysSoWhenThereIsNone() {
-		assertThrows(NoSuchMethodException.class, () -> KernelBusSupport.singleArgMethod(Sample.class, "absent"));
-	}
-
-
 	// --- helpers ------------------------------------------------------------------------------------------------
 
 	private static ClassNode carrier(String internalName) throws Exception {
@@ -116,14 +91,5 @@ class KernelBusSupportTest {
 			if (m.name.equals(name)) return m;
 		}
 		return null;
-	}
-
-	@SuppressWarnings("unused")
-	private static final class Sample {
-		public void post(Object event) { }
-
-		public void overloaded(Object one) { }
-
-		public void overloaded(Object one, Object two) { }
 	}
 }

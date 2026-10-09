@@ -1,0 +1,24 @@
+# W7Harness ARM A1-modmenu — kernel c6e47ce9… (975774d8), --only modmenu, corpus-user12
+# source: /Users/charlescai/Desktop/dsh/实验/forbric/w7/reports/orico-r1-evidence/payload-a1/console.log  sha256 3f4e909067dce854cf6d502dda897dc49df2c79adf3024dd9994b5d7208dcbd9
+# The damage seams are placed on the MERGED classes at boot, independent of which ecosystem the subject
+# belongs to, so this arm carries the A1 landed reading too (it is NOT unexercised; the earlier 0/0 was
+# a grep for the transformer NAME, which only appears in miss lines — verified in TransformChain.java:207-212).
+
+## [Forbric/Damage] landed lines (count 4)
+105:[09:12:59] [main/INFO]: [Forbric/Damage] net.minecraft.world.entity.LivingEntity: MinecraftForge's Hurt and Damage in actuallyHurt back in NeoForge's damage pipeline — nothing called them on the merged base
+159:[09:13:00] [main/INFO]: [Forbric/Damage] net.minecraft.world.entity.player.Player: MinecraftForge's Hurt and Damage in actuallyHurt, player Attack in hurt back in NeoForge's damage pipeline — nothing called them on the merged base
+623:[09:13:19] [pool-3-thread-1/INFO]: [Forbric/Damage] net.minecraft.world.entity.player.Player: MinecraftForge's Hurt and Damage in actuallyHurt, player Attack in hurt back in NeoForge's damage pipeline — nothing called them on the merged base
+627:[09:13:19] [pool-3-thread-1/INFO]: [Forbric/Damage] net.minecraft.world.entity.LivingEntity: MinecraftForge's Hurt and Damage in actuallyHurt back in NeoForge's damage pipeline — nothing called them on the merged base
+
+## anchor summary (no damage-seam miss)
+323:[09:13:03] [main/ERROR]: [Forbric/Anchor] 70 of 204 declared repair(s) landed, and 25 did NOT -- their target classes were loaded and the repair declined them. Each one is a feature that is gone with no other symptom:
+
+## forbric-forge-damage-seams lines (count 0) — 0 means no miss, not 'not visited'
+
+## why the corpus alone could not show the anchor pair: MultiLoader suppresses [FORGE] for manifest-only claims
+3:[09:12:42] [main/INFO]: [Forbric/MultiLoader] entityculling-neoforge-1.11.2-mc1.21.1.jar has initialization code for [NEOFORGE]; ignoring manifest-only claims [FORGE] so its real entrypoint is not suppressed
+4:[09:12:42] [main/INFO]: [Forbric/MultiLoader] entityculling-neoforge-1.11.2-mc1.21.1.jar declares 2 loaders — loading it as NEOFORGE only, suppressing [FORGE] (a universal jar would otherwise initialise once per live ecosystem)
+11:[09:12:43] [main/INFO]: [Forbric/MultiLoader] TRansition-1.0.25-1.21.1-neoforge-SNAPSHOT.jar has initialization code for [NEOFORGE]; ignoring manifest-only claims [FORGE] so its real entrypoint is not suppressed
+12:[09:12:43] [main/INFO]: [Forbric/MultiLoader] TRansition-1.0.25-1.21.1-neoforge-SNAPSHOT.jar declares 2 loaders — loading it as NEOFORGE only, suppressing [FORGE] (a universal jar would otherwise initialise once per live ecosystem)
+13:[09:12:43] [main/INFO]: [Forbric/MultiLoader] TRender-1.0.17-1.21.1-neoforge-SNAPSHOT.jar has initialization code for [NEOFORGE]; ignoring manifest-only claims [FORGE] so its real entrypoint is not suppressed
+14:[09:12:43] [main/INFO]: [Forbric/MultiLoader] TRender-1.0.17-1.21.1-neoforge-SNAPSHOT.jar declares 2 loaders — loading it as NEOFORGE only, suppressing [FORGE] (a universal jar would otherwise initialise once per live ecosystem)

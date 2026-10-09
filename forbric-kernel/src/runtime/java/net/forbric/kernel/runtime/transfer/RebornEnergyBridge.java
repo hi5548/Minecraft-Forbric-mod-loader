@@ -42,11 +42,14 @@ public final class RebornEnergyBridge {
 	 * exactly as it was. Reborn's API is checked member by member before the lookup is touched.
 	 */
 	public static void install() {
-		if (!BlockTransferBridge.installed() || !INSTALLED.compareAndSet(false, true)) return;
+		if (!BlockTransferBridge.installed() || INSTALLED.get()) return;
 		requireApi();
 		EnergyStorage.SIDED.registerFallback(RebornEnergyBridge::afterGeneric);
 		BlockTransferBridge.ahead(EnergyStorage.SIDED, RebornEnergyBridge::beforeGeneric);
 		BlockTransferBridge.fabricEnergy(new Side());
+		// Spent only after the body: requireApi() throws on API drift, and a CAS before it left the half spent
+		// with no retry.
+		INSTALLED.set(true);
 	}
 	/** Every Reborn member the adapters call, resolved now rather than inside a player's query. */
 	static void requireApi() {

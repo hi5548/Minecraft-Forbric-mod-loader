@@ -122,7 +122,7 @@ public final class BlockTransferBridge {
 	/** After the mod registration window; only invoke when the selected Fabric transfer and NeoForge APIs exist. */
 	public static void install() {
 		if ("off".equalsIgnoreCase(System.getProperty("forbric.transferBridge", "on"))) return;
-		if (!INSTALLED.compareAndSet(false, true)) return;
+		if (INSTALLED.get()) return;
 		ItemStorage.SIDED.registerFallback(BlockTransferBridge::itemsAfterGeneric);
 		FluidStorage.SIDED.registerFallback(BlockTransferBridge::fluidsAfterGeneric);
 		ahead(ItemStorage.SIDED, BlockTransferBridge::itemsBeforeGeneric);
@@ -138,6 +138,9 @@ public final class BlockTransferBridge {
 					"NeoForge 21.1 exposes no BlockCapability fallback seam; NeoForge consumers cannot reach non-NeoForge providers until the boot transform supplies one");
 		}
 		// A failure registering either callback leaves both directions dormant, even if one callback was added.
+		// The one-shot is spent only now: a throw in the body above must leave it open so a later call retries
+		// instead of leaving the Fabric fallback dormant for the whole session.
+		INSTALLED.set(true);
 		enabled = true;
 	}
 	private static boolean neoSeamPresent() {

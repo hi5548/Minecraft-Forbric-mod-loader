@@ -17,12 +17,6 @@
 package net.forbric.kernel.fabric;
 
 import java.io.File;
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandleProxies;
-import java.lang.invoke.MethodHandles;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -702,18 +696,10 @@ public final class KernelFabricLoader implements FabricLoader {
 				Class<?> owner = loadClass(v.substring(0, sep));
 				String member = v.substring(sep + 2);
 
-				for (Field field : owner.getDeclaredFields()) {
-					if (field.getName().equals(member) && Modifier.isStatic(field.getModifiers())) {
-						return type.isAssignableFrom(field.getType());
-					}
-				}
-
-				// A method reference can satisfy any functional interface; the exact shape is checked on construction.
-				for (Method method : owner.getDeclaredMethods()) {
-					if (method.getName().equals(member)) return type.isInterface();
-				}
-
-				return false;
+				// A static field whose type fits, or a static method that binds to this functional interface by
+				// descriptor. The exact shape is checked on construction; asking the same resolver here keeps the
+				// two answers from drifting.
+				return KernelLanguageAdapters.hasStaticMember(owner, member, type);
 			} catch (Throwable t) {
 				return unresolvable(t);
 			}
@@ -810,25 +796,7 @@ public final class KernelFabricLoader implements FabricLoader {
 
 			Class<?> owner = loadClass(v.substring(0, sep));
 			String member = v.substring(sep + 2);
-
-			for (Field field : owner.getDeclaredFields()) {
-				if (field.getName().equals(member) && Modifier.isStatic(field.getModifiers())) {
-					field.setAccessible(true);
-					return field.get(null);
-				}
-			}
-
-			for (Method method : owner.getDeclaredMethods()) {
-				if (!method.getName().equals(member) || !Modifier.isStatic(method.getModifiers())) continue;
-
-				method.setAccessible(true);
-				MethodHandle handle = MethodHandles.lookup().unreflect(method);
-				// Binds the static method to the requested functional interface without generating a class in the
-				// mod's package (LambdaMetafactory would need a lookup inside the mod's own class).
-				return MethodHandleProxies.asInterfaceInstance(type, handle);
-			}
-
-			throw new NoSuchMethodException("no static member '" + member + "' on " + owner.getName());
+			return KernelLanguageAdapters.staticMember(owner, member, type);
 		}
 
 		/**

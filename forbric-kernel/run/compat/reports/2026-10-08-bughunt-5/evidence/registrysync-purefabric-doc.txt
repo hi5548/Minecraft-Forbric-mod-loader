@@ -1,0 +1,6 @@
+# KernelForgeWrapperSync.java (kernel 0.3.8-beta) lines 50-54
+ * <p>Known limit, on purpose: fabric-api's {@code remap} is a mixin on {@code MappedRegistry}'s fields, so on a
+ * wrapped registry it is a silent no-op — a Forbric client against a PURE Fabric server gets no remap of these
+ * seventeen registries from either ecosystem. Against a Forbric server, NeoForge's sync carries the same ids and
+ * this class applies them. {@code -Dforbric.forgeWrapperSync=off} turns the staging into a no-op, which is the old
+ * behaviour minus the crash.

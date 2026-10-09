@@ -1,0 +1,7 @@
+# 0.3.8-beta installed-instance log (/Applications/.minecraft/versions/1.21.1-forbric/logs/latest.log), 2026-10-08
+[11:48:57] [main/ERROR]: [Forbric/Anchor] forbric-forge-damage-seams was handed net.minecraft.world.entity.LivingEntity and made no edit — its anchor is gone. MinecraftForge's LivingHurtEvent and LivingDamageEvent never fire — damage perks, immunity and death-prevention in MinecraftForge mods do nothing
+[11:48:57] [main/ERROR]: [Forbric/Anchor] forbric-forge-damage-seams was handed net.minecraft.world.entity.player.Player and made no edit — its anchor is gone. MinecraftForge's LivingHurtEvent and LivingDamageEvent never fire — damage perks, immunity and death-prevention in MinecraftForge mods do nothing
+[11:48:58] [main/ERROR]: [Forbric/Anchor]   forbric-forge-damage-seams on net.minecraft.world.entity.LivingEntity: MinecraftForge's LivingHurtEvent and LivingDamageEvent never fire — damage perks, immunity and death-prevention in MinecraftForge mods do nothing
+[11:48:58] [main/ERROR]: [Forbric/Anchor]   forbric-forge-damage-seams on net.minecraft.world.entity.player.Player: MinecraftForge's LivingHurtEvent and LivingDamageEvent never fire — damage perks, immunity and death-prevention in MinecraftForge mods do nothing
+[11:49:00] [main/INFO]: [Forbric/FieldDrift] scanned 68 jar(s): 0 reference a vanilla field the merge re-typed
+[11:49:00] [main/INFO]: [Forbric/AbiAudit] scanned 68 jar(s) in 205 ms: 1 with dangling Forge-family references

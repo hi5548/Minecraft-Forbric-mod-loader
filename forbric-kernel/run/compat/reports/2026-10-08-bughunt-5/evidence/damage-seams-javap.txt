@@ -1,0 +1,15 @@
+# 1.21.1 merged LivingEntity.actuallyHurt(DamageSource,float): NeoForge hooks present, NO ForgeHooks damage call
+# source: /Applications/.minecraft/.forbric-build/out/patched-mc-merged-1.21.1.jar
+1677:       409: invokestatic  #1513               // Method net/minecraftforge/common/ForgeHooks.onLivingMakeBrain:(Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/entity/ai/Brain;Lcom/mojang/serialization/Dynamic;)Lnet/minecraft/world/entity/ai/Brain;
+4394:  protected void actuallyHurt(net.minecraft.world.damagesource.DamageSource, float);
+4434:        86: invokestatic  #3017               // Method net/neoforged/neoforge/common/CommonHooks.onLivingDamagePre:(Lnet/minecraft/world/entity/LivingEntity;Lnet/neoforged/neoforge/common/damagesource/DamageContainer;)F
+4524:       284: invokestatic  #3042               // Method net/neoforged/neoforge/common/CommonHooks.onLivingDamagePost:(Lnet/minecraft/world/entity/LivingEntity;Lnet/neoforged/neoforge/common/damagesource/DamageContainer;)V
+
+# Player.hurt(DamageSource,float): no ForgeHooks.onPlayerAttack, no hurtServer (26.2 name)
+2184:  public boolean hurt(net.minecraft.world.damagesource.DamageSource, float);
+
+# injector targets the 26.2 descriptor and declines on 1.21.1:
+55:	static final String HURT_DESC = "(Lnet/minecraft/server/level/ServerLevel;" + SOURCE + "F)V";
+56:	static final String SERVER_DESC = "(Lnet/minecraft/server/level/ServerLevel;" + SOURCE + "F)Z";
+91:		MethodNode hurt = own(node, "actuallyHurt", HURT_DESC);
+94:			MethodNode server = own(node, "hurtServer", SERVER_DESC);

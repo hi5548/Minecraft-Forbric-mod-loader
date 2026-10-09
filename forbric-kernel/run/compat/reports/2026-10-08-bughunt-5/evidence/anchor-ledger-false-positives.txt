@@ -1,0 +1,22 @@
+# Negatives: 1.21.1 merged base already does what the 26.2 repair would do
+
+## IntegratedServer.stopServer(): super.stopServer() (the save) runs FIRST -- no teardown-before-save risk
+  public void stopServer();
+    Code:
+         0: aload_0
+         1: invokespecial #533                // Method net/minecraft/server/MinecraftServer.stopServer:()V
+         4: aload_0
+         5: getfield      #491                // Field lanPinger:Lnet/minecraft/client/server/LanServerPinger;
+         8: ifnull        23
+
+## AbstractFurnaceBlockEntity ctor already assigns handlers:
+        18: aload_0
+        19: new           #15                 // class net/minecraft/world/level/block/entity/AbstractFurnaceBlockEntity$1
+        22: dup
+        23: aload_0
+        24: invokespecial #117                // Method net/minecraft/world/level/block/entity/AbstractFurnaceBlockEntity$1."<init>":(Lnet/minecraft/world/level/block/entity/AbstractFurnaceBlockEntity;)V
+        27: putfield      #119                // Field dataAccess:Lnet/minecraft/world/inventory/ContainerData;
+        30: aload_0
+
+## ChiseledBookShelfBlockEntity ctor already assigns itemHandler:
+        36: putfield      #103                // Field itemHandler:Lnet/minecraftforge/common/util/LazyOptional;

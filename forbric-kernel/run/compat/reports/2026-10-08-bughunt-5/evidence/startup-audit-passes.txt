@@ -1,0 +1,6 @@
+# Boot-time full-jar audit passes (all run on [main] before the client window)
+/Users/charlescai/Desktop/dsh/实验/forbric/Minecraft-Forbric-mod-loader/forbric-kernel/src/main/java/net/forbric/kernel/boot/KernelBoot.java:361:		PortingLayerAudit.report(shadowCandidates, runtimeJars);
+/Users/charlescai/Desktop/dsh/实验/forbric/Minecraft-Forbric-mod-loader/forbric-kernel/src/main/java/net/forbric/kernel/boot/KernelBoot.java:364:		FabricApiModuleLossAudit.scan(shadowCandidates);
+/Users/charlescai/Desktop/dsh/实验/forbric/Minecraft-Forbric-mod-loader/forbric-kernel/src/main/java/net/forbric/kernel/boot/KernelBoot.java:367:		FieldDriftAudit.scan(shadowCandidates);
+/Users/charlescai/Desktop/dsh/实验/forbric/Minecraft-Forbric-mod-loader/forbric-kernel/src/main/java/net/forbric/kernel/boot/KernelBoot.java:370:		net.forbric.kernel.mixin.MergedBaseUncalledMethods.scanGuests(shadowCandidates);
+/Users/charlescai/Desktop/dsh/实验/forbric/Minecraft-Forbric-mod-loader/forbric-kernel/src/main/java/net/forbric/kernel/boot/KernelBoot.java:375:		AbiLinkAudit.scan(shadowCandidates, abiUniverse);

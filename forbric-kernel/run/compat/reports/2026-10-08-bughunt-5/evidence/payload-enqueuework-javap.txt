@@ -1,0 +1,28 @@
+# Payload work-ordering: both enqueueWork overloads carry the isSameThread shortcut
+# javap: /Applications/.minecraft/.forbric-build/out/neoforge-runtime.jar :: ClientPayloadContext
+
+  public java.util.concurrent.CompletableFuture<java.lang.Void> enqueueWork(java.lang.Runnable);
+    Code:
+         0: aload_0
+         1: getfield      #7                  // Field listener:Lnet/minecraft/network/protocol/common/ClientCommonPacketListener;
+         4: invokeinterface #26,  1           // InterfaceMethod net/minecraft/network/protocol/common/ClientCommonPacketListener.getMainThreadEventLoop:()Lnet/minecraft/util/thread/ReentrantBlockableEventLoop;
+         9: invokevirtual #32                 // Method net/minecraft/util/thread/ReentrantBlockableEventLoop.isSameThread:()Z
+        12: ifeq          26
+        15: aload_1
+        16: invokeinterface #38,  1           // InterfaceMethod java/lang/Runnable.run:()V
+        21: aconst_null
+        22: invokestatic  #43                 // Method java/util/concurrent/CompletableFuture.completedFuture:(Ljava/lang/Object;)Ljava/util/concurrent/CompletableFuture;
+        25: areturn
+        26: aload_0
+        27: getfield      #7                  // Field listener:Lnet/minecraft/network/protocol/common/ClientCommonPacketListener;
+        30: invokeinterface #26,  1           // InterfaceMethod net/minecraft/network/protocol/common/ClientCommonPacketListener.getMainThreadEventLoop:()Lnet/minecraft/util/thread/ReentrantBlockableEventLoop;
+        35: aload_1
+        36: invokevirtual #49                 // Method net/minecraft/util/thread/ReentrantBlockableEventLoop.submit:(Ljava/lang/Runnable;)Ljava/util/concurrent/CompletableFuture;
+        39: aload_0
+        40: getfield      #13                 // Field payloadId:Lnet/minecraft/resources/ResourceLocation;
+        43: invokestatic  #53                 // Method net/neoforged/neoforge/network/registration/NetworkRegistry.guard:(Ljava/util/concurrent/CompletableFuture;Lnet/minecraft/resources/ResourceLocation;)Ljava/util/concurrent/CompletableFuture;
+        46: areturn
+
+
+# and the kernel's transform matches ONLY the Runnable descriptor:
+70:	private static final String DESCRIPTOR = "(Ljava/lang/Runnable;)Ljava/util/concurrent/CompletableFuture;";

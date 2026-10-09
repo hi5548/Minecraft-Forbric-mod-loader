@@ -1933,7 +1933,10 @@ public final class PassiveSeeder {
 			verifyForgeFmlEnvironment(gameLoader, side);
 			seedForgeLaunchHandler(gameLoader, fmlLoader, side);
 			seedForge52ModuleLayerManager(gameLoader, fmlLoader);
-			seedForge52LoadingModList(gameLoader, fmlLoader);
+			// The mods dir is passed explicitly, as it is to seedNeoForgeLoader and publishForgeLoadingList: the
+			// list seeded here must describe the SAME jars this boot decided to load, and two independent
+			// derivations of "where the mods are" is how they drift apart.
+			seedForge52LoadingModList(gameLoader, fmlLoader, gameDir.resolve("mods"));
 
 			// Traditional-Forge FMLPaths + FMLConfig (ForgeMod's config registration reads FMLConfig; ConfigFileType
 			// Handler.<clinit> NPEs if FMLConfig.load() hasn't populated its backing file config).
@@ -2007,33 +2010,133 @@ public final class PassiveSeeder {
 	 * ModLoader.get() → new ModLoader() → FMLLoader.getLoadingModList()} NPE — i.e. before Main's lifecycle window,
 	 * which is why this runs from {@link #seedForgeFmlLoader} (pre-Main) and not from {@link #seedForgeLoadingModList}.
 	 *
-	 * <p>Seeded EMPTY: a no-mod instance genuinely has no MinecraftForge-family mods to report, and
-	 * {@code LoadingModList.of} also assigns {@code INSTANCE}, so {@code LoadingModList.get()} answers from the same
-	 * object. No-op once the field is set (a base that keeps the 26.2 holder, or a second call in one JVM).
+	 * <p><b>POPULATED, not empty — the same three states {@link ForgeLoadingList} models.</b> This used to seed an
+	 * EMPTY list unconditionally, which answered the "does this thing exist" question the merged base's
+	 * {@code <clinit>}s ask and nothing more: every later reader of the field — Forge's own {@code ModLoader}, and
+	 * any MinecraftForge-family mod doing a mod-list probe — got {@code getMods()=[]} while the kernel had already
+	 * decided which mods this boot loads. That is the identical failure the NeoForge {@code LoadingModList} was
+	 * fixed for (Iris' version probe NPEs on {@code getModFileById(myId)==null}; LambDynamicLights reads the empty
+	 * list as "dev environment"), and it is the one this seeder was leaving in place. So:
+	 *
+	 * <ul>
+	 *   <li><b>mods present</b> — publish them, built from the SAME {@code arbitratedForgeFamilyMods} answer the
+	 *       MinecraftForge {@code LoadingModList} is built from ({@link #buildForgeLoadingLists}). Fabric mods are
+	 *       deliberately NOT added: this list is what Forge's handshake announces, and presence must not become
+	 *       "this client runs those".</li>
+	 *   <li><b>no Forge-family mods</b> — an EMPTY list, which is then the TRUTH, and logged as such.</li>
+	 *   <li><b>discovery could not answer</b> — nothing is written, so the field stays null and the first Forge read
+	 *       is a loud NPE rather than a silent "zero mods" frozen for the run.</li>
+	 * </ul>
+	 *
+	 * <p>{@code LoadingModList.of} also assigns {@code INSTANCE}, so {@code LoadingModList.get()} answers from the
+	 * same object the field holds — which is the read side checked immediately below, because the write side
+	 * succeeds whether or not the list is what mods will actually see. No-op once the field is already set (a base
+	 * that keeps the 26.2 holder, a genuine loader, or a second call in one JVM).
 	 */
-	private static void seedForge52LoadingModList(ClassLoader gameLoader, Class<?> fmlLoader) {
+	static void seedForge52LoadingModList(ClassLoader gameLoader, Class<?> fmlLoader, Path modsDir) {
 		try {
 			Field field = fmlLoader.getDeclaredField("loadingModList");
 			field.setAccessible(true);
 			if (field.get(null) != null) return;
-			Class<?> loadingModList = Class.forName("net.minecraftforge.fml.loading.LoadingModList", false, gameLoader);
-			Class<?> earlyError = Class.forName("net.minecraftforge.fml.loading.EarlyLoadingException", false, gameLoader);
-			Method of = loadingModList.getMethod("of", List.class, List.class, earlyError);
-			Object empty = of.invoke(null, List.of(), List.of(), null);
-			// LoadingModList's own constructor leaves brokenFiles null — the genuine loader's scan fills it with the
-			// mod files it could not read — and Forge's ModLoader constructor streams it next to getErrors(). A list
-			// the kernel seeds therefore has to carry the empty answer, not the absent one.
-			Field broken = loadingModList.getDeclaredField("brokenFiles");
-			broken.setAccessible(true);
-			if (broken.get(empty) == null) broken.set(empty, List.of());
-			field.set(null, empty);
-			ForbricLog.info("[Forbric/Seed] seeded Forge 52's FMLLoader.loadingModList (empty, zero mods) — the "
-					+ "MinecraftForge patches read it during Bootstrap, before the mod-loading window");
+
+			if ("off".equalsIgnoreCase(System.getProperty(SEED_SWITCH, "on"))) {
+				ForbricLog.warn("[Forbric/Seed] -D%s=off — seeding an EMPTY Forge 52 FMLLoader.loadingModList; a "
+						+ "MinecraftForge-family mod that resolves itself through it will not find itself", SEED_SWITCH);
+				seedForge52LoadingModList(gameLoader, fmlLoader, List.of());
+				return;
+			}
+
+			List<DiscoveredMod> mods;
+			try {
+				mods = arbitratedForgeFamilyMods(modsDir);
+			} catch (Throwable t) {
+				// UNKNOWN is not empty. Leave the field null: the first reader is then loud, which is the point.
+				ForbricLog.error("[Forbric/Seed] could not discover the Forge-family mods to satisfy Forge 52's "
+						+ "FMLLoader.loadingModList — NOT freezing an empty list over an unknown answer; the first "
+						+ "MinecraftForge read of getLoadingModList() will fail loudly instead", unwrap(t));
+				return;
+			}
+			seedForge52LoadingModList(gameLoader, fmlLoader, mods);
 		} catch (NoSuchFieldException | ClassNotFoundException absent) {
 			ForbricLog.debug("[Forbric/Seed] Forge 52 FMLLoader.loadingModList seam absent — skipping");
 		} catch (Throwable t) {
 			ForbricLog.warn("[Forbric/Seed] could not seed Forge 52's FMLLoader.loadingModList", unwrap(t));
 		}
+	}
+
+	/** The publish half of {@link #seedForge52LoadingModList}: builds and installs the list for a KNOWN mod set. */
+	static void seedForge52LoadingModList(ClassLoader gameLoader, Class<?> fmlLoader, List<DiscoveredMod> mods)
+			throws Exception {
+		Field field = fmlLoader.getDeclaredField("loadingModList");
+		field.setAccessible(true);
+		if (field.get(null) != null) return;
+
+		ForgeLoadingLists lists = mods.isEmpty()
+				? new ForgeLoadingLists(List.of(), List.of())
+				: buildForgeLoadingLists(gameLoader, mods);
+		Class<?> loadingModList = Class.forName("net.minecraftforge.fml.loading.LoadingModList", false, gameLoader);
+		Class<?> earlyError = Class.forName("net.minecraftforge.fml.loading.EarlyLoadingException", false, gameLoader);
+		Method of = loadingModList.getMethod("of", List.class, List.class, earlyError);
+		Object list = of.invoke(null, lists.files(), lists.modInfos(), null);
+		// LoadingModList's own constructor leaves brokenFiles null — the genuine loader's scan fills it with the
+		// mod files it could not read — and Forge's ModLoader constructor streams it next to getErrors(). A list the
+		// kernel seeds therefore has to carry the empty answer, not the absent one.
+		Field broken = loadingModList.getDeclaredField("brokenFiles");
+		broken.setAccessible(true);
+		if (broken.get(list) == null) broken.set(list, List.of());
+		field.set(null, list);
+
+		// The READ side, because the write side succeeds whether or not the list is what mods will actually see.
+		int readBack = -1;
+		try {
+			readBack = readBackForge52ModCount(loadingModList, list);
+		} catch (Throwable readSide) {
+			ForbricLog.error("[Forbric/Seed] Forge 52's LoadingModList.getMods() is unreadable even though seeding "
+					+ "succeeded — MinecraftForge reads it through the INSTANCE that of() assigns", unwrap(readSide));
+			return;
+		}
+		if (readBack != lists.modInfos().size()) {
+			ForbricLog.error("[Forbric/Seed] Forge 52's LoadingModList.getMods() reads back %d mod(s) but the kernel "
+					+ "built %d — MinecraftForge's handshake will announce the wrong list", readBack,
+					lists.modInfos().size());
+			return;
+		}
+		if (mods.isEmpty()) {
+			ForbricLog.info("[Forbric/Seed] seeded Forge 52's FMLLoader.loadingModList (empty, zero mods) — that IS "
+					+ "the answer for this instance, not a fallback; the MinecraftForge patches read it during "
+					+ "Bootstrap, before the mod-loading window");
+		} else {
+			StringBuilder ids = new StringBuilder();
+			for (DiscoveredMod mod : mods) {
+				if (ids.length() > 0) ids.append(", ");
+				ids.append(mod.getId());
+			}
+			ForbricLog.info("[Forbric/Seed] seeded Forge 52's FMLLoader.loadingModList with %d Forge-family mod(s) "
+					+ "and read them back through LoadingModList.getMods() — a MinecraftForge-family mod resolving "
+					+ "itself through FMLLoader.getLoadingModList()/getModFileById finds itself instead of the empty "
+					+ "list this used to freeze before Main. [%s]", mods.size(), ids);
+		}
+	}
+
+	/**
+	 * How many mods a seeded Forge 52 {@code LoadingModList} answers with through {@code LoadingModList.get()} →
+	 * {@code getMods()} — the door a mod uses, not the field.
+	 *
+	 * <p>{@code get()} is static and returns {@code INSTANCE} (which {@code of} assigned); {@code getMods()} is an
+	 * INSTANCE method, so the call is made on that receiver. A first cut invoked {@code getMods()} with a null
+	 * receiver and threw on every boot — the client run's console caught it ("unreadable even though seeding
+	 * succeeded") — so the path lives here where the probe can drive it directly rather than inline in the seeder.
+	 *
+	 * @throws IllegalStateException when {@code get()} does not answer with the seeded object, because then the list
+	 *                               is written but no reader sees it
+	 */
+	static int readBackForge52ModCount(Class<?> loadingModList, Object seededList) throws Exception {
+		Object instance = loadingModList.getMethod("get").invoke(null);
+		if (instance != seededList) {
+			throw new IllegalStateException("LoadingModList.get() answered with " + instance
+					+ " but the seeded field holds " + seededList);
+		}
+		return ((List<?>) loadingModList.getMethod("getMods").invoke(instance)).size();
 	}
 
 	/**

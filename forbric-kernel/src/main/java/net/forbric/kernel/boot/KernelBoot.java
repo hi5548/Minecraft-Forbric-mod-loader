@@ -1184,9 +1184,9 @@ public final class KernelBoot {
 		//
 		// The sweep must NOT run when this invoke returns on the server: MinecraftServer.spin starts the game on a
 		// "Server thread" and returns immediately, so `main.invoke` returns as the server is still BOOTING (measured:
-		// sweeping here stopped the two boot-time watchers, set ClientShutdown's one-shot guard, and missed the
+		// sweeping here stopped the two boot-time watchers and missed the
 		// third watcher created once the server configs loaded). Wait for the real end — that thread dying.
-		// Idempotent: ClientShutdown returns immediately if the injected hook already ran.
+		// Idempotent: ClientShutdown returns immediately while the injected hook's exit guard is still sweeping.
 		boolean started = true;
 		try {
 			main.invoke(null, (Object) gameArgs.toArray(new String[0]));

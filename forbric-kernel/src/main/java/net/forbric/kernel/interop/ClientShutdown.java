@@ -24,6 +24,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import net.forbric.kernel.util.ForbricLog;
 
@@ -72,7 +73,7 @@ public final class ClientShutdown {
 	 */
 	private static final boolean HALT_ON_ORPHAN_WORKERS = !"false".equals(System.getProperty("forbric.exitGuardHalt"));
 
-	private static volatile boolean ran;
+	private static final AtomicBoolean GUARD_RUNNING = new AtomicBoolean();
 	/** Watchers already stopped, so a repeat sweep can tell "re-created" from "still the same one". */
 	private static final Map<Object, Boolean> STOPPED = new IdentityHashMap<>();
 
@@ -86,10 +87,20 @@ public final class ClientShutdown {
 	 * leaked worker there does not crash the process, it keeps it alive forever after "Stopping server").
 	 */
 	public static void stopLeakedBackgroundExecutors(ClassLoader cl) {
-		if (ran) return;
-		ran = true;
-		List<String> stopped = sweep(cl);
-		stopCreateWorkers(cl);
+		// Not a session-wide one-shot. A client's Minecraft.close() can run — and its exit guard can finish on a
+		// still-clean JVM — before the integrated server creates its watchers; a session-wide latch then suppresses
+		// the later end-of-life sweep and those watchers keep the JVM open, which is the very hang this class
+		// prevents. While a guard is running it is already sweeping, so a call then just reports.
+		if (!GUARD_RUNNING.compareAndSet(false, true)) return;
+		List<String> stopped;
+		try {
+			stopped = sweep(cl);
+			stopCreateWorkers(cl);
+		} catch (Throwable failure) {
+			// A failed sweep must not leave the guard latch spent.
+			GUARD_RUNNING.set(false);
+			throw failure;
+		}
 		ForbricLog.info("[Forbric/Shutdown] stopped %d config file-watcher(s) at exit so the JVM can end: %s",
 				stopped.size(), stopped);
 		startExitGuard(cl);
@@ -234,7 +245,15 @@ public final class ClientShutdown {
 	 * hundred milliseconds) or the deadline passes, and reports either way.
 	 */
 	private static void startExitGuard(ClassLoader cl) {
-		Thread guard = new Thread(() -> runExitGuard(cl), "Forbric exit guard");
+		Thread guard = new Thread(() -> {
+			try {
+				runExitGuard(cl);
+			} finally {
+				// Re-arm: a later end-of-life call (the launcher's, after this side's main returns; the other side's)
+				// may still have watchers to sweep.
+				GUARD_RUNNING.set(false);
+			}
+		}, "Forbric exit guard");
 		guard.setDaemon(true);
 		guard.start();
 	}

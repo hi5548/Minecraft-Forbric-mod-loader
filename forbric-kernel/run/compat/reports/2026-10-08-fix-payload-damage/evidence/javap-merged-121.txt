@@ -1,0 +1,197 @@
+# javap -c -p /Applications/.minecraft/.forbric-build/out/patched-mc-merged-1.21.1.jar :: the shapes the injector must match
+# LivingEntity.actuallyHurt(DamageSource,float)V  (guard + Pre + the applied-damage store are here)
+
+  protected void actuallyHurt(net.minecraft.world.damagesource.DamageSource, float);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: invokevirtual #1996               // Method isInvulnerableTo:(Lnet/minecraft/world/damagesource/DamageSource;)Z
+         5: ifne          287
+         8: aload_0
+         9: getfield      #382                // Field damageContainers:Ljava/util/Stack;
+        12: invokevirtual #2015               // Method java/util/Stack.peek:()Ljava/lang/Object;
+        15: checkcast     #56                 // class net/neoforged/neoforge/common/damagesource/DamageContainer
+        18: getstatic     #3009               // Field net/neoforged/neoforge/common/damagesource/DamageContainer$Reduction.ARMOR:Lnet/neoforged/neoforge/common/damagesource/DamageContainer$Reduction;
+        21: aload_0
+        22: getfield      #382                // Field damageContainers:Ljava/util/Stack;
+        25: invokevirtual #2015               // Method java/util/Stack.peek:()Ljava/lang/Object;
+        28: checkcast     #56                 // class net/neoforged/neoforge/common/damagesource/DamageContainer
+        31: invokevirtual #2028               // Method net/neoforged/neoforge/common/damagesource/DamageContainer.getNewDamage:()F
+        34: aload_0
+        35: aload_1
+        36: aload_0
+        37: getfield      #382                // Field damageContainers:Ljava/util/Stack;
+        40: invokevirtual #2015               // Method java/util/Stack.peek:()Ljava/lang/Object;
+        43: checkcast     #56                 // class net/neoforged/neoforge/common/damagesource/DamageContainer
+        46: invokevirtual #2028               // Method net/neoforged/neoforge/common/damagesource/DamageContainer.getNewDamage:()F
+        49: invokevirtual #3011               // Method getDamageAfterArmorAbsorb:(Lnet/minecraft/world/damagesource/DamageSource;F)F
+        52: fsub
+        53: invokevirtual #2104               // Method net/neoforged/neoforge/common/damagesource/DamageContainer.setReduction:(Lnet/neoforged/neoforge/common/damagesource/DamageContainer$Reduction;F)V
+        56: aload_0
+        57: aload_1
+        58: aload_0
+        59: getfield      #382                // Field damageContainers:Ljava/util/Stack;
+        62: invokevirtual #2015               // Method java/util/Stack.peek:()Ljava/lang/Object;
+        65: checkcast     #56                 // class net/neoforged/neoforge/common/damagesource/DamageContainer
+        68: invokevirtual #2028               // Method net/neoforged/neoforge/common/damagesource/DamageContainer.getNewDamage:()F
+        71: invokevirtual #3013               // Method getDamageAfterMagicAbsorb:(Lnet/minecraft/world/damagesource/DamageSource;F)F
+        74: pop
+        75: aload_0
+        76: aload_0
+        77: getfield      #382                // Field damageContainers:Ljava/util/Stack;
+        80: invokevirtual #2015               // Method java/util/Stack.peek:()Ljava/lang/Object;
+        83: checkcast     #56                 // class net/neoforged/neoforge/common/damagesource/DamageContainer
+        86: invokestatic  #3017               // Method net/neoforged/neoforge/common/CommonHooks.onLivingDamagePre:(Lnet/minecraft/world/entity/LivingEntity;Lnet/neoforged/neoforge/common/damagesource/DamageContainer;)F
+        89: fstore_3
+        90: aload_0
+        91: getfield      #382                // Field damageContainers:Ljava/util/Stack;
+        94: invokevirtual #2015               // Method java/util/Stack.peek:()Ljava/lang/Object;
+        97: checkcast     #56                 // class net/neoforged/neoforge/common/damagesource/DamageContainer
+       100: getstatic     #3019               // Field net/neoforged/neoforge/common/damagesource/DamageContainer$Reduction.ABSORPTION:Lnet/neoforged/neoforge/common/damagesource/DamageContainer$Reduction;
+       103: aload_0
+       104: invokevirtual #1307               // Method getAbsorptionAmount:()F
+       107: fload_3
+       108: invokestatic  #3021               // Method java/lang/Math.min:(FF)F
+       111: invokevirtual #2104               // Method net/neoforged/neoforge/common/damagesource/DamageContainer.setReduction:(Lnet/neoforged/neoforge/common/damagesource/DamageContainer$Reduction;F)V
+       114: fload_3
+       115: aload_0
+       116: getfield      #382                // Field damageContainers:Ljava/util/Stack;
+       119: invokevirtual #2015               // Method java/util/Stack.peek:()Ljava/lang/Object;
+       122: checkcast     #56                 // class net/neoforged/neoforge/common/damagesource/DamageContainer
+       125: getstatic     #3019               // Field net/neoforged/neoforge/common/damagesource/DamageContainer$Reduction.ABSORPTION:Lnet/neoforged/neoforge/common/damagesource/DamageContainer$Reduction;
+       128: invokevirtual #3025               // Method net/neoforged/neoforge/common/damagesource/DamageContainer.getReduction:(Lnet/neoforged/neoforge/common/damagesource/DamageContainer$Reduction;)F
+       131: invokestatic  #3021               // Method java/lang/Math.min:(FF)F
+       134: fstore        4
+       136: aload_0
+       137: fconst_0
+       138: aload_0
+       139: invokevirtual #1307               // Method getAbsorptionAmount:()F
+       142: fload         4
+       144: fsub
+       145: invokestatic  #2944               // Method java/lang/Math.max:(FF)F
+       148: invokevirtual #1976               // Method setAbsorptionAmount:(F)V
+       151: aload_0
+       152: getfield      #382                // Field damageContainers:Ljava/util/Stack;
+       155: invokevirtual #2015               // Method java/util/Stack.peek:()Ljava/lang/Object;
+       158: checkcast     #56                 // class net/neoforged/neoforge/common/damagesource/DamageContainer
+       161: invokevirtual #2028               // Method net/neoforged/neoforge/common/damagesource/DamageContainer.getNewDamage:()F
+       164: fstore        5
+       166: fload         4
+       168: fstore        6
+       170: fload         6
+       172: fconst_0
+       173: fcmpl
+       174: ifle          224
+       177: fload         6
+       179: ldc_w         #2226               // float 3.4028235E37f
+       182: fcmpg
+       183: ifge          224
+       186: aload_1
+       187: invokevirtual #2115               // Method net/minecraft/world/damagesource/DamageSource.getEntity:()Lnet/minecraft/world/entity/Entity;
+       190: astore        8
+       192: aload         8
+       194: instanceof    #970                // class net/minecraft/server/level/ServerPlayer
+       197: ifeq          224
+       200: aload         8
+       202: checkcast     #970                // class net/minecraft/server/level/ServerPlayer
+       205: astore        7
+       207: aload         7
+       209: getstatic     #3028               // Field net/minecraft/stats/Stats.DAMAGE_DEALT_ABSORBED:Lnet/minecraft/resources/ResourceLocation;
+       212: fload         6
+       214: ldc_w         #2089               // float 10.0f
+       217: fmul
+       218: invokestatic  #2235               // Method java/lang/Math.round:(F)I
+       221: invokevirtual #2239               // Method net/minecraft/server/level/ServerPlayer.awardStat:(Lnet/minecraft/resources/ResourceLocation;I)V
+       224: fload         5
+       226: fconst_0
+       227: fcmpl
+       228: ifeq          273
+       231: aload_0
+       232: invokevirtual #2452               // Method getCombatTracker:()Lnet/minecraft/world/damagesource/CombatTracker;
+       235: aload_1
+       236: fload         5
+       238: invokevirtual #3031               // Method net/minecraft/world/damagesource/CombatTracker.recordDamage:(Lnet/minecraft/world/damagesource/DamageSource;F)V
+       241: aload_0
+       242: aload_0
+       243: invokevirtual #1282               // Method getHealth:()F
+       246: fload         5
+       248: fsub
+       249: invokevirtual #403                // Method setHealth:(F)V
+       252: aload_0
+       253: getstatic     #3034               // Field net/minecraft/world/level/gameevent/GameEvent.ENTITY_DAMAGE:Lnet/minecraft/core/Holder$Reference;
+       256: invokevirtual #1229               // Method gameEvent:(Lnet/minecraft/core/Holder;)V
+       259: aload_0
+       260: aload_0
+       261: getfield      #382                // Field damageContainers:Ljava/util/Stack;
+       264: invokevirtual #2015               // Method java/util/Stack.peek:()Ljava/lang/Object;
+       267: checkcast     #56                 // class net/neoforged/neoforge/common/damagesource/DamageContainer
+       270: invokevirtual #3038               // Method onDamageTaken:(Lnet/neoforged/neoforge/common/damagesource/DamageContainer;)V
+       273: aload_0
+       274: aload_0
+       275: getfield      #382                // Field damageContainers:Ljava/util/Stack;
+       278: invokevirtual #2015               // Method java/util/Stack.peek:()Ljava/lang/Object;
+       281: checkcast     #56                 // class net/neoforged/neoforge/common/damagesource/DamageContainer
+       284: invokestatic  #3042               // Method net/neoforged/neoforge/common/CommonHooks.onLivingDamagePost:(Lnet/minecraft/world/entity/LivingEntity;Lnet/neoforged/neoforge/common/damagesource/DamageContainer;)V
+       287: return
+
+
+# Player.hurt(DamageSource,float)Z  (no hurtServer on 1.21.1; no ForgeHooks.onPlayerAttack)
+
+  public boolean hurt(net.minecraft.world.damagesource.DamageSource, float);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: invokevirtual #1776               // Method isInvulnerableTo:(Lnet/minecraft/world/damagesource/DamageSource;)Z
+         5: ifeq          10
+         8: iconst_0
+         9: ireturn
+        10: aload_0
+        11: getfield      #262                // Field abilities:Lnet/minecraft/world/entity/player/Abilities;
+        14: getfield      #1779               // Field net/minecraft/world/entity/player/Abilities.invulnerable:Z
+        17: ifeq          32
+        20: aload_1
+        21: getstatic     #1782               // Field net/minecraft/tags/DamageTypeTags.BYPASSES_INVULNERABILITY:Lnet/minecraft/tags/TagKey;
+        24: invokevirtual #1751               // Method net/minecraft/world/damagesource/DamageSource.is:(Lnet/minecraft/tags/TagKey;)Z
+        27: ifne          32
+        30: iconst_0
+        31: ireturn
+        32: aload_0
+        33: iconst_0
+        34: putfield      #1785               // Field noActionTime:I
+        37: aload_0
+        38: invokevirtual #999                // Method isDeadOrDying:()Z
+        41: ifeq          46
+        44: iconst_0
+        45: ireturn
+        46: aload_0
+        47: invokevirtual #559                // Method level:()Lnet/minecraft/world/level/Level;
+        50: getfield      #354                // Field net/minecraft/world/level/Level.isClientSide:Z
+        53: ifne          60
+        56: aload_0
+        57: invokevirtual #1108               // Method removeEntitiesOnShoulder:()V
+        60: fconst_0
+        61: aload_1
+        62: invokevirtual #1345               // Method net/minecraft/world/damagesource/DamageSource.type:()Lnet/minecraft/world/damagesource/DamageType;
+        65: invokevirtual #1789               // Method net/minecraft/world/damagesource/DamageType.scaling:()Lnet/minecraft/world/damagesource/DamageScaling;
+        68: invokevirtual #1795               // Method net/minecraft/world/damagesource/DamageScaling.getScalingFunction:()Lnet/neoforged/neoforge/common/damagesource/IScalingFunction;
+        71: aload_1
+        72: aload_0
+        73: fload_2
+        74: aload_0
+        75: invokevirtual #559                // Method level:()Lnet/minecraft/world/level/Level;
+        78: invokevirtual #940                // Method net/minecraft/world/level/Level.getDifficulty:()Lnet/minecraft/world/Difficulty;
+        81: invokeinterface #1801,  5         // InterfaceMethod net/neoforged/neoforge/common/damagesource/IScalingFunction.scaleDamage:(Lnet/minecraft/world/damagesource/DamageSource;Lnet/minecraft/world/entity/player/Player;FLnet/minecraft/world/Difficulty;)F
+        86: invokestatic  #1804               // Method java/lang/Math.max:(FF)F
+        89: fstore_2
+        90: fload_2
+        91: fconst_0
+        92: fcmpl
+        93: ifne          100
+        96: iconst_0
+        97: goto          106
+       100: aload_0
+       101: aload_1
+       102: fload_2
+       103: invokespecial #1806               // Method net/minecraft/world/entity/LivingEntity.hurt:(Lnet/minecraft/world/damagesource/DamageSource;F)Z
+       106: ireturn
+

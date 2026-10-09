@@ -1,0 +1,111 @@
+# javap -c -p /Applications/.minecraft/.forbric-build/out/neoforge-runtime.jar :: net.neoforged.neoforge.network.handling.ClientPayloadContext
+# both enqueueWork overloads carry the same isSameThread inline shortcut (byte-verified 2026-10-09)
+
+  public java.util.concurrent.CompletableFuture<java.lang.Void> enqueueWork(java.lang.Runnable);
+    Code:
+         0: aload_0
+         1: getfield      #7                  // Field listener:Lnet/minecraft/network/protocol/common/ClientCommonPacketListener;
+         4: invokeinterface #26,  1           // InterfaceMethod net/minecraft/network/protocol/common/ClientCommonPacketListener.getMainThreadEventLoop:()Lnet/minecraft/util/thread/ReentrantBlockableEventLoop;
+         9: invokevirtual #32                 // Method net/minecraft/util/thread/ReentrantBlockableEventLoop.isSameThread:()Z
+        12: ifeq          26
+        15: aload_1
+        16: invokeinterface #38,  1           // InterfaceMethod java/lang/Runnable.run:()V
+        21: aconst_null
+        22: invokestatic  #43                 // Method java/util/concurrent/CompletableFuture.completedFuture:(Ljava/lang/Object;)Ljava/util/concurrent/CompletableFuture;
+        25: areturn
+        26: aload_0
+        27: getfield      #7                  // Field listener:Lnet/minecraft/network/protocol/common/ClientCommonPacketListener;
+        30: invokeinterface #26,  1           // InterfaceMethod net/minecraft/network/protocol/common/ClientCommonPacketListener.getMainThreadEventLoop:()Lnet/minecraft/util/thread/ReentrantBlockableEventLoop;
+        35: aload_1
+        36: invokevirtual #49                 // Method net/minecraft/util/thread/ReentrantBlockableEventLoop.submit:(Ljava/lang/Runnable;)Ljava/util/concurrent/CompletableFuture;
+        39: aload_0
+        40: getfield      #13                 // Field payloadId:Lnet/minecraft/resources/ResourceLocation;
+        43: invokestatic  #53                 // Method net/neoforged/neoforge/network/registration/NetworkRegistry.guard:(Ljava/util/concurrent/CompletableFuture;Lnet/minecraft/resources/ResourceLocation;)Ljava/util/concurrent/CompletableFuture;
+        46: areturn
+
+  public <T> java.util.concurrent.CompletableFuture<T> enqueueWork(java.util.function.Supplier<T>);
+    Code:
+         0: aload_0
+         1: getfield      #7                  // Field listener:Lnet/minecraft/network/protocol/common/ClientCommonPacketListener;
+         4: invokeinterface #26,  1           // InterfaceMethod net/minecraft/network/protocol/common/ClientCommonPacketListener.getMainThreadEventLoop:()Lnet/minecraft/util/thread/ReentrantBlockableEventLoop;
+         9: invokevirtual #32                 // Method net/minecraft/util/thread/ReentrantBlockableEventLoop.isSameThread:()Z
+        12: ifeq          25
+        15: aload_1
+        16: invokeinterface #59,  1           // InterfaceMethod java/util/function/Supplier.get:()Ljava/lang/Object;
+        21: invokestatic  #43                 // Method java/util/concurrent/CompletableFuture.completedFuture:(Ljava/lang/Object;)Ljava/util/concurrent/CompletableFuture;
+        24: areturn
+        25: aload_0
+        26: getfield      #7                  // Field listener:Lnet/minecraft/network/protocol/common/ClientCommonPacketListener;
+        29: invokeinterface #26,  1           // InterfaceMethod net/minecraft/network/protocol/common/ClientCommonPacketListener.getMainThreadEventLoop:()Lnet/minecraft/util/thread/ReentrantBlockableEventLoop;
+        34: aload_1
+        35: invokevirtual #65                 // Method net/minecraft/util/thread/ReentrantBlockableEventLoop.submit:(Ljava/util/function/Supplier;)Ljava/util/concurrent/CompletableFuture;
+        38: aload_0
+        39: getfield      #13                 // Field payloadId:Lnet/minecraft/resources/ResourceLocation;
+        42: invokestatic  #53                 // Method net/neoforged/neoforge/network/registration/NetworkRegistry.guard:(Ljava/util/concurrent/CompletableFuture;Lnet/minecraft/resources/ResourceLocation;)Ljava/util/concurrent/CompletableFuture;
+        45: areturn
+
+  public void finishCurrentTask(net.minecraft.server.network.ConfigurationTask$Type);
+    Code:
+         0: new           #68                 // class java/lang/UnsupportedOperationException
+         3: dup
+         4: ldc           #70                 // String Attempted to complete a configuration task on the client!
+         6: invokespecial #72                 // Method java/lang/UnsupportedOperationException."<init>":(Ljava/lang/String;)V
+         9: athrow
+
+  public net.minecraft.network.protocol.PacketFlow flow();
+    Code:
+         0: getstatic     #75                 // Field net/minecraft/network/protocol/PacketFlow.CLIENTBOUND:Lnet/minecraft/network/protocol/PacketFlow;
+         3: areturn
+
+  public net.minecraft.world.entity.player.Player player();
+    Code:
+         0: invokestatic  #81                 // Method net/minecraft/client/Minecraft.getInstance:()Lnet/minecraft/client/Minecraft;
+         3: getfield      #87                 // Field net/minecraft/client/Minecraft.player:Lnet/minecraft/client/player/LocalPlayer;
+         6: ifnull        16
+         9: invokestatic  #81                 // Method net/minecraft/client/Minecraft.getInstance:()Lnet/minecraft/client/Minecraft;
+        12: getfield      #87                 // Field net/minecraft/client/Minecraft.player:Lnet/minecraft/client/player/LocalPlayer;
+        15: areturn
+        16: new           #68                 // class java/lang/UnsupportedOperationException
+        19: dup
+        20: ldc           #91                 // String Cannot retrieve the client player during the configuration phase.
+        22: invokespecial #72                 // Method java/lang/UnsupportedOperationException."<init>":(Ljava/lang/String;)V
+        25: athrow
+
+  public final java.lang.String toString();
+    Code:
+         0: aload_0
+         1: invokedynamic #96,  0             // InvokeDynamic #0:toString:(Lnet/neoforged/neoforge/network/handling/ClientPayloadContext;)Ljava/lang/String;
+         6: areturn
+
+  public final int hashCode();
+    Code:
+         0: aload_0
+         1: invokedynamic #100,  0            // InvokeDynamic #0:hashCode:(Lnet/neoforged/neoforge/network/handling/ClientPayloadContext;)I
+         6: ireturn
+
+  public final boolean equals(java.lang.Object);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: invokedynamic #104,  0            // InvokeDynamic #0:equals:(Lnet/neoforged/neoforge/network/handling/ClientPayloadContext;Ljava/lang/Object;)Z
+         7: ireturn
+
+  public net.minecraft.network.protocol.common.ClientCommonPacketListener listener();
+    Code:
+         0: aload_0
+         1: getfield      #7                  // Field listener:Lnet/minecraft/network/protocol/common/ClientCommonPacketListener;
+         4: areturn
+
+  public net.minecraft.resources.ResourceLocation payloadId();
+    Code:
+         0: aload_0
+         1: getfield      #13                 // Field payloadId:Lnet/minecraft/resources/ResourceLocation;
+         4: areturn
+
+  public net.neoforged.neoforge.common.extensions.ICommonPacketListener listener();
+    Code:
+         0: aload_0
+         1: invokevirtual #93                 // Method listener:()Lnet/minecraft/network/protocol/common/ClientCommonPacketListener;
+         4: areturn
+}
+

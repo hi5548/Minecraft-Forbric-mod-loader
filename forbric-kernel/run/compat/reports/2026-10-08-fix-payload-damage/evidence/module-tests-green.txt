@@ -1,0 +1,19 @@
+== net.forbric.kernel.transform.PayloadWorkOrderingTransformerTest
+[Forbric/INFO] [Forbric/PayloadOrdering] net.neoforged.neoforge.network.handling.ClientPayloadContext.enqueueWork now submits its work unconditionally — the inline same-thread path ran payload work before the client level existed, which is how the data-map sync died with "Network Protocol Error"
+[Forbric/INFO] [Forbric/PayloadOrdering] net.neoforged.neoforge.network.handling.ClientPayloadContext.enqueueWork now submits its work unconditionally — the inline same-thread path ran payload work before the client level existed, which is how the data-map sync died with "Network Protocol Error"
+[Forbric/INFO] [Forbric/PayloadOrdering] net.neoforged.neoforge.network.handling.ClientPayloadContext.enqueueWork now submits its work unconditionally — the inline same-thread path ran payload work before the client level existed, which is how the data-map sync died with "Network Protocol Error"
+[Forbric/INFO] [Forbric/PayloadOrdering] net.neoforged.neoforge.network.handling.ClientPayloadContext.enqueueWork now submits its work unconditionally — the inline same-thread path ran payload work before the client level existed, which is how the data-map sync died with "Network Protocol Error"
+  PASS theSameThreadShortcutIsReplacedByAnUnconditionalJumpToTheSubmitPath
+[Forbric/INFO] [Forbric/PayloadOrdering] net.neoforged.neoforge.network.handling.ClientPayloadContext.enqueueWork now submits its work unconditionally — the inline same-thread path ran payload work before the client level existed, which is how the data-map sync died with "Network Protocol Error"
+[Forbric/INFO] [Forbric/PayloadOrdering] net.neoforged.neoforge.network.handling.ClientPayloadContext.enqueueWork now submits its work unconditionally — the inline same-thread path ran payload work before the client level existed, which is how the data-map sync died with "Network Protocol Error"
+  PASS theTransformedClassLinksUnderTheRealVerifier
+  PASS theKillSwitchLeavesTheClassAlone
+== net.forbric.kernel.transform.ForgeDamageSeamsInjectorTest
+  PASS minecraftForgesOwnPipelineAndTheSwitchAreLeftAlone
+[Forbric/INFO] [Forbric/Damage] net.minecraft.world.entity.LivingEntity: MinecraftForge's Hurt and Damage in actuallyHurt back in NeoForge's damage pipeline — nothing called them on the merged base
+[Forbric/INFO] [Forbric/Damage] net.minecraft.world.entity.player.Player: MinecraftForge's Hurt and Damage in actuallyHurt, player Attack in hurt back in NeoForge's damage pipeline — nothing called them on the merged base
+  PASS hurtBeforeArmourAndDamageAfterAbsorptionInBothBodies
+[Forbric/INFO] [Forbric/Damage] net.minecraft.world.entity.player.Player: MinecraftForge's Hurt and Damage in actuallyHurt, player Attack in hurt back in NeoForge's damage pipeline — nothing called them on the merged base
+[Forbric/INFO] [Forbric/Damage] net.minecraft.world.entity.LivingEntity: MinecraftForge's Hurt and Damage in actuallyHurt back in NeoForge's damage pipeline — nothing called them on the merged base
+  PASS thePlayerIsAskedAtTheHeadOfTheHurtEntryAndTellsTheForward
+pass=6 fail=0 skip=0

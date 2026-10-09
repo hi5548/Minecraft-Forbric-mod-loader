@@ -1,0 +1,12 @@
+== net.forbric.kernel.transform.PayloadWorkOrderingTransformerTest
+[Forbric/INFO] [Forbric/PayloadOrdering] net.neoforged.neoforge.network.handling.ClientPayloadContext.enqueueWork now submits its work unconditionally — the inline same-thread path ran payload work before the client level existed, which is how the data-map sync died with "Network Protocol Error"
+  PASS theTransformedClassLinksUnderTheRealVerifier
+[Forbric/INFO] [Forbric/PayloadOrdering] net.neoforged.neoforge.network.handling.ClientPayloadContext.enqueueWork now submits its work unconditionally — the inline same-thread path ran payload work before the client level existed, which is how the data-map sync died with "Network Protocol Error"
+[Forbric/INFO] [Forbric/PayloadOrdering] net.neoforged.neoforge.network.handling.ClientPayloadContext.enqueueWork now submits its work unconditionally — the inline same-thread path ran payload work before the client level existed, which is how the data-map sync died with "Network Protocol Error"
+  FAIL theSameThreadShortcutIsReplacedByAnUnconditionalJumpToTheSubmitPath - org.opentest4j.AssertionFailedError: no isSameThread-then-conditional-jump may remain in (Ljava/util/function/Supplier;)Ljava/util/concurrent/CompletableFuture; ==> expected: <null> but was: <org.objectweb.asm.tree.JumpInsnNode@71dac704>
+  PASS theKillSwitchLeavesTheClassAlone
+== net.forbric.kernel.transform.ForgeDamageSeamsInjectorTest
+  FAIL hurtBeforeArmourAndDamageAfterAbsorptionInBothBodies - org.opentest4j.AssertionFailedError: net/minecraft/world/entity/LivingEntity ==> expected: not same but was: <[B@16f65612>
+  FAIL thePlayerIsAskedAtTheHeadOfTheHurtEntryAndTellsTheForward - org.opentest4j.AssertionFailedError: before difficulty scaling and the zero-damage return ==> expected: <true> but was: <false>
+  PASS minecraftForgesOwnPipelineAndTheSwitchAreLeftAlone
+pass=3 fail=3 skip=0

@@ -1,0 +1,50 @@
+=== R1 - enqueueWork work ordering ===
+carrier       = /Applications/.minecraft/.forbric-build/out/neoforge-runtime.jar
+[Forbric/INFO] [Forbric/PayloadOrdering] net.neoforged.neoforge.network.handling.ClientPayloadContext.enqueueWork now submits its work unconditionally — the inline same-thread path ran payload work before the client level existed, which is how the data-map sync died with "Network Protocol Error"
+input  sha256 = 7f6c5bfdb89bc1f139fdc1088c6c83eab21f7fa5407903473aa8528152de24b9  (5407 bytes)
+output sha256 = d79b547a115e5a0d28023268af49c954904764fb04ea19fde99b7cdd56613686  (5455 bytes)
+edited        = true
+
+enqueueWork (Ljava/lang/Runnable;)Ljava/util/concurrent/CompletableFuture;
+  before: isSameThread-then-conditional-jump = IFEQ
+    inline path: [VAR ALOAD 0, FIELD net/neoforged/neoforge/network/handling/ClientPayloadContext.listener:Lnet/minecraft/network/protocol/common/ClientCommonPacketListener;, CALL net/minecraft/network/protocol/common/ClientCommonPacketListener.getMainThreadEventLoop()Lnet/minecraft/util/thread/ReentrantBlockableEventLoop;, VAR ALOAD 1]
+  after : isSameThread-then-conditional-jump = none
+  after : POP+GOTO lands on = [VAR ALOAD 0, FIELD net/neoforged/neoforge/network/handling/ClientPayloadContext.listener:Lnet/minecraft/network/protocol/common/ClientCommonPacketListener;, CALL net/minecraft/network/protocol/common/ClientCommonPacketListener.getMainThreadEventLoop()Lnet/minecraft/util/thread/ReentrantBlockableEventLoop;, VAR ALOAD 1, CALL net/minecraft/util/thread/ReentrantBlockableEventLoop.submit(Ljava/lang/Runnable;)Ljava/util/concurrent/CompletableFuture;]
+  BasicVerifier: OK
+
+enqueueWork (Ljava/util/function/Supplier;)Ljava/util/concurrent/CompletableFuture;
+  before: isSameThread-then-conditional-jump = IFEQ
+    inline path: [VAR ALOAD 0, FIELD net/neoforged/neoforge/network/handling/ClientPayloadContext.listener:Lnet/minecraft/network/protocol/common/ClientCommonPacketListener;, CALL net/minecraft/network/protocol/common/ClientCommonPacketListener.getMainThreadEventLoop()Lnet/minecraft/util/thread/ReentrantBlockableEventLoop;, VAR ALOAD 1]
+  after : isSameThread-then-conditional-jump = PRESENT (defect)
+  after : POP+GOTO lands on = none
+  BasicVerifier: OK
+
+link gate (JVM verifier over the transformed class):
+  net.neoforged.neoforge.network.handling.ClientPayloadContext linked and initialised = OK
+    declared: public java.util.concurrent.CompletableFuture<java.lang.Void> net.neoforged.neoforge.network.handling.ClientPayloadContext.enqueueWork(java.lang.Runnable)
+    declared: public <T> java.util.concurrent.CompletableFuture<T> net.neoforged.neoforge.network.handling.ClientPayloadContext.enqueueWork(java.util.function.Supplier<T>)
+
+falsifier -Dforbric.payloadWorkOrdering=off:
+  the class comes back byte-for-byte unchanged = true
+
+=== A1 - Forge damage seams ===
+carrier       = /Applications/.minecraft/.forbric-build/out/patched-mc-merged-1.21.1.jar
+
+net/minecraft/world/entity/LivingEntity
+  input  sha256 = 97f671ccbdf9eff34a30686aaf9cb6d59e7d2eff0214303282fb6c4c43c73efc
+  output sha256 = 97f671ccbdf9eff34a30686aaf9cb6d59e7d2eff0214303282fb6c4c43c73efc   edited = false
+  [!!] no edit - its anchor is gone on this carrier
+
+net/minecraft/world/entity/player/Player
+  input  sha256 = f2a813a62cf90a5a86fc6896005fe07c5de228e115897c3ecde17c7252bc8990
+  output sha256 = f2a813a62cf90a5a86fc6896005fe07c5de228e115897c3ecde17c7252bc8990   edited = false
+  [!!] no edit - its anchor is gone on this carrier
+
+link gate (JVM verifier over the transformed damage classes):
+  net.minecraft.world.entity.LivingEntity linked under the JVM verifier = OK
+  net.minecraft.world.entity.player.Player linked under the JVM verifier = OK
+
+falsifiers:
+  -Dforbric.forgeDamageSeams=off: merged LivingEntity byte-identical = true
+  MinecraftForge base net/minecraft/world/entity/LivingEntity byte-identical = true
+  MinecraftForge base net/minecraft/world/entity/player/Player byte-identical = true

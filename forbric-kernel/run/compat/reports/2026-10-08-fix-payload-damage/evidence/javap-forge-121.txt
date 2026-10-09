@@ -1,0 +1,34 @@
+# javap -c -p /Applications/.minecraft/.forbric-build/out/patched-mc-forge-1.21.1.jar :: MinecraftForge 1.21.1's own seam positions
+# Player.hurt head: onPlayerAttack first thing (the 1.21.1 position the seam reproduces)
+
+  public boolean hurt(net.minecraft.world.damagesource.DamageSource, float);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: fload_2
+         3: invokestatic  #1739               // Method net/minecraftforge/common/ForgeHooks.onPlayerAttack:(Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/damagesource/DamageSource;F)Z
+         6: ifne          11
+         9: iconst_0
+        10: ireturn
+        11: aload_0
+        12: aload_1
+        13: invokevirtual #1740               // Method isInvulnerableTo:(Lnet/minecraft/world/damagesource/DamageSource;)Z
+        16: ifeq          21
+        19: iconst_0
+        20: ireturn
+        21: aload_0
+        22: getfield      #248                // Field abilities:Lnet/minecraft/world/entity/player/Abilities;
+        25: getfield      #1743               // Field net/minecraft/world/entity/player/Abilities.invulnerable:Z
+        28: ifeq          43
+        31: aload_1
+
+# LivingEntity.actuallyHurt: onLivingHurt after the guard, onLivingDamage writing the applied local
+
+5:         2: invokevirtual #1984               // Method isInvulnerableTo:(Lnet/minecraft/world/damagesource/DamageSource;)Z
+6:         5: ifne          167
+10:        11: invokestatic  #2986               // Method net/minecraftforge/common/ForgeHooks.onLivingHurt:(Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/damagesource/DamageSource;F)F
+33:        46: fstore_3
+73:       121: invokestatic  #2999               // Method net/minecraftforge/common/ForgeHooks.onLivingDamage:(Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/damagesource/DamageSource;F)F
+74:       124: fstore_3
+83:       137: invokevirtual #3002               // Method net/minecraft/world/damagesource/CombatTracker.recordDamage:(Lnet/minecraft/world/damagesource/DamageSource;F)V
+89:       147: invokevirtual #391                // Method setHealth:(F)V

@@ -69,6 +69,7 @@ public final class KernelPacketContext {
 	private static volatile boolean resolved;
 	private static volatile boolean announced;
 	private static volatile boolean warned;
+	private static volatile boolean absentLogged;
 
 	private KernelPacketContext() {
 	}
@@ -155,10 +156,9 @@ public final class KernelPacketContext {
 
 	/** Resolves Fabric's two internals once. Absent means no Fabric networking here, which is not a failure. */
 	private static boolean resolve(Object ctx) {
-		if (resolved) return scopedValue != null && encoderContext != null;
+		if (resolved) return true;
 		synchronized (KernelPacketContext.class) {
-			if (resolved) return scopedValue != null && encoderContext != null;
-			resolved = true;
+			if (resolved) return true;
 			try {
 				ClassLoader loader = ctx.getClass().getClassLoader();
 				Class<?> impl = Class.forName(CONTEXT_IMPL, false, loader);
@@ -172,12 +172,19 @@ public final class KernelPacketContext {
 					break;
 				}
 				if (encoderContext != null) scopedValue = value.get(null);
+				// Spent only once the context is actually in hand: this runs on the first packet encode, which can
+				// precede the classloader that carries fabric-networking, and latching "off" there would leave
+				// every later packet uncaptured for the session.
+				resolved = scopedValue != null && encoderContext != null;
 			} catch (ReflectiveOperationException | RuntimeException absent) {
-				ForbricLog.debug("[Forbric/Net] no Fabric packet context on this instance — NeoForge's splitter "
-						+ "encodes exactly as it always did");
+				if (!absentLogged) {
+					absentLogged = true;
+					ForbricLog.debug("[Forbric/Net] no Fabric packet context on this instance — NeoForge's splitter "
+							+ "encodes exactly as it always did");
+				}
 			}
 		}
-		return scopedValue != null && encoderContext != null;
+		return resolved;
 	}
 
 	private static void warnOnce(String what, Throwable t) {

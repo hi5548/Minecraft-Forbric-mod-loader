@@ -20,14 +20,17 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.objectweb.asm.ClassWriter;
@@ -45,10 +48,20 @@ class AbiLinkAuditTest {
 	private static final String LOADING = "net/neoforged/fml/loading/moddiscovery/ModsFolderLocator";
 	private List<ModCatalog.Entry> previous;
 
+	@BeforeEach
+	void resetArbitration() {
+		MultiLoaderArbiter.reset();
+		System.clearProperty("forbric.multiLoaderPreference");
+		System.clearProperty(MultiLoaderArbiter.ENTRYPOINT_SWITCH);
+	}
+
 	@AfterEach
 	void forget() {
 		AbiLinkAudit.reset();
 		System.clearProperty(AbiLinkAudit.SWITCH);
+		MultiLoaderArbiter.reset();
+		System.clearProperty("forbric.multiLoaderPreference");
+		System.clearProperty(MultiLoaderArbiter.ENTRYPOINT_SWITCH);
 		if (previous != null) ModCatalog.publish(previous);
 	}
 
@@ -99,6 +112,37 @@ class AbiLinkAuditTest {
 	}
 
 	@Test
+	void aUniversalJarsDroppedForgeHalfIsNotAFinding(@TempDir Path dir) throws Exception {
+		Path mod = multiLoaderJar(dir.resolve("universal.jar"), "a/b/DroppedForgeHalf",
+				"net/minecraftforge/client/event/RenderGuiEvent");
+		assertEquals(Set.of(Ecosystem.FORGE), AbiLinkAudit.droppedFamilies(mod),
+				"the jar declares both families, so arbitration drops the one it did not give the jar");
+		assertTrue(AbiLinkAudit.audit(List.of(mod), AbiLinkAudit.classesOf(List.of(mod))).isEmpty(),
+				"a dangling name in the half the kernel never loads is not the live mod's");
+	}
+
+	@Test
+	void aUniversalJarsLiveHalfIsStillAFinding(@TempDir Path dir) throws Exception {
+		Path mod = multiLoaderJar(dir.resolve("universal.jar"), "a/b/LiveNeoHalf", GONE);
+		List<AbiLinkAudit.Finding> findings = AbiLinkAudit.audit(List.of(mod), AbiLinkAudit.classesOf(List.of(mod)));
+		assertEquals(1, findings.size(), findings.toString());
+		assertEquals("NeoForge", findings.get(0).family(), "NeoForge owns the jar, so its half is judged");
+		assertEquals(List.of(GONE), findings.get(0).missing());
+	}
+
+	@Test
+	void aFamilyTheJarNeverDeclaresIsStillJudged(@TempDir Path dir) throws Exception {
+		Path mod = dir.resolve("neoforge-only.jar");
+		try (OutputStream out = Files.newOutputStream(mod); ZipOutputStream zip = new ZipOutputStream(out)) {
+			putText(zip, "META-INF/neoforge.mods.toml", neoForgeManifest());
+			put(zip, "a/b/Uses", caller("a/b/Uses", "net/minecraftforge/client/event/RenderGuiEvent"));
+		}
+		assertEquals(Set.of(), AbiLinkAudit.droppedFamilies(mod), "a single-manifest jar drops nothing");
+		assertEquals(1, AbiLinkAudit.audit(List.of(mod), AbiLinkAudit.classesOf(List.of(mod))).size(),
+				"a stray Forge reference in a NeoForge-only jar is not explained away by arbitration");
+	}
+
+	@Test
 	void reportMarksEveryRowFromTheJarAndSaysSo(@TempDir Path dir) throws Exception {
 		previous = ModCatalog.everything();
 		ModCatalog.publish(List.of(
@@ -132,6 +176,45 @@ class AbiLinkAuditTest {
 			put(zip, internal, bytes);
 		}
 		return file;
+	}
+
+	/**
+	 * A jar declaring BOTH Forge-family manifests and carrying a NeoForge {@code @Mod}, as the real universal
+	 * jars do: arbitration gives it NEOFORGE and drops FORGE, the half {@code uses} belongs to.
+	 */
+	private static Path multiLoaderJar(Path file, String uses, String target) throws Exception {
+		try (OutputStream out = Files.newOutputStream(file); ZipOutputStream zip = new ZipOutputStream(out)) {
+			putText(zip, "META-INF/mods.toml", forgeManifest());
+			putText(zip, "META-INF/neoforge.mods.toml", neoForgeManifest());
+			put(zip, "example/NeoEntry", mod("example/NeoEntry", "Lnet/neoforged/fml/common/Mod;", "example"));
+			put(zip, uses, caller(uses, target));
+		}
+		return file;
+	}
+
+	private static String forgeManifest() {
+		return "# the file NeoForge 1.20.1/Forge reads\nmodLoader=\"lowcodefml\"\nloaderVersion=\"[1,)\"\n[[mods]]\nmodId=\"example\"\nversion=\"1\"\n";
+	}
+
+	private static String neoForgeManifest() {
+		return "modLoader=\"javafml\"\nloaderVersion=\"[1,)\"\n[[mods]]\nmodId=\"example\"\nversion=\"1\"\n";
+	}
+
+	private static void putText(ZipOutputStream zip, String name, String text) throws Exception {
+		zip.putNextEntry(new ZipEntry(name));
+		zip.write(text.getBytes(StandardCharsets.UTF_8));
+		zip.closeEntry();
+	}
+
+	/** An entrypoint class carrying a loader's {@code @Mod} annotation, which is what names its family. */
+	private static byte[] mod(String internal, String descriptor, String modId) {
+		ClassWriter cw = new ClassWriter(0);
+		cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, internal, null, "java/lang/Object", null);
+		var annotation = cw.visitAnnotation(descriptor, true);
+		annotation.visit("value", modId);
+		annotation.visitEnd();
+		cw.visitEnd();
+		return cw.toByteArray();
 	}
 
 	private static void put(ZipOutputStream zip, String internal, byte[] bytes) throws Exception {

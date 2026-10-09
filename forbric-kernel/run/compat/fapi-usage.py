@@ -7,10 +7,14 @@ Usage: fapi-usage.py [--preset NAME | --symbols FILE] [--list-presets] <jar-or-m
 Only class references are evidence; resource strings and dependency declarations
 do not establish API use. Nested META-INF/jars are scanned with their parent label.
 
+A jar that declares several loaders is loaded as exactly one of them (MultiLoaderArbiter); the half arbitration
+drops never reaches the classpath, so a reference from that half is not this mod's use of the API and is skipped.
+
 WHY THE SYMBOL SET IS A PARAMETER. This script answered exactly one question --
 "who consumes the four suppressed Fabric API surfaces" -- with the answer's
-prefixes frozen in a constant. The same two judgements it already gets right
-(constant-pool references only; a bundled API defining itself is not a use of it)
+prefixes frozen in a constant. The same judgements it already gets right
+(constant-pool references only; a bundled API defining itself is not a use of it;
+a loader half arbitration dropped is not the live mod's reference)
 are what "which mods are actually WAITING on this Forge event" needs, and that
 question has no tool at all: the event-hook censuses in this project were done by
 hand with `javap` and written into javadoc, so they are true on the day they are
@@ -33,7 +37,7 @@ from pathlib import Path
 import sys
 import zipfile
 
-# Keep the bytecode parser identical to abi-audit, including nested-jar handling.
+# Keep the bytecode parser and the multi-loader drop rule identical to abi-audit, including nested-jar handling.
 _spec = importlib.util.spec_from_file_location("forbric_abi_audit", Path(__file__).with_name("abi-audit.py"))
 abi = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(abi)
@@ -144,12 +148,15 @@ def main():
             for jar in abi.jar_paths(candidate):
                 count += 1
                 with zipfile.ZipFile(jar) as archive:
-                    for label, name, refs in abi.scan_classes(archive, jar.name):
+                    for label, name, refs, dropped in abi.scan_classes(archive, jar.name):
                         # A bundled API defining itself is not evidence that the candidate uses it.
                         if definers and name.startswith(definers):
                             continue
                         for ref in refs:
                             if ref.startswith(surfaces):
+                                # A dropped loader half is not the live mod consuming the API.
+                                if abi.family_of(ref) in dropped:
+                                    continue
                                 findings.setdefault(label, {}).setdefault(ref, set()).add(name)
         # Say what was asked before saying what was found: a census with an unstated question
         # is the same trap as a count nobody compares.

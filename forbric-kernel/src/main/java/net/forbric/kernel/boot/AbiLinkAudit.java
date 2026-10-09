@@ -31,6 +31,7 @@ import java.util.zip.ZipFile;
 
 import org.objectweb.asm.ClassReader;
 
+import net.forbric.api.Ecosystem;
 import net.forbric.api.ModCatalog;
 import net.forbric.kernel.util.ByteScan;
 import net.forbric.kernel.util.ForbricLog;
@@ -47,6 +48,13 @@ import net.forbric.kernel.util.ForbricLog;
  * <p>Loader-bootstrap packages are out of scope: the kernel REPLACES FML's loading layer, so
  * {@code fml/loading}, {@code fml/relauncher} and the {@code locating} SPIs are absent here by design and a mod
  * naming them (CustomSkinLoader's six references) is not compiled against the wrong Forge.
+ *
+ * <p>A universal jar carries one half per loader family and {@link MultiLoaderArbiter} loads exactly one of them.
+ * The half it drops is still in the file, and its references — a 1.20.1 Forge half naming
+ * {@code net.minecraftforge.client.event.RenderGuiEvent*} against a 1.21.1 merged base — are not the live mod's,
+ * so judging the whole jar marks the row DEGRADED for code the kernel never loads. A dangling name in a family
+ * arbitration dropped for THIS jar is therefore not a finding; a name in a family the jar did not declare (a
+ * NeoForge-only jar's stray {@code net.minecraftforge} reference) still is.
  *
  * <p>Never throws, never refuses a jar; {@code -Dforbric.abiAudit=off}. Scanned at boot while the jar names are
  * in hand, reported after the catalog is published so the rows reach load-report.txt.
@@ -108,7 +116,7 @@ public final class AbiLinkAudit {
 		return present;
 	}
 
-	/** The findings over {@code jars}, given the set of classes that exist. Pure; the test's entry point. */
+	/** The findings over {@code jars}, given the set of classes that exist. The test's entry point. */
 	static List<Finding> audit(List<Path> jars, Set<String> present) {
 		List<Finding> out = new ArrayList<>();
 		for (Path jar : jars) {
@@ -130,11 +138,35 @@ public final class AbiLinkAudit {
 				continue;
 			}
 			if (missing.isEmpty()) continue;
+			// A universal jar's DROPPED half is in the file but never loaded, so its dangling Forge-family names
+			// belong to the half arbitration removed, not to this row. Only names in a family the jar declared
+			// and arbitration did not give it are removed; a family it never declared stays judged.
+			Set<Ecosystem> dropped = droppedFamilies(jar);
+			if (!dropped.isEmpty()) missing.removeIf(named -> dropped.contains(familyOf(named)));
+			if (missing.isEmpty()) continue;
 			String first = missing.iterator().next();
-			out.add(new Finding(jar.getFileName().toString(), first.startsWith("net/neoforged/") ? "NeoForge" : "MinecraftForge",
-					List.copyOf(missing)));
+			out.add(new Finding(jar.getFileName().toString(), familyOf(first).displayName(), List.copyOf(missing)));
 		}
 		return out;
+	}
+
+	/**
+	 * The loader families {@code jar} declares but arbitration did not give it — the half {@link MultiLoaderArbiter}
+	 * drops. Empty when the jar declares one family or none: a single-family jar is never dropped for its own
+	 * family, so its dangling references are still judged. Asked only of a jar that already has a finding, so the
+	 * common path pays nothing.
+	 */
+	static Set<Ecosystem> droppedFamilies(Path jar) {
+		List<Ecosystem> declared = MultiLoaderArbiter.declaredBy(jar);
+		if (declared.size() < 2) return Set.of();
+		Set<Ecosystem> dropped = new LinkedHashSet<>(declared);
+		dropped.remove(MultiLoaderArbiter.ownerOf(jar));
+		return dropped;
+	}
+
+	/** The loader family a judged class name belongs to; the audit judges only these two. */
+	static Ecosystem familyOf(String internal) {
+		return internal.startsWith("net/minecraftforge/") ? Ecosystem.FORGE : Ecosystem.NEOFORGE;
 	}
 
 	/** Whether {@code internal} is a Forge-family class this audit judges. */

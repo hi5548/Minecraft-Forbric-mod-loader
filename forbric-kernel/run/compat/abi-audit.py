@@ -4,6 +4,12 @@
 Usage: abi-audit.py <mods-dir-or-jar> <carrier-jar>...
 CONSTANT_Class references and nested META-INF/jars are read without loading Java.
 Findings are a report (exit 0); unreadable input is an incomplete audit (exit 2).
+
+A jar that declares several loaders is loaded as exactly one of them (MultiLoaderArbiter), so the half
+arbitration drops is in the file but never on the runtime classpath: a 1.20.1 Forge half naming
+net.minecraftforge.client.event.RenderGuiEvent* must not mark the live 1.21.1 NeoForge mod. A dangling name in a
+family the archive declares but does not own is therefore skipped; a name in a family it does not declare (a
+NeoForge-only jar's stray net.minecraftforge reference) is still a finding.
 """
 import argparse
 import io
@@ -11,6 +17,52 @@ from pathlib import Path
 import struct
 import sys
 import zipfile
+
+# The loader families a manifest can claim, and the spelling -Dforbric.multiLoaderPreference takes. The default
+# order must match MultiLoaderArbiter.DEFAULT_PREFERENCE.
+FORGE, NEOFORGE, FABRIC = "minecraftforge", "neoforge", "fabric"
+DEFAULT_PREFERENCE = (NEOFORGE, FORGE, FABRIC)
+_MANIFEST_FAMILIES = (
+    ("META-INF/neoforge.mods.toml", NEOFORGE),
+    ("META-INF/mods.toml", FORGE),
+    ("fabric.mod.json", FABRIC),
+)
+_CLASS_FAMILIES = (
+    ("net/neoforged/", NEOFORGE),
+    ("net/minecraftforge/", FORGE),
+    ("net/fabricmc/", FABRIC),
+)
+
+
+def family_of(internal):
+    """The loader family a class name belongs to, or None. Shared with the Fabric API consumer probe."""
+    for prefix, family in _CLASS_FAMILIES:
+        if internal.startswith(prefix):
+            return family
+    return None
+
+
+def declared_families(archive):
+    """The loader families the archive's own manifests declare, in preference-independent order."""
+    names = set(archive.namelist())
+    return [family for manifest, family in _MANIFEST_FAMILIES if manifest in names]
+
+
+def dropped_families(archive, preference=None):
+    """The loader families arbitration drops for this archive: declared, but not the one that owns it.
+
+    Mirrors MultiLoaderArbiter's manifest-level decision (that class's initializer refinement can only narrow a
+    claim further, and needs the @Mod/entrypoint scan this probe deliberately does not repeat). A single-manifest
+    archive, or one with no manifest at all, drops nothing -- so a plain library and a genuine wrong-Forge
+    single-half jar are still judged.
+    """
+    declared = declared_families(archive)
+    if len(declared) < 2:
+        return frozenset()
+    for family in (preference or DEFAULT_PREFERENCE):
+        if family in declared:
+            return frozenset(f for f in declared if f != family)
+    return frozenset(declared[1:])
 
 
 def class_refs(data):
@@ -63,11 +115,13 @@ def jar_paths(path):
 
 
 def scan_classes(archive, label):
-    """Yield label, class entry and type references, recursively through jar-in-jar."""
+    """Yield label, class entry, type references and the families arbitration DROPS for the archive the class
+    came from, recursively through jar-in-jar. A nested jar arbitrates on its OWN manifests, not its parent's."""
+    dropped = dropped_families(archive)
     for name in sorted(archive.namelist()):
         if name.endswith(".class"):
             try:
-                yield label, name, class_refs(archive.read(name))
+                yield label, name, class_refs(archive.read(name)), dropped
             except (IndexError, KeyError, ValueError, struct.error) as exc:
                 raise ValueError("%s :: %s: %s" % (label, name, exc)) from exc
         elif name.endswith(".jar") and name.startswith("META-INF/jars/"):
@@ -89,9 +143,12 @@ def main():
         jars = jar_paths(args.mods)
         for jar in jars:
             with zipfile.ZipFile(jar) as archive:
-                for label, name, refs in scan_classes(archive, jar.name):
+                for label, name, refs, dropped in scan_classes(archive, jar.name):
                     for ref in refs:
-                        if ref.startswith(("net/neoforged/", "net/minecraftforge/")) and ref not in owned:
+                        if not ref.startswith(("net/neoforged/", "net/minecraftforge/")): continue
+                        # A family this archive drops is the dead half's; its references are not the live mod's.
+                        if family_of(ref) in dropped: continue
+                        if ref not in owned:
                             findings.setdefault(label, {}).setdefault(ref, set()).add(name)
         print("carrier classes: %d\n" % len(owned))
         for label in sorted(findings):

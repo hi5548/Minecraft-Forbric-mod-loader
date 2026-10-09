@@ -1,0 +1,18 @@
+# fapi-usage.py --preset minecraftforge-events on the demo jar (the universal, dual-version jar)
+# BEFORE:
+symbol set: minecraftforge-events (1 surface(s), 1 definer prefix(es))
+the-shooting-star-demo-1.3.1-neoforge.jar
+    net/minecraftforge/event/BuildCreativeModeTabContentsEvent <- dev/aek/shootingstardemo/mc1201/registry/ModItems.class
+    net/minecraftforge/event/TickEvent <- dev/aek/shootingstardemo/mc1201/ShootingStarDemo.class, dev/aek/shootingstardemo/mc1201/client/ShootingStarDemoClient.class
+    net/minecraftforge/event/TickEvent$ClientTickEvent <- dev/aek/shootingstardemo/mc1201/client/ShootingStarDemoClient.class
+    net/minecraftforge/event/TickEvent$Phase <- dev/aek/shootingstardemo/mc1201/ShootingStarDemo.class, dev/aek/shootingstardemo/mc1201/client/ShootingStarDemoClient.class
+    net/minecraftforge/event/TickEvent$ServerTickEvent <- dev/aek/shootingstardemo/mc1201/ShootingStarDemo.class
+    net/minecraftforge/event/entity/player/PlayerEvent <- dev/aek/shootingstardemo/mc1201/ShootingStarDemo.class
+    net/minecraftforge/event/entity/player/PlayerEvent$PlayerLoggedInEvent <- dev/aek/shootingstardemo/mc1201/ShootingStarDemo.class
+    net/minecraftforge/event/entity/player/PlayerInteractEvent <- dev/aek/shootingstardemo/mc1201/client/ShootingStarDemoClient.class
+    net/minecraftforge/event/entity/player/PlayerInteractEvent$EntityInteract <- dev/aek/shootingstardemo/mc1201/client/ShootingStarDemoClient.class
+scanned jars: 1; API consumer groups: 1
+
+# AFTER:
+symbol set: minecraftforge-events (1 surface(s), 1 definer prefix(es))
+scanned jars: 1; API consumer groups: 0

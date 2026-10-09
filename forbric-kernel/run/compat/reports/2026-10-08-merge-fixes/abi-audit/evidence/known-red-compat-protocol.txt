@@ -1,0 +1,15 @@
+# NOT caused by this change: CompatProtocolTest asserts PROTOCOL.md names every .sh/.py under run/compat;
+# 11 report-evidence scripts committed before this branch are unnamed, so the test is red at HEAD too.
+# Proof: the same walk at HEAD (main checkout) reports 11 missing:
+
+HEAD-MISSING reports/2026-10-04-inert-apis/evidence/run-probes.sh
+HEAD-MISSING reports/2026-10-04-tint/evidence/sample-tint.py
+HEAD-MISSING reports/2026-10-04-tint-repro/evidence/make-scene.py
+HEAD-MISSING reports/2026-10-04-tint-repro/evidence/nbt.py
+HEAD-MISSING reports/2026-10-04-tint-repro/evidence/region.py
+HEAD-MISSING reports/2026-10-04-tint-repro/evidence/sampler.py
+HEAD-MISSING reports/2026-10-06-release-0.3.5-beta/evidence/sampler.py
+HEAD-MISSING reports/2026-10-06-stub-table/evidence/sampler.py
+HEAD-MISSING reports/2026-10-07-release-0.3.6-beta/evidence/sampler.py
+HEAD-MISSING reports/2026-10-08-cannot-fire/evidence/instrument-run_with_probe.py
+HEAD-MISSING reports/2026-10-08-release-0.3.7-beta/evidence/sampler.py

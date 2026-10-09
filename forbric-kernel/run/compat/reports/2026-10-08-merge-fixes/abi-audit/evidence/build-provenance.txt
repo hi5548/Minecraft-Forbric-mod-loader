@@ -1,0 +1,38 @@
+repo:        /Users/charlescai/Desktop/dsh/实验/forbric/abi-wt
+branch:      merge-fixes-abi-audit
+HEAD(before commit): 61b93a04dae0588c05707d94efd5da4f2e9e7608
+base main:   61b93a04
+
+changed files + sha256:
+8d87cf01d19553b99dfb1eed85c1cc4864897259df0ebb58c19d046c527bb476  forbric-kernel/run/compat/abi-audit.py
+a992963553758dcd621fa0898cefeed8cc6594680cfe3ecd0dd62e83106c9ec6  forbric-kernel/run/compat/fapi-usage.py
+a0a7d18a0d536bd50cec21d0da8d891c36755d704eee9951ec0e67abff19ccdf  forbric-kernel/src/main/java/net/forbric/kernel/boot/AbiLinkAudit.java
+b80cccb5aee63f61ecc4bdfb1c1243ac87dbe77e0e90f25acfe5e9694ceb0486  forbric-kernel/src/test/java/net/forbric/kernel/boot/AbiLinkAuditStagedTest.java
+4ba1b0e36e939841b536f41dfa2f18d152b767bd8af86d300f0f21a7c4d9833b  forbric-kernel/src/test/java/net/forbric/kernel/boot/AbiLinkAuditTest.java
+fb13afd50dc7ab73f98fc1d36b65e6f42a3795fd571f95eedcb063c42fcd4b02  forbric-kernel/src/test/java/net/forbric/kernel/compat/AbiAuditCompatTest.java
+65411f936ed2fe2d476ff6aa0b50c2c58325e6311e89c455e932731d819c1ffa  forbric-kernel/src/test/java/net/forbric/kernel/compat/FabricApiUsageCompatTest.java
+
+user inputs (sha256):
+8b972bcef153eb78d4ef89f9d3bb2cc3a744e1d830a6a3e54bd120056a1762b0  /Applications/.minecraft/versions/1.21.1-forbric/mods/the-shooting-star-demo-1.3.1-neoforge.jar
+9b2ce1b10449eb6dcb640eec83c50666c52043f1b47b76cdaa49aba39c24f760  /Applications/.minecraft/versions/1.21.1-forbric/mods/shooting_star_addition-1.1.0.jar
+
+carriers (sha256):
+46af05299bafd3140321b25246138def88dd4f938b9ae9451f976b57bd1c587f  /Applications/.minecraft/.forbric-build/out/patched-mc-merged-1.21.1.jar
+0f53e530b978c1c822249c3d6d0ef6528f6ee55743e275e16bdea9a22fbd5d0b  /Applications/.minecraft/.forbric-build/out/forge-runtime-interop.jar
+3d862fd92a42efddca77ba3d97d7a53229b4386b9fa8b4bdf6f8ffa01d1d0494  /Applications/.minecraft/.forbric-build/out/neoforge-runtime.jar
+
+mods dir listing (14 jars):
+/Applications/.minecraft/versions/1.21.1-forbric/mods/ImmediatelyFast-NeoForge-1.6.14+1.21.1.jar
+/Applications/.minecraft/versions/1.21.1-forbric/mods/appleskin-neoforge-mc1.21-3.0.9.jar
+/Applications/.minecraft/versions/1.21.1-forbric/mods/cloth-config-15.0.140-neoforge.jar
+/Applications/.minecraft/versions/1.21.1-forbric/mods/entityculling-neoforge-1.11.2-mc1.21.1.jar
+/Applications/.minecraft/versions/1.21.1-forbric/mods/fabric-api-0.116.17+1.21.1.jar
+/Applications/.minecraft/versions/1.21.1-forbric/mods/ferritecore-7.0.3-neoforge.jar
+/Applications/.minecraft/versions/1.21.1-forbric/mods/jei-1.21.1-neoforge-19.57.0.450.jar
+/Applications/.minecraft/versions/1.21.1-forbric/mods/lithium-neoforge-0.15.4+mc1.21.1.jar
+/Applications/.minecraft/versions/1.21.1-forbric/mods/modernfix-neoforge-5.27.24+mc1.21.1.jar
+/Applications/.minecraft/versions/1.21.1-forbric/mods/modmenu-11.0.5.jar
+/Applications/.minecraft/versions/1.21.1-forbric/mods/placeholder-api-2.4.2+1.21.jar
+/Applications/.minecraft/versions/1.21.1-forbric/mods/shooting_star_addition-1.1.0.jar
+/Applications/.minecraft/versions/1.21.1-forbric/mods/sodium-neoforge-0.8.13+mc1.21.1.jar
+/Applications/.minecraft/versions/1.21.1-forbric/mods/the-shooting-star-demo-1.3.1-neoforge.jar

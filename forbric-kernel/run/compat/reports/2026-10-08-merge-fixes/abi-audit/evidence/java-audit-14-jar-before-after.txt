@@ -1,0 +1,6 @@
+# java AbiLinkAudit.audit() over the user's 14-jar set (naive = pre-fix loop, arbitration-aware = this branch)
+    PROBE-DROPPED entityculling-neoforge-1.11.2-mc1.21.1.jar [FORGE]
+    PROBE-NAIVE the-shooting-star-demo-1.3.1-neoforge.jar dropped=[FORGE] missing=[net/minecraftforge/client/event/RenderGuiEvent$Post, net/minecraftforge/client/event/RenderGuiEvent, net/minecraftforge/client/event/RenderGuiEvent$Pre, net/minecraftforge/network/simple/SimpleChannel$MessageBuilder, net/minecraftforge/network/simple/SimpleChannel, net/minecraftforge/network/NetworkEvent$Context, net/minecraftforge/network/NetworkEvent]
+    PROBE-DROPPED the-shooting-star-demo-1.3.1-neoforge.jar [FORGE]
+    PROBE-RESULT naive-groups=1 arbitration-aware-groups=0
+test: 1 tests, 0 skipped, 0 failed

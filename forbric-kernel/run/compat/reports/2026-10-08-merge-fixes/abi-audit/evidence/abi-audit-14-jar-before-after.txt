@@ -1,0 +1,19 @@
+# abi-audit.py over the user's 14-jar set, resolved against the three carriers
+# BEFORE (repo HEAD 61b93a04):
+carrier classes: 14381
+
+the-shooting-star-demo-1.3.1-neoforge.jar
+    net/minecraftforge/client/event/RenderGuiEvent                                    <- dev/aek/shootingstardemo/mc1201/client/ShootingStarDemoClient.class
+    net/minecraftforge/client/event/RenderGuiEvent$Post                               <- dev/aek/shootingstardemo/mc1201/client/ShootingStarDemoClient.class
+    net/minecraftforge/client/event/RenderGuiEvent$Pre                                <- dev/aek/shootingstardemo/mc1201/client/ShootingStarDemoClient.class
+    net/minecraftforge/network/NetworkEvent                                           <- dev/aek/shootingstardemo/mc1201/net/Network.class
+    net/minecraftforge/network/NetworkEvent$Context                                   <- dev/aek/shootingstardemo/mc1201/net/Network.class
+    net/minecraftforge/network/simple/SimpleChannel                                   <- dev/aek/shootingstardemo/mc1201/net/Network.class
+    net/minecraftforge/network/simple/SimpleChannel$MessageBuilder                    <- dev/aek/shootingstardemo/mc1201/net/Network.class
+
+scanned jars: 14; finding groups: 1
+
+# AFTER (fix branch merge-fixes-abi-audit):
+carrier classes: 14381
+
+scanned jars: 14; finding groups: 0
